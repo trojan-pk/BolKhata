@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Mic, X, Sparkles, CheckCircle, Volume2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
+import { Audio } from 'expo-av';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
@@ -51,11 +52,22 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       
       if (response) {
         setParsedData({
-          partyName: response.customerName,
+          partyName: response.customerName || response.partyName,
           amount: response.amount,
           type: response.type,
-          note: response.description,
+          note: response.description || response.note,
         });
+
+        if (response.audioBase64) {
+          try {
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: `data:audio/wav;base64,${response.audioBase64}` },
+              { shouldPlay: true }
+            );
+          } catch (audioErr) {
+            console.error('Failed to play TTS audio:', audioErr);
+          }
+        }
       }
     } catch (e) {
       console.error(e);

@@ -50,8 +50,12 @@ export interface StoreProfile {
 }
 
 export interface VoiceCommandParseResult {
+  intent?: 'ADD_CREDIT' | 'ADD_PAYMENT' | 'GET_BALANCE';
+  customerName?: string;
   partyName?: string;
   amount?: number;
-  type?: TransactionType;
+  description?: string;
   note?: string;
+  type?: TransactionType;
+  audioBase64?: string;
 }
