@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native';
 
 // Services, Theme & Typography
-import { StorageService } from './src/services/storage';
+import { ApiService } from './src/services/api';
 import { COLORS } from './src/theme/colors';
 import { FONTS, injectWebGoogleFonts } from './src/theme/typography';
 import {
@@ -61,7 +61,7 @@ export default function App() {
     mobile: '+91 98765 43210',
     currency: '₹',
     language: 'hi',
-    expressApiUrl: 'http://localhost:5000/api',
+    expressApiUrl: 'http://localhost:3000',
     isBackendConnected: false,
   });
 
@@ -95,10 +95,10 @@ export default function App() {
     injectWebGoogleFonts();
 
     async function loadData() {
-      const profile = await StorageService.getStoreProfile();
-      const loadedParties = await StorageService.getParties();
-      const loadedTxns = await StorageService.getTransactions();
-      const loadedCashbook = await StorageService.getCashbook();
+      const profile = await ApiService.getStoreProfile();
+      const loadedParties = await ApiService.getParties();
+      const loadedTxns = await ApiService.getTransactions();
+      const loadedCashbook = await ApiService.getCashbook();
 
       setStoreProfile(profile);
       setParties(loadedParties);
@@ -153,8 +153,8 @@ export default function App() {
   const updatePartiesAndTxns = async (newParties: Party[], newTxns: Transaction[]) => {
     setParties(newParties);
     setTransactions(newTxns);
-    await StorageService.saveParties(newParties);
-    await StorageService.saveTransactions(newTxns);
+    await ApiService.saveParties(newParties);
+    await ApiService.saveTransactions(newTxns);
   };
 
   // Add new customer / supplier
@@ -178,7 +178,7 @@ export default function App() {
 
     const updated = [newParty, ...parties];
     setParties(updated);
-    await StorageService.saveParties(updated);
+    await ApiService.saveParties(updated);
   };
 
   // Record Gave / Got transaction
@@ -317,7 +317,7 @@ export default function App() {
 
     const updated = [newEntry, ...cashbook];
     setCashbook(updated);
-    await StorageService.saveCashbook(updated);
+    await ApiService.saveCashbook(updated);
   };
 
   // Totals
@@ -431,7 +431,7 @@ export default function App() {
               storeProfile={storeProfile}
               onUpdateStore={async (updated) => {
                 setStoreProfile(updated);
-                await StorageService.saveStoreProfile(updated);
+                await ApiService.saveStoreProfile(updated);
               }}
               onOpenApiConfig={() => setApiConfigModalVisible(true)}
             />
@@ -628,7 +628,7 @@ export default function App() {
             isBackendConnected: isConnected,
           };
           setStoreProfile(updated);
-          await StorageService.saveStoreProfile(updated);
+          await ApiService.saveStoreProfile(updated);
         }}
       />
     </SafeAreaView>
