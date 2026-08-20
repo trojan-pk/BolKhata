@@ -1,0 +1,47 @@
+# Node dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+*.expo/*
+
+# Native builds
+android/
+ios/
+*.apk
+*.aab
+*.ipa
+
+# EAS
+.eas/
+
+# Environment and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug and Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# System & OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# IDE / Editor files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
