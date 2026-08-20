@@ -41,30 +41,27 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     'Amrit Supplier ko 3200 diya',
   ];
 
-  const handleSimulateVoice = (phrase: string) => {
+  const handleSimulateVoice = async (phrase: string) => {
     setIsListening(true);
     setVoiceText(phrase);
 
-    setTimeout(() => {
+    try {
+      const { ApiService } = require('../services/api');
+      const response = await ApiService.processVoice();
+      
+      if (response) {
+        setParsedData({
+          partyName: response.customerName,
+          amount: response.amount,
+          type: response.type,
+          note: response.description,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
       setIsListening(false);
-      const isGot =
-        phrase.toLowerCase().includes('jama') ||
-        phrase.toLowerCase().includes('mila');
-
-      const numbers = phrase.match(/\d+/g);
-      const amount = numbers ? parseInt(numbers[0]) : 500;
-
-      let partyName = 'Ramesh Kumar (Grocery)';
-      if (phrase.includes('Sunita')) partyName = 'Sunita Devi';
-      if (phrase.includes('Amrit')) partyName = 'Amrit Rice Supplier';
-
-      setParsedData({
-        partyName,
-        amount,
-        type: isGot ? 'got' : 'gave',
-        note: phrase,
-      });
-    }, 1000);
+    }
   };
 
   const handleConfirm = () => {
