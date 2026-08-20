@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { ClerkProvider, ClerkLoaded, SignedIn, SignedOut } from '@clerk/expo';
+import { tokenCache } from './src/cache';
+import { AuthScreen } from './src/screens/AuthScreen';
 import {
   StyleSheet,
   View,
@@ -49,7 +52,7 @@ import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 
-export default function App() {
+function MainLayout() {
   const [showSplashOverlay, setShowSplashOverlay] = useState(true);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const dashboardFade = useRef(new Animated.Value(0)).current;
@@ -754,3 +757,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+
+if (!publishableKey) {
+  throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env');
+}
+
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <SignedIn>
+          <MainLayout />
+        </SignedIn>
+        <SignedOut>
+          <AuthScreen />
+        </SignedOut>
+      </ClerkLoaded>
+    </ClerkProvider>
+  );
+}
