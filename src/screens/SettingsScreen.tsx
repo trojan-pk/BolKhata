@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Store, Globe, DollarSign, Server, Smartphone, ShieldCheck } from 'lucide-react-native';
+import { Store, Globe, Server } from 'lucide-react-native';
 import { StoreProfile } from '../types';
 import { COLORS } from '../theme/colors';
 
@@ -49,7 +49,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+    >
       <Text style={styles.pageTitle}>Shop Settings</Text>
 
       {/* Express API Connector Banner */}
@@ -58,11 +61,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         onPress={onOpenApiConfig}
         activeOpacity={0.85}
       >
-        <Server size={22} color={COLORS.primary} />
+        <Server size={20} color={COLORS.primary} />
         <View style={{ flex: 1 }}>
           <Text style={styles.apiTitle}>Node.js Express API Connection</Text>
-          <Text style={styles.apiSub}>
-            Status: {storeProfile.isBackendConnected ? 'Connected to Express API' : 'Offline Mobile UI Mode'}
+          <Text style={styles.apiSub} numberOfLines={1}>
+            Status:{' '}
+            {storeProfile.isBackendConnected
+              ? 'Connected to Express'
+              : 'Offline Mobile UI Mode'}
           </Text>
         </View>
         <Text style={styles.configureText}>Configure</Text>
@@ -71,24 +77,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Store Profile Section */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
-          <Store size={18} color={COLORS.primary} />
+          <Store size={16} color={COLORS.primary} />
           <Text style={styles.sectionTitle}>Store Details</Text>
         </View>
 
         <Text style={styles.label}>Shop / Business Name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} />
 
-        <Text style={[styles.label, { marginTop: 12 }]}>Owner Name</Text>
+        <Text style={[styles.label, { marginTop: 10 }]}>Owner Name</Text>
         <TextInput style={styles.input} value={ownerName} onChangeText={setOwnerName} />
 
-        <Text style={[styles.label, { marginTop: 12 }]}>Contact Number</Text>
+        <Text style={[styles.label, { marginTop: 10 }]}>Contact Number</Text>
         <TextInput style={styles.input} value={mobile} onChangeText={setMobile} />
       </View>
 
       {/* Currency & Localization */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
-          <Globe size={18} color={COLORS.primary} />
+          <Globe size={16} color={COLORS.primary} />
           <Text style={styles.sectionTitle}>Currency & Regional Settings</Text>
         </View>
 
@@ -100,22 +106,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               style={[styles.currPill, currency === c && styles.currPillActive]}
               onPress={() => setCurrency(c)}
             >
-              <Text style={[styles.currText, currency === c && styles.currTextActive]}>
+              <Text
+                style={[
+                  styles.currText,
+                  currency === c && styles.currTextActive,
+                ]}
+              >
                 {c}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={[styles.label, { marginTop: 14 }]}>App Language</Text>
+        <Text style={[styles.label, { marginTop: 12 }]}>App Language</Text>
         <View style={styles.langGrid}>
           {languages.map((l) => (
             <TouchableOpacity
               key={l.key}
-              style={[styles.langCard, language === l.key && styles.langCardActive]}
+              style={[
+                styles.langCard,
+                language === l.key && styles.langCardActive,
+              ]}
               onPress={() => setLanguage(l.key)}
             >
-              <Text style={[styles.langText, language === l.key && styles.langTextActive]}>
+              <Text
+                style={[
+                  styles.langText,
+                  language === l.key && styles.langTextActive,
+                ]}
+              >
                 {l.label}
               </Text>
             </TouchableOpacity>
@@ -123,7 +142,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
       </View>
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.saveBtn}
+        onPress={handleSave}
+        activeOpacity={0.85}
+      >
         <Text style={styles.saveBtnText}>Save Settings</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -135,32 +158,38 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    width: '100%',
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: 14,
+    color: '#0f172a',
+    marginBottom: 12,
   },
   apiBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#1e293b',
-    padding: 14,
-    borderRadius: 16,
+    gap: 10,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 16,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   apiTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   apiSub: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
   },
   configureText: {
@@ -169,61 +198,66 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sectionCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 16,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#94a3b8',
-    marginBottom: 6,
+    color: '#475569',
+    marginBottom: 4,
   },
   input: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 44,
-    color: '#ffffff',
-    fontSize: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    color: '#0f172a',
+    fontSize: 13,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   currencyRow: {
     flexDirection: 'row',
     gap: 8,
   },
   currPill: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#0f172a',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   currPillActive: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
   currText: {
-    fontSize: 16,
-    color: '#94a3b8',
+    fontSize: 15,
+    color: '#475569',
     fontWeight: '700',
   },
   currTextActive: {
@@ -232,39 +266,40 @@ const styles = StyleSheet.create({
   langGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   langCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   langCardActive: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    backgroundColor: COLORS.primaryLight,
   },
   langText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#475569',
     fontWeight: '600',
   },
   langTextActive: {
-    color: '#ffffff',
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   saveBtn: {
     backgroundColor: COLORS.primary,
-    height: 52,
-    borderRadius: 16,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
   saveBtnText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

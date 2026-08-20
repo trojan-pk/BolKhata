@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Phone, ChevronRight } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
+import { FONTS } from '../theme/typography';
 import { Party } from '../types';
 
 interface CustomerCardProps {
@@ -33,7 +34,12 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
       onPress={onPress}
     >
       {/* Avatar */}
-      <View style={[styles.avatar, { backgroundColor: party.avatarColor || COLORS.primary }]}>
+      <View
+        style={[
+          styles.avatar,
+          { backgroundColor: party.avatarColor || COLORS.primary },
+        ]}
+      >
         <Text style={styles.avatarText}>{initials}</Text>
       </View>
 
@@ -45,14 +51,14 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
           </Text>
           <View style={styles.typeBadge}>
             <Text style={styles.typeBadgeText}>
-              {party.type === 'customer' ? 'Grahak' : 'Supplier'}
+              {party.type === 'customer' ? 'Customer' : 'Supplier'}
             </Text>
           </View>
         </View>
 
         <View style={styles.phoneRow}>
-          <Phone size={12} color="#64748b" />
-          <Text style={styles.phoneText}>{party.mobile}</Text>
+          <Phone size={11} color="#64748b" />
+          <Text style={styles.phoneText} numberOfLines={1}>{party.mobile}</Text>
           <Text style={styles.dotSeparator}>•</Text>
           <Text style={styles.dateText}>{party.lastUpdated}</Text>
         </View>
@@ -61,32 +67,32 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
       {/* Balance Tag */}
       <View style={styles.balanceCol}>
         {isReceivable && (
-          <View style={styles.receivableBadge}>
+          <View style={styles.badgeContainer}>
             <Text style={styles.balanceStatusRed}>Aap Lenge</Text>
-            <Text style={styles.balanceAmountRed}>
+            <Text style={styles.balanceAmountRed} numberOfLines={1}>
               {currency} {party.currentBalance.toLocaleString('en-IN')}
             </Text>
           </View>
         )}
 
         {isPayable && (
-          <View style={styles.payableBadge}>
+          <View style={styles.badgeContainer}>
             <Text style={styles.balanceStatusGreen}>Aap Denge</Text>
-            <Text style={styles.balanceAmountGreen}>
+            <Text style={styles.balanceAmountGreen} numberOfLines={1}>
               {currency} {Math.abs(party.currentBalance).toLocaleString('en-IN')}
             </Text>
           </View>
         )}
 
         {isSettled && (
-          <View style={styles.settledBadge}>
+          <View style={styles.badgeContainer}>
             <Text style={styles.settledStatus}>Settled</Text>
             <Text style={styles.settledAmount}>{currency} 0</Text>
           </View>
         )}
       </View>
 
-      <ChevronRight size={18} color="#94a3b8" style={{ marginLeft: 4 }} />
+      <ChevronRight size={16} color="#94a3b8" style={{ marginLeft: 6 }} />
     </TouchableOpacity>
   );
 };
@@ -95,28 +101,37 @@ const styles = StyleSheet.create({
   cardContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+    width: '100%',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
+    fontFamily: FONTS.headingBold,
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   infoCol: {
     flex: 1,
+    flexShrink: 1,
+    paddingRight: 6,
   },
   nameRow: {
     flexDirection: 'row',
@@ -124,20 +139,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   partyName: {
-    fontSize: 15,
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
-    maxWidth: 150,
+    color: '#0f172a',
+    flex: 1,
   },
   typeBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
   typeBadgeText: {
-    fontSize: 10,
-    color: '#94a3b8',
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 9,
+    color: '#475569',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -145,59 +162,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 3,
   },
   phoneText: {
-    fontSize: 12,
-    color: '#94a3b8',
-  },
-  dotSeparator: {
-    fontSize: 12,
-    color: '#475569',
-  },
-  dateText: {
+    fontFamily: FONTS.bodyRegular,
     fontSize: 11,
     color: '#64748b',
+  },
+  dotSeparator: {
+    fontSize: 11,
+    color: '#cbd5e1',
+  },
+  dateText: {
+    fontFamily: FONTS.bodyRegular,
+    fontSize: 11,
+    color: '#94a3b8',
   },
   balanceCol: {
     alignItems: 'flex-end',
   },
-  receivableBadge: {
+  badgeContainer: {
     alignItems: 'flex-end',
   },
   balanceStatusRed: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 10,
     color: COLORS.gaveRed,
     fontWeight: '700',
   },
   balanceAmountRed: {
-    fontSize: 15,
+    fontFamily: FONTS.headingExtraBold,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.gaveRed,
   },
-  payableBadge: {
-    alignItems: 'flex-end',
-  },
   balanceStatusGreen: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 10,
     color: COLORS.gotGreen,
     fontWeight: '700',
   },
   balanceAmountGreen: {
-    fontSize: 15,
+    fontFamily: FONTS.headingExtraBold,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.gotGreen,
   },
-  settledBadge: {
-    alignItems: 'flex-end',
-  },
   settledStatus: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
   },
   settledAmount: {
-    fontSize: 14,
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
     fontWeight: '700',
     color: '#94a3b8',
   },

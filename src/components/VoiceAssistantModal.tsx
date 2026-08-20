@@ -47,9 +47,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
     setTimeout(() => {
       setIsListening(false);
-      // Smart voice parsing logic
-      const isGot = phrase.toLowerCase().includes('jama') || phrase.toLowerCase().includes('mila');
-      const isGave = phrase.toLowerCase().includes('diya') || phrase.toLowerCase().includes('udhaar');
+      const isGot =
+        phrase.toLowerCase().includes('jama') ||
+        phrase.toLowerCase().includes('mila');
 
       const numbers = phrase.match(/\d+/g);
       const amount = numbers ? parseInt(numbers[0]) : 500;
@@ -64,11 +64,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         type: isGot ? 'got' : 'gave',
         note: phrase,
       });
-    }, 1200);
+    }, 1000);
   };
 
   const handleConfirm = () => {
-    if (parsedData && parsedData.partyName && parsedData.amount && parsedData.type) {
+    if (
+      parsedData &&
+      parsedData.partyName &&
+      parsedData.amount &&
+      parsedData.type
+    ) {
       onParseVoice({
         partyName: parsedData.partyName,
         amount: parsedData.amount,
@@ -88,11 +93,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.brandTitleRow}>
-              <Sparkles size={20} color={COLORS.gotGreen} />
+              <Sparkles size={18} color={COLORS.primary} />
               <Text style={styles.title}>BolKhata Voice Assistant</Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={20} color="#94a3b8" />
+              <X size={18} color="#64748b" />
             </TouchableOpacity>
           </View>
 
@@ -101,25 +106,25 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               Speak or tap a phrase to add a voice transaction (बोलकर खाता जोड़ें)
             </Text>
 
-            {/* Glowing Mic Button */}
+            {/* Mic Button */}
             <TouchableOpacity
               style={[styles.micBigBtn, isListening && styles.micListening]}
               onPress={() => handleSimulateVoice('Ramesh ko 500 basmati rice diya')}
               activeOpacity={0.8}
             >
-              <Mic size={36} color="#ffffff" strokeWidth={2.5} />
+              <Mic size={32} color="#ffffff" strokeWidth={2.5} />
               <Text style={styles.micText}>
                 {isListening ? 'Listening...' : 'Tap & Speak'}
               </Text>
             </TouchableOpacity>
 
-            {/* Voice Input Box */}
+            {/* Spoken Text Box */}
             <View style={styles.inputBox}>
-              <Volume2 size={18} color="#60a5fa" style={{ marginRight: 8 }} />
+              <Volume2 size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.voiceTextInput}
                 placeholder="Spoken entry will appear here..."
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 value={voiceText}
                 onChangeText={(t: string) => {
                   setVoiceText(t);
@@ -129,7 +134,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </View>
 
             {/* Quick Sample Prompts */}
-            <Text style={styles.sampleHeader}>Try sample store voice commands:</Text>
+            <Text style={styles.sampleHeader}>Try sample store commands:</Text>
             <View style={styles.sampleGrid}>
               {sampleCommands.map((cmd, idx) => (
                 <TouchableOpacity
@@ -146,23 +151,33 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             {parsedData && (
               <View style={styles.parsedCard}>
                 <View style={styles.parsedHeader}>
-                  <CheckCircle size={18} color={COLORS.gotGreen} />
+                  <CheckCircle size={16} color={COLORS.gotGreen} />
                   <Text style={styles.parsedTitle}>Parsed Entry Ready:</Text>
                 </View>
 
                 <Text style={styles.parsedDetailText}>
-                  • Party: <Text style={{ color: '#ffffff', fontWeight: '700' }}>{parsedData.partyName}</Text>{'\n'}
-                  • Type:{' '}
+                  • Party:{' '}
+                  <Text style={{ color: '#0f172a', fontWeight: '700' }}>
+                    {parsedData.partyName}
+                  </Text>
+                  {'\n'}• Type:{' '}
                   <Text
                     style={{
-                      color: parsedData.type === 'gave' ? COLORS.gaveRed : COLORS.gotGreen,
+                      color:
+                        parsedData.type === 'gave'
+                          ? COLORS.gaveRed
+                          : COLORS.gotGreen,
                       fontWeight: '800',
                     }}
                   >
-                    {parsedData.type === 'gave' ? 'You Gave (Udhaar)' : 'You Received (Jama)'}
-                  </Text>{'\n'}
-                  • Amount:{' '}
-                  <Text style={{ color: '#ffffff', fontWeight: '800' }}>₹{parsedData.amount}</Text>
+                    {parsedData.type === 'gave'
+                      ? 'You Gave (Udhaar)'
+                      : 'You Received (Jama)'}
+                  </Text>
+                  {'\n'}• Amount:{' '}
+                  <Text style={{ color: '#0f172a', fontWeight: '800' }}>
+                    ₹{parsedData.amount}
+                  </Text>
                 </Text>
 
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
@@ -180,7 +195,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -188,11 +203,16 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#0f172a',
-    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
   },
   headerRow: {
     flexDirection: 'row',
@@ -201,7 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#e2e8f0',
   },
   brandTitleRow: {
     flexDirection: 'row',
@@ -209,15 +229,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -226,24 +246,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subtitle: {
-    fontSize: 13,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   micBigBtn: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: COLORS.gotGreen,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: COLORS.gotGreen,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
+    marginBottom: 14,
   },
   micListening: {
     backgroundColor: COLORS.gaveRed,
@@ -258,80 +273,80 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 48,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
     borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 16,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
   },
   voiceTextInput: {
     flex: 1,
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#0f172a',
+    fontSize: 13,
   },
   sampleHeader: {
     alignSelf: 'flex-start',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748b',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   sampleGrid: {
     width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sampleChip: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   sampleChipText: {
-    fontSize: 12,
-    color: '#38bdf8',
+    fontSize: 11,
+    color: '#334155',
   },
   parsedCard: {
     width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
-    borderColor: COLORS.gotGreen,
+    borderColor: COLORS.gotGreenBorder,
   },
   parsedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   parsedTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.gotGreen,
+    color: '#166534',
   },
   parsedDetailText: {
-    fontSize: 13,
-    color: '#94a3b8',
-    lineHeight: 20,
-    marginBottom: 12,
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 18,
+    marginBottom: 10,
   },
   confirmBtn: {
     backgroundColor: COLORS.gotGreen,
-    height: 42,
-    borderRadius: 10,
+    height: 38,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   confirmBtnText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

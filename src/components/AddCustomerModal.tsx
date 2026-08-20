@@ -67,11 +67,11 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.titleRow}>
-              <UserPlus size={22} color={COLORS.primary} />
-              <Text style={styles.modalTitle}>Add New Grahak / Party</Text>
+              <UserPlus size={20} color={COLORS.primary} />
+              <Text style={styles.modalTitle}>Add New Party</Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={20} color="#94a3b8" />
+              <X size={18} color="#64748b" />
             </TouchableOpacity>
           </View>
 
@@ -83,9 +83,17 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                 style={[styles.roleCard, type === 'customer' && styles.roleSelected]}
                 onPress={() => setType('customer')}
               >
-                <UserCheck size={18} color={type === 'customer' ? COLORS.primary : '#94a3b8'} />
-                <Text style={[styles.roleText, type === 'customer' && styles.roleTextSelected]}>
-                  Grahak (Customer)
+                <UserCheck
+                  size={16}
+                  color={type === 'customer' ? COLORS.primary : '#64748b'}
+                />
+                <Text
+                  style={[
+                    styles.roleText,
+                    type === 'customer' && styles.roleTextSelected,
+                  ]}
+                >
+                  Customer (Grahak)
                 </Text>
               </TouchableOpacity>
 
@@ -93,31 +101,41 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                 style={[styles.roleCard, type === 'supplier' && styles.roleSelected]}
                 onPress={() => setType('supplier')}
               >
-                <UserCheck size={18} color={type === 'supplier' ? COLORS.primary : '#94a3b8'} />
-                <Text style={[styles.roleText, type === 'supplier' && styles.roleTextSelected]}>
+                <UserCheck
+                  size={16}
+                  color={type === 'supplier' ? COLORS.primary : '#64748b'}
+                />
+                <Text
+                  style={[
+                    styles.roleText,
+                    type === 'supplier' && styles.roleTextSelected,
+                  ]}
+                >
                   Supplier (Wholesaler)
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Name Input */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Full Name *</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Full Name *</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. Ramesh Kumar"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#94a3b8"
               value={name}
               onChangeText={setName}
             />
 
             {/* Mobile Input */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Mobile Phone Number *</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+              Mobile Phone Number *
+            </Text>
             <View style={styles.inputRow}>
-              <Phone size={16} color="#64748b" style={{ marginRight: 8 }} />
+              <Phone size={15} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.flexInput}
                 placeholder="e.g. 9812345678"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
                 value={mobile}
                 onChangeText={setMobile}
@@ -125,31 +143,39 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
             </View>
 
             {/* Address */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Shop / Home Address (Optional)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+              Shop / Home Address (Optional)
+            </Text>
             <View style={styles.inputRow}>
-              <MapPin size={16} color="#64748b" style={{ marginRight: 8 }} />
+              <MapPin size={15} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.flexInput}
                 placeholder="e.g. Shop #12, Main Market"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 value={address}
                 onChangeText={setAddress}
               />
             </View>
 
             {/* Opening Balance */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Opening Balance (Optional)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+              Opening Balance (Optional)
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="0 (Positive = You will collect)"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#94a3b8"
               keyboardType="numeric"
               value={openingBalance}
               onChangeText={setOpeningBalance}
             />
 
             {/* Save Button */}
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleSave}
+              activeOpacity={0.85}
+            >
               <Text style={styles.saveBtnText}>Save Party to Khata</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -162,16 +188,16 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   headerRow: {
     flexDirection: 'row',
@@ -179,7 +205,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#e2e8f0',
   },
   titleRow: {
     flexDirection: 'row',
@@ -189,20 +215,20 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
   },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#475569',
     marginBottom: 6,
   },
   roleGrid: {
@@ -213,63 +239,64 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#1e293b',
+    gap: 6,
+    backgroundColor: '#f8fafc',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   roleSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    backgroundColor: COLORS.primaryLight,
   },
   roleText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
   },
   roleTextSelected: {
-    color: '#ffffff',
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   input: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 48,
-    color: '#ffffff',
-    fontSize: 14,
+    height: 46,
+    color: '#0f172a',
+    fontSize: 13,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 48,
+    height: 46,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   flexInput: {
     flex: 1,
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#0f172a',
+    fontSize: 13,
     height: '100%',
   },
   saveBtn: {
     backgroundColor: COLORS.primary,
-    height: 52,
+    height: 48,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
     marginBottom: 16,
   },
   saveBtnText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

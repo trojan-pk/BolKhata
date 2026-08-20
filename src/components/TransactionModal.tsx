@@ -59,15 +59,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={[styles.modalHeader, isGave ? styles.gaveHeader : styles.gotHeader]}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.modalTitle}>
                 {isGave ? 'You Gave Money (Udhaar)' : 'You Received Money (Jama)'}
               </Text>
-              <Text style={styles.partySub}>For: {partyName}</Text>
+              <Text style={styles.partySub} numberOfLines={1}>For: {partyName}</Text>
             </View>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={20} color="#ffffff" />
+              <X size={18} color="#ffffff" />
             </TouchableOpacity>
           </View>
 
@@ -75,13 +75,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {/* Amount Input */}
             <Text style={styles.fieldLabel}>Enter Amount ({currency})</Text>
             <View style={styles.amountInputRow}>
-              <Text style={[styles.currencyPrefix, { color: isGave ? COLORS.gaveRed : COLORS.gotGreen }]}>
+              <Text
+                style={[
+                  styles.currencyPrefix,
+                  { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                ]}
+              >
                 {currency}
               </Text>
               <TextInput
-                style={[styles.amountInput, { color: isGave ? COLORS.gaveRed : COLORS.gotGreen }]}
+                style={[
+                  styles.amountInput,
+                  { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                ]}
                 placeholder="0"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
@@ -114,7 +122,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     style={[styles.modeCard, isSelected && styles.modeCardSelected]}
                     onPress={() => setPaymentMode(item.key)}
                   >
-                    <Icon size={18} color={isSelected ? COLORS.primary : '#94a3b8'} />
+                    <Icon size={16} color={isSelected ? COLORS.primary : '#64748b'} />
                     <Text style={[styles.modeText, isSelected && styles.modeTextSelected]}>
                       {item.label}
                     </Text>
@@ -124,11 +132,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </View>
 
             {/* Item Details / Note */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Entry Note / Items list (Optional)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+              Entry Note / Items list (Optional)
+            </Text>
             <TextInput
               style={styles.noteInput}
               placeholder="e.g. 5kg Basmati Rice, Oil packet..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#94a3b8"
               value={note}
               onChangeText={setNote}
               multiline
@@ -140,7 +150,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               onPress={handleSubmit}
               activeOpacity={0.85}
             >
-              <Check size={20} color="#ffffff" />
+              <Check size={18} color="#ffffff" />
               <Text style={styles.submitText}>
                 Save {isGave ? 'Udhaar' : 'Jama'} Entry
               </Text>
@@ -155,16 +165,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -188,7 +198,7 @@ const styles = StyleSheet.create({
   },
   partySub: {
     fontSize: 13,
-    color: '#f8fafc',
+    color: '#ffffff',
     opacity: 0.9,
     marginTop: 2,
   },
@@ -204,47 +214,47 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#94a3b8',
-    marginBottom: 8,
+    color: '#475569',
+    marginBottom: 6,
   },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingHorizontal: 14,
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: '#cbd5e1',
   },
   currencyPrefix: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
-    marginRight: 8,
+    marginRight: 6,
   },
   amountInput: {
     flex: 1,
-    height: 60,
-    fontSize: 28,
+    height: 54,
+    fontSize: 26,
     fontWeight: '800',
   },
   pillsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 10,
+    marginTop: 8,
   },
   pill: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   pillText: {
-    fontSize: 12,
-    color: '#e2e8f0',
+    fontSize: 11,
+    color: '#334155',
     fontWeight: '600',
   },
   modeGrid: {
@@ -256,43 +266,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   modeCardSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    backgroundColor: COLORS.primaryLight,
   },
   modeText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
   },
   modeTextSelected: {
-    color: '#ffffff',
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   noteInput: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 12,
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#0f172a',
+    fontSize: 13,
     borderWidth: 1,
-    borderColor: '#334155',
-    minHeight: 60,
+    borderColor: '#e2e8f0',
+    minHeight: 56,
   },
   submitButton: {
-    height: 52,
-    borderRadius: 16,
+    height: 48,
+    borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    marginTop: 24,
+    marginTop: 20,
     marginBottom: 16,
   },
   submitGave: {
@@ -303,7 +314,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
 });

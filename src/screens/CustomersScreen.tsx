@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Search, UserPlus, Users, Filter } from 'lucide-react-native';
+import { Search, UserPlus, Users } from 'lucide-react-native';
 import { CustomerCard } from '../components/CustomerCard';
 import { Party } from '../types';
 import { COLORS } from '../theme/colors';
+import { FONTS } from '../theme/typography';
 
 interface CustomersScreenProps {
   parties: Party[];
@@ -47,55 +48,64 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       {/* Search Bar & Add Button */}
       <View style={styles.topControlBar}>
         <View style={styles.searchBox}>
-          <Search size={16} color="#64748b" style={{ marginRight: 8 }} />
+          <Search size={15} color="#94a3b8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by customer name or phone..."
-            placeholderTextColor="#64748b"
+            placeholder="Search customer or phone..."
+            placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
 
         <TouchableOpacity style={styles.addBtn} onPress={onAddParty} activeOpacity={0.85}>
-          <UserPlus size={18} color="#ffffff" />
+          <UserPlus size={16} color="#ffffff" />
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterStrip}>
-        {[
-          { key: 'all', label: 'All Customers' },
-          { key: 'get', label: "You'll Get (Udhaar)" },
-          { key: 'give', label: "You'll Give (Jama)" },
-          { key: 'settled', label: 'Settled' },
-        ].map((item) => (
-          <TouchableOpacity
-            key={item.key}
-            style={[
-              styles.filterPill,
-              activeFilter === item.key && styles.filterPillActive,
-            ]}
-            onPress={() => setActiveFilter(item.key as any)}
-          >
-            <Text
+      {/* Filter Tabs Horizontal Scroll */}
+      <View style={styles.filterContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterStrip}
+        >
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'get', label: "You'll Get (Udhaar)" },
+            { key: 'give', label: "You'll Give (Jama)" },
+            { key: 'settled', label: 'Settled' },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.key}
               style={[
-                styles.filterPillText,
-                activeFilter === item.key && styles.filterPillTextActive,
+                styles.filterPill,
+                activeFilter === item.key && styles.filterPillActive,
               ]}
+              onPress={() => setActiveFilter(item.key as any)}
             >
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.filterPillText,
+                  activeFilter === item.key && styles.filterPillTextActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* List */}
-      <ScrollView style={styles.listArea} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView
+        style={styles.listArea}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {filteredParties.length === 0 ? (
           <View style={styles.emptyState}>
-            <Users size={36} color="#475569" />
+            <Users size={32} color="#94a3b8" />
             <Text style={styles.emptyTitle}>No matching customers found</Text>
             <Text style={styles.emptySub}>
               Tap '+ Add' to register a new customer or supplier
@@ -121,27 +131,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    width: '100%',
   },
   topControlBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 10,
+    width: '100%',
   },
   searchBox: {
     flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: 42,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   searchInput: {
+    fontFamily: FONTS.bodyRegular,
     flex: 1,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
   },
   addBtn: {
@@ -150,34 +164,39 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 14,
+    height: 42,
+    borderRadius: 12,
   },
   addBtnText: {
+    fontFamily: FONTS.headingBold,
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+  },
+  filterContainer: {
+    marginBottom: 10,
   },
   filterStrip: {
     flexDirection: 'row',
     gap: 6,
-    marginBottom: 12,
+    paddingVertical: 2,
   },
   filterPill: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 10,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   filterPillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
   },
   filterPillText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '600',
   },
   filterPillTextActive: {
@@ -192,14 +211,17 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#94a3b8',
-    marginTop: 12,
+    color: '#475569',
+    marginTop: 10,
   },
   emptySub: {
+    fontFamily: FONTS.bodyRegular,
     fontSize: 12,
-    color: '#64748b',
+    color: '#94a3b8',
     marginTop: 4,
+    textAlign: 'center',
   },
 });

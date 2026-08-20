@@ -59,9 +59,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
     );
 
     const url = `whatsapp://send?phone=${party.mobile}&text=${message}`;
-    Linking.canOpenURL(url)
-      ? Linking.openURL(url)
-      : Linking.openURL(`https://wa.me/${party.mobile}?text=${message}`);
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://wa.me/${party.mobile}?text=${message}`);
+    });
   };
 
   const handlePhoneCall = () => {
@@ -74,7 +74,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         {/* Header */}
         <View style={styles.headerBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onClose}>
-            <X size={20} color="#ffffff" />
+            <X size={18} color="#0f172a" />
           </TouchableOpacity>
 
           <View style={styles.headerInfo}>
@@ -87,11 +87,14 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           {/* Call & WhatsApp Quick Buttons */}
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.actionCircle} onPress={handlePhoneCall}>
-              <Phone size={16} color="#ffffff" />
+              <Phone size={15} color="#ffffff" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.whatsappCircle} onPress={handleSendWhatsAppReminder}>
-              <MessageCircle size={16} color="#ffffff" />
+            <TouchableOpacity
+              style={styles.whatsappCircle}
+              onPress={handleSendWhatsAppReminder}
+            >
+              <MessageCircle size={15} color="#ffffff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -107,12 +110,12 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               : styles.settledBanner,
           ]}
         >
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.balanceLabel}>
               {isReceivable
-                ? 'Total Amount You Will Collect (Udhaar)'
+                ? 'Amount You Will Collect (Udhaar)'
                 : isPayable
-                ? 'Total Amount You Will Pay (Jama)'
+                ? 'Amount You Will Pay (Jama)'
                 : 'Khata Balance Cleared'}
             </Text>
             <Text
@@ -123,9 +126,10 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     ? COLORS.gaveRed
                     : isPayable
                     ? COLORS.gotGreen
-                    : '#94a3b8',
+                    : '#64748b',
                 },
               ]}
+              numberOfLines={1}
             >
               {currency} {Math.abs(party.currentBalance).toLocaleString('en-IN')}
             </Text>
@@ -133,19 +137,24 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
           {party.currentBalance !== 0 && (
             <TouchableOpacity style={styles.settleBtn} onPress={onSettleUp}>
-              <CheckCheck size={14} color="#ffffff" />
+              <CheckCheck size={14} color="#0f172a" />
               <Text style={styles.settleBtnText}>Settle Up</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Ledger Transaction Timeline */}
-        <Text style={styles.timelineHeader}>Ledger Entry History ({partyTxns.length})</Text>
+        <Text style={styles.timelineHeader}>
+          Ledger Entry History ({partyTxns.length})
+        </Text>
 
-        <ScrollView style={styles.timelineList} contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView
+          style={styles.timelineList}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
           {partyTxns.length === 0 ? (
             <View style={styles.emptyState}>
-              <Tag size={32} color="#475569" />
+              <Tag size={28} color="#94a3b8" />
               <Text style={styles.emptyText}>No entries recorded yet</Text>
               <Text style={styles.emptySub}>
                 Use the + Gave or + Got buttons below to record credit/cash
@@ -159,7 +168,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   <View style={styles.txnMainRow}>
                     <View style={styles.txnLeftCol}>
                       <View style={styles.txnDateRow}>
-                        <Calendar size={12} color="#94a3b8" />
+                        <Calendar size={11} color="#64748b" />
                         <Text style={styles.txnDate}>{txn.date}</Text>
                         <View style={styles.modeBadge}>
                           <Text style={styles.modeBadgeText}>
@@ -169,7 +178,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       </View>
 
                       {txn.note ? (
-                        <Text style={styles.txnNote}>{txn.note}</Text>
+                        <Text style={styles.txnNote} numberOfLines={2}>
+                          {txn.note}
+                        </Text>
                       ) : (
                         <Text style={styles.txnNoNote}>No note added</Text>
                       )}
@@ -182,6 +193,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                           styles.txnAmount,
                           { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
                         ]}
+                        numberOfLines={1}
                       >
                         {isGave ? '-' : '+'} {currency}{' '}
                         {txn.amount.toLocaleString('en-IN')}
@@ -209,7 +221,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             onPress={onAddGave}
             activeOpacity={0.85}
           >
-            <MinusCircle size={20} color="#ffffff" />
+            <MinusCircle size={18} color="#ffffff" />
             <Text style={styles.bottomActionText}>+ YOU GAVE ({currency})</Text>
           </TouchableOpacity>
 
@@ -218,7 +230,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             onPress={onAddGot}
             activeOpacity={0.85}
           >
-            <PlusCircle size={20} color="#ffffff" />
+            <PlusCircle size={18} color="#ffffff" />
             <Text style={styles.bottomActionText}>+ YOU GOT ({currency})</Text>
           </TouchableOpacity>
         </View>
@@ -230,39 +242,40 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f8fafc',
   },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#e2e8f0',
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#334155',
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   headerInfo: {
     flex: 1,
+    flexShrink: 1,
   },
   headerName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   headerPhone: {
     fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
+    color: '#64748b',
+    marginTop: 1,
   },
   headerActions: {
     flexDirection: 'row',
@@ -294,16 +307,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   receivableBanner: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fca5a5',
+    backgroundColor: COLORS.gaveRedBg,
+    borderColor: COLORS.gaveRedBorder,
   },
   payableBanner: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
+    backgroundColor: COLORS.gotGreenBg,
+    borderColor: COLORS.gotGreenBorder,
   },
   settledBanner: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
   },
   balanceLabel: {
     fontSize: 12,
@@ -311,7 +324,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   balanceValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     marginTop: 2,
   },
@@ -319,20 +332,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
   },
   settleBtnText: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '700',
   },
   timelineHeader: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#475569',
     marginHorizontal: 16,
     marginBottom: 8,
   },
@@ -346,23 +361,29 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#94a3b8',
-    marginTop: 10,
+    color: '#475569',
+    marginTop: 8,
   },
   emptySub: {
     fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
+    color: '#94a3b8',
+    marginTop: 2,
+    textAlign: 'center',
   },
   txnCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   txnMainRow: {
     flexDirection: 'row',
@@ -381,10 +402,10 @@ const styles = StyleSheet.create({
   },
   txnDate: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
   },
   modeBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
@@ -392,25 +413,25 @@ const styles = StyleSheet.create({
   },
   modeBadgeText: {
     fontSize: 9,
-    color: '#e2e8f0',
+    color: '#475569',
     fontWeight: '700',
   },
   txnNote: {
-    fontSize: 14,
-    color: '#ffffff',
+    fontSize: 13,
+    color: '#0f172a',
     fontWeight: '600',
     marginTop: 2,
   },
   txnNoNote: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: 12,
+    color: '#94a3b8',
     fontStyle: 'italic',
   },
   txnRightCol: {
     alignItems: 'flex-end',
   },
   txnAmount: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   txnTag: {
@@ -425,14 +446,14 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: '#e2e8f0',
   },
   bottomActionBtn: {
     flex: 1,
-    height: 52,
+    height: 48,
     borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',
@@ -447,7 +468,7 @@ const styles = StyleSheet.create({
   },
   bottomActionText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
 });

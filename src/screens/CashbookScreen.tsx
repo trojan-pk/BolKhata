@@ -8,7 +8,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { TrendingUp, TrendingDown, Plus, Minus, X, Calendar, Wallet } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, Plus, Minus, X, Calendar } from 'lucide-react-native';
 import { CashbookEntry } from '../types';
 import { COLORS } from '../theme/colors';
 
@@ -68,20 +68,24 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
       <View style={styles.summaryCard}>
         <View style={styles.summaryCol}>
           <View style={styles.iconLabel}>
-            <TrendingUp size={14} color={COLORS.gotGreen} />
+            <TrendingUp size={13} color={COLORS.gotGreen} />
             <Text style={styles.summaryLabel}>Total Cash In</Text>
           </View>
-          <Text style={styles.valIn}>+ {currency} {totalIn.toLocaleString('en-IN')}</Text>
+          <Text style={styles.valIn} numberOfLines={1}>
+            + {currency} {totalIn.toLocaleString('en-IN')}
+          </Text>
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.summaryCol}>
           <View style={styles.iconLabel}>
-            <TrendingDown size={14} color={COLORS.gaveRed} />
+            <TrendingDown size={13} color={COLORS.gaveRed} />
             <Text style={styles.summaryLabel}>Total Cash Out</Text>
           </View>
-          <Text style={styles.valOut}>- {currency} {totalOut.toLocaleString('en-IN')}</Text>
+          <Text style={styles.valOut} numberOfLines={1}>
+            - {currency} {totalOut.toLocaleString('en-IN')}
+          </Text>
         </View>
       </View>
 
@@ -92,7 +96,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
           onPress={() => handleOpenModal('in')}
           activeOpacity={0.85}
         >
-          <Plus size={18} color="#ffffff" />
+          <Plus size={16} color="#ffffff" />
           <Text style={styles.btnText}>+ CASH IN</Text>
         </TouchableOpacity>
 
@@ -101,7 +105,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
           onPress={() => handleOpenModal('out')}
           activeOpacity={0.85}
         >
-          <Minus size={18} color="#ffffff" />
+          <Minus size={16} color="#ffffff" />
           <Text style={styles.btnText}>- CASH OUT</Text>
         </TouchableOpacity>
       </View>
@@ -116,16 +120,24 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
             <View key={item.id} style={styles.entryCard}>
               <View style={styles.entryLeft}>
                 <View style={styles.dateRow}>
-                  <Calendar size={12} color="#94a3b8" />
+                  <Calendar size={11} color="#64748b" />
                   <Text style={styles.entryDate}>{item.date}</Text>
                   <View style={styles.catBadge}>
                     <Text style={styles.catBadgeText}>{item.category}</Text>
                   </View>
                 </View>
-                <Text style={styles.entryNote}>{item.note || 'No notes'}</Text>
+                <Text style={styles.entryNote} numberOfLines={2}>
+                  {item.note || 'No notes'}
+                </Text>
               </View>
 
-              <Text style={[styles.entryAmount, { color: isIn ? COLORS.gotGreen : COLORS.gaveRed }]}>
+              <Text
+                style={[
+                  styles.entryAmount,
+                  { color: isIn ? COLORS.gotGreen : COLORS.gaveRed },
+                ]}
+                numberOfLines={1}
+              >
                 {isIn ? '+' : '-'} {currency} {item.amount.toLocaleString('en-IN')}
               </Text>
             </View>
@@ -137,12 +149,17 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.overlay}>
           <View style={styles.modalCard}>
-            <View style={[styles.modalHeader, entryType === 'in' ? styles.headerIn : styles.headerOut]}>
+            <View
+              style={[
+                styles.modalHeader,
+                entryType === 'in' ? styles.headerIn : styles.headerOut,
+              ]}
+            >
               <Text style={styles.modalTitle}>
-                {entryType === 'in' ? 'Record Cash In' : 'Record Cash Out / Expense'}
+                {entryType === 'in' ? 'Record Cash In' : 'Record Cash Out'}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <X size={20} color="#ffffff" />
+                <X size={18} color="#ffffff" />
               </TouchableOpacity>
             </View>
 
@@ -151,7 +168,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
               <TextInput
                 style={styles.input}
                 placeholder="0"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
@@ -162,7 +179,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Daily Cash Sale, Tea, Electric Bill"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 value={category}
                 onChangeText={setCategory}
               />
@@ -171,13 +188,16 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
               <TextInput
                 style={styles.input}
                 placeholder="Optional details..."
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#94a3b8"
                 value={note}
                 onChangeText={setNote}
               />
 
               <TouchableOpacity
-                style={[styles.saveBtn, entryType === 'in' ? styles.btnIn : styles.btnOut]}
+                style={[
+                  styles.saveBtn,
+                  entryType === 'in' ? styles.btnIn : styles.btnOut,
+                ]}
                 onPress={handleSave}
               >
                 <Text style={styles.saveBtnText}>Save Cash Entry</Text>
@@ -195,15 +215,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    width: '100%',
   },
   summaryCard: {
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   summaryCol: {
     flex: 1,
@@ -216,34 +242,34 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: 11,
+    color: '#64748b',
     fontWeight: '600',
   },
   valIn: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.gotGreen,
   },
   valOut: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.gaveRed,
   },
   divider: {
     width: 1,
-    height: 36,
-    backgroundColor: '#334155',
+    height: 32,
+    backgroundColor: '#e2e8f0',
   },
   btnRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 14,
   },
   actionBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: 14,
+    height: 44,
+    borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -263,22 +289,28 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#475569',
     marginBottom: 8,
   },
   entryCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   entryLeft: {
     flex: 1,
+    paddingRight: 8,
   },
   dateRow: {
     flexDirection: 'row',
@@ -288,10 +320,10 @@ const styles = StyleSheet.create({
   },
   entryDate: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
   },
   catBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
@@ -299,29 +331,29 @@ const styles = StyleSheet.create({
   },
   catBadgeText: {
     fontSize: 9,
-    color: '#e2e8f0',
+    color: '#475569',
     fontWeight: '700',
   },
   entryNote: {
-    fontSize: 14,
-    color: '#ffffff',
+    fontSize: 13,
+    color: '#0f172a',
     fontWeight: '600',
   },
   entryAmount: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -345,30 +377,30 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#475569',
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 14,
-    height: 48,
-    color: '#ffffff',
-    fontSize: 14,
+    height: 46,
+    color: '#0f172a',
+    fontSize: 13,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
   },
   saveBtn: {
-    height: 48,
+    height: 46,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 18,
     marginBottom: 10,
   },
   saveBtnText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
 });

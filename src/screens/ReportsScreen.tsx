@@ -5,9 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
-import { FileText, Share2, AlertCircle, TrendingUp, Download } from 'lucide-react-native';
+import { Download } from 'lucide-react-native';
 import { Party } from '../types';
 import { COLORS } from '../theme/colors';
 
@@ -27,20 +26,27 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const totalJama = creditors.reduce((sum, p) => sum + Math.abs(p.currentBalance), 0);
 
   const handleExportPDF = () => {
-    alert('PDF Statement generated! Downloading shop ledger statement report...');
+    alert('PDF Statement generated! Downloading shop ledger report...');
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 100 }}
+    >
       {/* Action Header */}
       <View style={styles.actionHeader}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.pageTitle}>Reports & Analytics</Text>
           <Text style={styles.pageSub}>Download statements & debt insights</Text>
         </View>
 
-        <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} activeOpacity={0.85}>
-          <Download size={16} color="#ffffff" />
+        <TouchableOpacity
+          style={styles.exportBtn}
+          onPress={handleExportPDF}
+          activeOpacity={0.85}
+        >
+          <Download size={15} color="#ffffff" />
           <Text style={styles.exportBtnText}>PDF Report</Text>
         </TouchableOpacity>
       </View>
@@ -48,24 +54,30 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       {/* Summary Metrics */}
       <View style={styles.metricsGrid}>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Total Debtors (Udhaar Grahak)</Text>
-          <Text style={styles.metricValRed}>{debtors.length} Parties</Text>
-          <Text style={styles.metricSub}>
+          <Text style={styles.metricLabel}>Total Debtors (Grahak)</Text>
+          <Text style={styles.metricValRed} numberOfLines={1}>
+            {debtors.length} Parties
+          </Text>
+          <Text style={styles.metricSub} numberOfLines={1}>
             {currency} {totalUdhaar.toLocaleString('en-IN')} pending
           </Text>
         </View>
 
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Total Creditors (Suppliers)</Text>
-          <Text style={styles.metricValGreen}>{creditors.length} Parties</Text>
-          <Text style={styles.metricSub}>
+          <Text style={styles.metricValGreen} numberOfLines={1}>
+            {creditors.length} Parties
+          </Text>
+          <Text style={styles.metricSub} numberOfLines={1}>
             {currency} {totalJama.toLocaleString('en-IN')} payable
           </Text>
         </View>
       </View>
 
       {/* Top Pending Debtors List */}
-      <Text style={styles.sectionHeader}>Top Pending Debtors (Action Required)</Text>
+      <Text style={styles.sectionHeader}>
+        Top Pending Debtors (Action Required)
+      </Text>
 
       {debtors.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -77,13 +89,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           .map((party) => (
             <View key={party.id} style={styles.debtorCard}>
               <View style={styles.debtorInfo}>
-                <Text style={styles.debtorName}>{party.name}</Text>
+                <Text style={styles.debtorName} numberOfLines={1}>
+                  {party.name}
+                </Text>
                 <Text style={styles.debtorPhone}>{party.mobile}</Text>
               </View>
 
               <View style={styles.debtorValBox}>
                 <Text style={styles.debtorStatus}>Aap Lenge</Text>
-                <Text style={styles.debtorAmount}>
+                <Text style={styles.debtorAmount} numberOfLines={1}>
                   {currency} {party.currentBalance.toLocaleString('en-IN')}
                 </Text>
               </View>
@@ -99,22 +113,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    width: '100%',
   },
   actionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   pageSub: {
     fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
+    color: '#64748b',
+    marginTop: 1,
   },
   exportBtn: {
     flexDirection: 'row',
@@ -122,88 +137,101 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: COLORS.primary,
     paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 12,
+    height: 36,
+    borderRadius: 10,
   },
   exportBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   metricsGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
   },
   metricLabel: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
   },
   metricValRed: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.gaveRed,
     marginTop: 4,
   },
   metricValGreen: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.gotGreen,
     marginTop: 4,
   },
   metricSub: {
-    fontSize: 12,
-    color: '#e2e8f0',
+    fontSize: 11,
+    color: '#475569',
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 2,
   },
   sectionHeader: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#94a3b8',
-    marginBottom: 10,
+    color: '#475569',
+    marginBottom: 8,
   },
   emptyCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     padding: 20,
     borderRadius: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   emptyText: {
-    color: '#94a3b8',
-    fontSize: 14,
+    color: '#64748b',
+    fontSize: 13,
   },
   debtorCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
   debtorInfo: {
     flex: 1,
+    paddingRight: 8,
   },
   debtorName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   debtorPhone: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: 11,
+    color: '#64748b',
     marginTop: 2,
   },
   debtorValBox: {
@@ -215,7 +243,7 @@ const styles = StyleSheet.create({
     color: COLORS.gaveRed,
   },
   debtorAmount: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.gaveRed,
   },

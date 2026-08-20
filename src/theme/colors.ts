@@ -1,39 +1,38 @@
 export const COLORS = {
-  // Brand & Accent
-  primary: '#2563eb', // Rich Royal Blue
-  primaryDark: '#1d4ed8',
+  // Modern Premium Light Theme
+  bg: '#f8fafc',
+  bgCard: '#ffffff',
+  surface: '#ffffff',
+  surfaceSubtle: '#f1f5f9',
+  surfaceHover: '#e2e8f0',
+
+  // Text Colors (High Contrast)
+  textPrimary: '#0f172a',    // Deep slate black
+  textSecondary: '#475569',  // Slate gray
+  textMuted: '#94a3b8',      // Light muted gray
+
+  // Borders
+  border: '#e2e8f0',
+  borderDark: '#cbd5e1',
+  borderFocus: '#2563eb',
+
+  // Brand Accent (Modern Royal Blue)
+  primary: '#2563eb',
   primaryLight: '#eff6ff',
-  accent: '#7c3aed', // Purple accent
-  
-  // Ledger Core Tags (Khatabook Style)
-  gaveRed: '#dc2626', // Udhaar / You Gave (Red)
-  gaveRedBg: '#fef2f2',
-  gaveRedBorder: '#fca5a5',
-  
-  gotGreen: '#16a34a', // Jama / You Got (Green)
+  primaryDark: '#1d4ed8',
+
+  // Ledger Badges (Udhaar / Jama)
+  gaveRed: '#e11d48',
+  gaveRedBg: '#fff1f2',
+  gaveRedBorder: '#fecdd3',
+
+  gotGreen: '#16a34a',
   gotGreenBg: '#f0fdf4',
-  gotGreenBorder: '#86efac',
-  
-  // Neutral Tones
-  bgDark: '#0f172a',
-  cardDark: '#1e293b',
-  bgLight: '#f8fafc',
-  cardLight: '#ffffff',
-  borderLight: '#e2e8f0',
-  borderDark: '#334155',
-  
-  // Text Colors
-  textPrimaryDark: '#f8fafc',
-  textSecondaryDark: '#94a3b8',
-  textPrimaryLight: '#0f172a',
-  textSecondaryLight: '#64748b',
-  
-  // Status Colors
-  warning: '#f59e0b',
+  gotGreenBorder: '#bbf7d0',
+
+  // Status & Actions
+  warning: '#d97706',
   warningBg: '#fef3c7',
-  info: '#0284c7',
-  infoBg: '#e0f2fe',
-  
-  // WhatsApp Brand
   whatsapp: '#25d366',
+  whatsappBg: '#dcfce7',
 };

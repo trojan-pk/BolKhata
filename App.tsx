@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,20 +7,21 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import {
   Home,
   Users,
-  Wallet,
   PieChart,
   Settings as SettingsIcon,
   Mic,
-  UserPlus,
 } from 'lucide-react-native';
 
-// Services & Theme
+// Services, Theme & Typography
 import { StorageService } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
+import { FONTS, injectWebGoogleFonts } from './src/theme/typography';
 import {
   Party,
   Transaction,
@@ -49,7 +50,11 @@ import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplashOverlay, setShowSplashOverlay] = useState(true);
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const dashboardFade = useRef(new Animated.Value(0)).current;
+  const dashboardTranslateY = useRef(new Animated.Value(10)).current;
+
   const [storeProfile, setStoreProfile] = useState<StoreProfile>({
     name: 'Sharma General Store',
     ownerName: 'Rajesh Sharma',
@@ -72,6 +77,9 @@ export default function App() {
   const [addCustomerModalVisible, setAddCustomerModalVisible] = useState(false);
   const [apiConfigModalVisible, setApiConfigModalVisible] = useState(false);
 
+  // Animated Pill Navigation Dock Indicator
+  const tabAnimIndex = useRef(new Animated.Value(0)).current;
+
   const [txnModalState, setTxnModalState] = useState<{
     visible: boolean;
     type: TransactionType;
@@ -82,8 +90,10 @@ export default function App() {
     type: 'gave',
   });
 
-  // Load initial data
+  // Load initial data & Web Google Fonts
   useEffect(() => {
+    injectWebGoogleFonts();
+
     async function loadData() {
       const profile = await StorageService.getStoreProfile();
       const loadedParties = await StorageService.getParties();
@@ -97,6 +107,47 @@ export default function App() {
     }
     loadData();
   }, []);
+
+  // Update Animated Pill Dock position on tab change
+  const animateTabTo = (index: number) => {
+    Animated.spring(tabAnimIndex, {
+      toValue: index,
+      friction: 8,
+      tension: 65,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const handleTabChange = (tab: 'home' | 'customers' | 'cashbook' | 'reports' | 'settings', index: number) => {
+    setActiveTab(tab);
+    animateTabTo(index);
+  };
+
+  // Smooth Cross-Fade Transition from Splash to Dashboard
+  const handleSplashFinish = () => {
+    Animated.parallel([
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(dashboardFade, {
+        toValue: 1,
+        duration: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(dashboardTranslateY, {
+        toValue: 0,
+        duration: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowSplashOverlay(false);
+    });
+  };
 
   // Save changes helper
   const updatePartiesAndTxns = async (newParties: Party[], newTxns: Transaction[]) => {
@@ -122,7 +173,7 @@ export default function App() {
       type: data.type,
       currentBalance: data.openingBalance,
       lastUpdated: new Date().toISOString().split('T')[0],
-      avatarColor: data.type === 'customer' ? COLORS.primary : COLORS.accent,
+      avatarColor: data.type === 'customer' ? COLORS.primary : '#7c3aed',
     };
 
     const updated = [newParty, ...parties];
@@ -155,8 +206,6 @@ export default function App() {
       createdAt: Date.now(),
     };
 
-    // Calculate updated balance
-    // Gave = Udhaar (+ balance towards receivable), Got = Jama (- balance)
     const balanceChange = isGave ? data.amount : -data.amount;
     const updatedBalance = targetParty.currentBalance + balanceChange;
 
@@ -171,10 +220,8 @@ export default function App() {
     );
 
     const updatedTxns = [newTxn, ...transactions];
-
     await updatePartiesAndTxns(updatedParties, updatedTxns);
 
-    // Update active modal selected party state
     if (selectedParty && selectedParty.id === targetParty.id) {
       setSelectedParty({
         ...targetParty,
@@ -238,7 +285,7 @@ export default function App() {
     );
 
     if (!matchedParty) {
-      matchedParty = parties[0]; // fallback to first party
+      matchedParty = parties[0];
     }
 
     if (matchedParty) {
@@ -290,158 +337,233 @@ export default function App() {
     .filter((c) => c.type === 'out')
     .reduce((sum, c) => sum + c.amount, 0);
 
-  // If showing splash screen loading entry
-  if (showSplash) {
-    return (
-      <SplashScreen
-        onFinish={() => setShowSplash(false)}
-        storeName={storeProfile.name}
-        ownerName={storeProfile.ownerName}
-      />
-    );
-  }
+  // Left position interpolation for sliding active pill indicator (5 items -> 0%, 20%, 40%, 60%, 80%)
+  const slidingPillLeft = tabAnimIndex.interpolate({
+    inputRange: [0, 1, 2, 3, 4],
+    outputRange: ['1%', '21%', '41%', '61%', '81%'],
+  });
 
   return (
     <SafeAreaView style={styles.safeContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Top App Header */}
-      <Header
-        storeProfile={storeProfile}
-        onOpenVoice={() => setVoiceModalVisible(true)}
-        onOpenApiConfig={() => setApiConfigModalVisible(true)}
-      />
+      {/* Main Responsive Dashboard Container */}
+      <Animated.View
+        style={[
+          styles.appResponsiveWrapper,
+          {
+            opacity: dashboardFade,
+            transform: [{ translateY: dashboardTranslateY }],
+          },
+        ]}
+      >
+        {/* Top App Header */}
+        <Header
+          storeProfile={storeProfile}
+          onOpenVoice={() => setVoiceModalVisible(true)}
+          onOpenApiConfig={() => setApiConfigModalVisible(true)}
+        />
 
-      {/* Tab Screen Views */}
-      <View style={styles.mainContentArea}>
-        {activeTab === 'home' && (
-          <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-            {/* Dashboard Metrics */}
-            <DashboardCards
-              totalReceivable={totalReceivable}
-              totalPayable={totalPayable}
-              todayCashIn={todayCashIn}
-              todayCashOut={todayCashOut}
+        {/* Tab Screen Views */}
+        <View style={styles.mainContentArea}>
+          {activeTab === 'home' && (
+            <ScrollView
+              contentContainerStyle={{ paddingBottom: 110 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Dashboard Metrics */}
+              <DashboardCards
+                totalReceivable={totalReceivable}
+                totalPayable={totalPayable}
+                todayCashIn={todayCashIn}
+                todayCashOut={todayCashOut}
+                currency={storeProfile.currency}
+                onPressReceivable={() => handleTabChange('customers', 1)}
+                onPressPayable={() => handleTabChange('customers', 1)}
+              />
+
+              {/* Quick Grahak Ledger Summary */}
+              <View style={styles.homeSectionHeader}>
+                <Text style={styles.homeSectionTitle}>Recent Customer Khata</Text>
+                <TouchableOpacity onPress={() => handleTabChange('customers', 1)}>
+                  <Text style={styles.viewAllText}>
+                    View All ({parties.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ paddingHorizontal: 16 }}>
+                {parties.slice(0, 4).map((party) => (
+                  <CustomerCard
+                    key={party.id}
+                    party={party}
+                    currency={storeProfile.currency}
+                    onPress={() => setSelectedParty(party)}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {activeTab === 'customers' && (
+            <CustomersScreen
+              parties={parties}
               currency={storeProfile.currency}
-              onPressReceivable={() => setActiveTab('customers')}
-              onPressPayable={() => setActiveTab('customers')}
+              onSelectParty={(party) => setSelectedParty(party)}
+              onAddParty={() => setAddCustomerModalVisible(true)}
+            />
+          )}
+
+          {activeTab === 'cashbook' && (
+            <CashbookScreen
+              entries={cashbook}
+              currency={storeProfile.currency}
+              onAddCashEntry={handleAddCashbookEntry}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsScreen parties={parties} currency={storeProfile.currency} />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsScreen
+              storeProfile={storeProfile}
+              onUpdateStore={async (updated) => {
+                setStoreProfile(updated);
+                await StorageService.saveStoreProfile(updated);
+              }}
+              onOpenApiConfig={() => setApiConfigModalVisible(true)}
+            />
+          )}
+        </View>
+
+        {/* DARK THEMED FLOATING ANIMATED PILL NAVIGATION DOCK */}
+        <View style={styles.pillDockWrapper}>
+          <View style={styles.floatingPillDock}>
+            {/* Sliding Active Pill Background Highlight (Dark Charcoal) */}
+            <Animated.View
+              style={[
+                styles.slidingPillIndicator,
+                { left: slidingPillLeft },
+              ]}
             />
 
-            {/* Quick Grahak Ledger Summary */}
-            <View style={styles.homeSectionHeader}>
-              <Text style={styles.homeSectionTitle}>Recent Customer Khata</Text>
-              <TouchableOpacity onPress={() => setActiveTab('customers')}>
-                <Text style={styles.viewAllText}>View All ({parties.length})</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Tab 1: Home */}
+            <TouchableOpacity
+              style={styles.pillTabItem}
+              onPress={() => handleTabChange('home', 0)}
+              activeOpacity={0.8}
+            >
+              <Home
+                size={18}
+                color={activeTab === 'home' ? '#ffffff' : '#94a3b8'}
+              />
+              <Text
+                style={[
+                  styles.pillTabLabel,
+                  activeTab === 'home' && styles.pillTabLabelActive,
+                ]}
+              >
+                Home
+              </Text>
+            </TouchableOpacity>
 
-            <View style={{ paddingHorizontal: 16 }}>
-              {parties.slice(0, 4).map((party) => (
-                <CustomerCard
-                  key={party.id}
-                  party={party}
-                  currency={storeProfile.currency}
-                  onPress={() => setSelectedParty(party)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-        )}
+            {/* Tab 2: Customers */}
+            <TouchableOpacity
+              style={styles.pillTabItem}
+              onPress={() => handleTabChange('customers', 1)}
+              activeOpacity={0.8}
+            >
+              <Users
+                size={18}
+                color={activeTab === 'customers' ? '#ffffff' : '#94a3b8'}
+              />
+              <Text
+                style={[
+                  styles.pillTabLabel,
+                  activeTab === 'customers' && styles.pillTabLabelActive,
+                ]}
+              >
+                Customers
+              </Text>
+            </TouchableOpacity>
 
-        {activeTab === 'customers' && (
-          <CustomersScreen
-            parties={parties}
-            currency={storeProfile.currency}
-            onSelectParty={(party) => setSelectedParty(party)}
-            onAddParty={() => setAddCustomerModalVisible(true)}
+            {/* Tab 3: Central Voice Mic Action */}
+            <TouchableOpacity
+              style={styles.pillTabItem}
+              onPress={() => {
+                animateTabTo(2);
+                setVoiceModalVisible(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.centerMicPillButton}>
+                <Mic size={18} color="#000000" strokeWidth={2.5} />
+              </View>
+              <Text style={styles.centerMicPillLabel}>BolKhata</Text>
+            </TouchableOpacity>
+
+            {/* Tab 4: Reports */}
+            <TouchableOpacity
+              style={styles.pillTabItem}
+              onPress={() => handleTabChange('reports', 3)}
+              activeOpacity={0.8}
+            >
+              <PieChart
+                size={18}
+                color={activeTab === 'reports' ? '#ffffff' : '#94a3b8'}
+              />
+              <Text
+                style={[
+                  styles.pillTabLabel,
+                  activeTab === 'reports' && styles.pillTabLabelActive,
+                ]}
+              >
+                Reports
+              </Text>
+            </TouchableOpacity>
+
+            {/* Tab 5: Settings */}
+            <TouchableOpacity
+              style={styles.pillTabItem}
+              onPress={() => handleTabChange('settings', 4)}
+              activeOpacity={0.8}
+            >
+              <SettingsIcon
+                size={18}
+                color={activeTab === 'settings' ? '#ffffff' : '#94a3b8'}
+              />
+              <Text
+                style={[
+                  styles.pillTabLabel,
+                  activeTab === 'settings' && styles.pillTabLabelActive,
+                ]}
+              >
+                Settings
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Cross-Fading Splash Overlay */}
+      {showSplashOverlay && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFillObject,
+            styles.splashOverlayContainer,
+            { opacity: splashOpacity },
+          ]}
+          pointerEvents={showSplashOverlay ? 'auto' : 'none'}
+        >
+          <SplashScreen
+            onFinish={handleSplashFinish}
+            storeName={storeProfile.name}
+            ownerName={storeProfile.ownerName}
           />
-        )}
-
-        {activeTab === 'cashbook' && (
-          <CashbookScreen
-            entries={cashbook}
-            currency={storeProfile.currency}
-            onAddCashEntry={handleAddCashbookEntry}
-          />
-        )}
-
-        {activeTab === 'reports' && (
-          <ReportsScreen parties={parties} currency={storeProfile.currency} />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsScreen
-            storeProfile={storeProfile}
-            onUpdateStore={async (updated) => {
-              setStoreProfile(updated);
-              await StorageService.saveStoreProfile(updated);
-            }}
-            onOpenApiConfig={() => setApiConfigModalVisible(true)}
-          />
-        )}
-      </View>
-
-      {/* Floating BolKhata Voice Action Button */}
-      <TouchableOpacity
-        style={styles.floatingMicBtn}
-        onPress={() => setVoiceModalVisible(true)}
-        activeOpacity={0.85}
-      >
-        <Mic size={22} color="#ffffff" strokeWidth={2.5} />
-      </TouchableOpacity>
-
-      {/* Bottom Tab Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'home' && styles.tabActive]}
-          onPress={() => setActiveTab('home')}
-        >
-          <Home size={20} color={activeTab === 'home' ? COLORS.primary : '#94a3b8'} />
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>
-            Home
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'customers' && styles.tabActive]}
-          onPress={() => setActiveTab('customers')}
-        >
-          <Users size={20} color={activeTab === 'customers' ? COLORS.primary : '#94a3b8'} />
-          <Text style={[styles.tabLabel, activeTab === 'customers' && styles.tabLabelActive]}>
-            Customers
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'cashbook' && styles.tabActive]}
-          onPress={() => setActiveTab('cashbook')}
-        >
-          <Wallet size={20} color={activeTab === 'cashbook' ? COLORS.primary : '#94a3b8'} />
-          <Text style={[styles.tabLabel, activeTab === 'cashbook' && styles.tabLabelActive]}>
-            Cashbook
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'reports' && styles.tabActive]}
-          onPress={() => setActiveTab('reports')}
-        >
-          <PieChart size={20} color={activeTab === 'reports' ? COLORS.primary : '#94a3b8'} />
-          <Text style={[styles.tabLabel, activeTab === 'reports' && styles.tabLabelActive]}>
-            Reports
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'settings' && styles.tabActive]}
-          onPress={() => setActiveTab('settings')}
-        >
-          <SettingsIcon size={20} color={activeTab === 'settings' ? COLORS.primary : '#94a3b8'} />
-          <Text style={[styles.tabLabel, activeTab === 'settings' && styles.tabLabelActive]}>
-            Settings
-          </Text>
-        </TouchableOpacity>
-      </View>
+        </Animated.View>
+      )}
 
       {/* Interactive Modals */}
       <CustomerDetailModal
@@ -500,7 +622,11 @@ export default function App() {
         storeProfile={storeProfile}
         onClose={() => setApiConfigModalVisible(false)}
         onSaveConfig={async (url, isConnected) => {
-          const updated = { ...storeProfile, expressApiUrl: url, isBackendConnected: isConnected };
+          const updated = {
+            ...storeProfile,
+            expressApiUrl: url,
+            isBackendConnected: isConnected,
+          };
           setStoreProfile(updated);
           await StorageService.saveStoreProfile(updated);
         }}
@@ -512,7 +638,21 @@ export default function App() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
+  },
+  appResponsiveWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+    backgroundColor: '#f8fafc',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  splashOverlayContainer: {
+    zIndex: 999,
+    backgroundColor: '#ffffff',
   },
   mainContentArea: {
     flex: 1,
@@ -522,61 +662,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: 18,
+    marginBottom: 8,
   },
   homeSectionTitle: {
-    fontSize: 15,
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   viewAllText: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
     color: COLORS.primary,
     fontWeight: '700',
   },
-  floatingMicBtn: {
+
+  // Floating Dark Pill Dock Wrapper
+  pillDockWrapper: {
     position: 'absolute',
-    bottom: 74,
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.gotGreen,
-    justifyContent: 'center',
+    bottom: 16,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    shadowColor: COLORS.gotGreen,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 10,
+    paddingHorizontal: 16,
   },
-  bottomTabBar: {
+  floatingPillDock: {
+    width: '100%',
+    maxWidth: 520,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#0f172a', // Dark theme slate background
     flexDirection: 'row',
-    height: 60,
-    backgroundColor: '#1e293b',
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 10,
+    paddingHorizontal: 4,
   },
-  tabItem: {
+  slidingPillIndicator: {
+    position: 'absolute',
+    width: '18%',
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#334155', // Charcoal highlight indicator
+    top: 4,
+  },
+  pillTabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    height: '100%',
+    zIndex: 2,
   },
-  tabActive: {
-    borderTopWidth: 2,
-    borderTopColor: COLORS.primary,
-  },
-  tabLabel: {
+  pillTabLabel: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 10,
     color: '#94a3b8',
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  tabLabelActive: {
-    color: COLORS.primary,
+  pillTabLabelActive: {
+    fontFamily: FONTS.bodyBold,
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+
+  // Central White Contrast Voice Mic Button inside Dark Pill Dock
+  centerMicPillButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff', // Crisp white contrast
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  centerMicPillLabel: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 9,
+    color: '#ffffff',
+    marginTop: 2,
     fontWeight: '700',
   },
 });
