@@ -51,6 +51,7 @@ import { CustomersScreen } from './src/screens/CustomersScreen';
 import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { getTranslation } from './src/i18n/translations';
 
 function MainLayout() {
   const [showSplashOverlay, setShowSplashOverlay] = useState(true);
@@ -59,14 +60,16 @@ function MainLayout() {
   const dashboardTranslateY = useRef(new Animated.Value(10)).current;
 
   const [storeProfile, setStoreProfile] = useState<StoreProfile>({
-    name: 'Sharma General Store',
-    ownerName: 'Rajesh Sharma',
-    mobile: '+91 98765 43210',
-    currency: '₹',
-    language: 'hi',
+    name: 'Bismillah General Store',
+    ownerName: 'Muhammad Salman',
+    mobile: '+92 300 1234567',
+    currency: 'Rs',
+    language: 'ur',
     expressApiUrl: 'http://localhost:3000',
     isBackendConnected: false,
   });
+
+  const t = getTranslation(storeProfile.language);
 
   const [parties, setParties] = useState<Party[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -383,16 +386,17 @@ function MainLayout() {
                 todayCashIn={todayCashIn}
                 todayCashOut={todayCashOut}
                 currency={storeProfile.currency}
+                language={storeProfile.language}
                 onPressReceivable={() => handleTabChange('customers', 1)}
                 onPressPayable={() => handleTabChange('customers', 1)}
               />
 
               {/* Quick Grahak Ledger Summary */}
               <View style={styles.homeSectionHeader}>
-                <Text style={styles.homeSectionTitle}>Recent Customer Khata</Text>
+                <Text style={styles.homeSectionTitle}>{t.recentParties}</Text>
                 <TouchableOpacity onPress={() => handleTabChange('customers', 1)}>
                   <Text style={styles.viewAllText}>
-                    View All ({parties.length})
+                    {t.viewAll} ({parties.length})
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -403,6 +407,7 @@ function MainLayout() {
                     key={party.id}
                     party={party}
                     currency={storeProfile.currency}
+                    language={storeProfile.language}
                     onPress={() => setSelectedParty(party)}
                   />
                 ))}
@@ -414,6 +419,7 @@ function MainLayout() {
             <CustomersScreen
               parties={parties}
               currency={storeProfile.currency}
+              language={storeProfile.language}
               onSelectParty={(party) => setSelectedParty(party)}
               onAddParty={() => setAddCustomerModalVisible(true)}
             />
@@ -423,12 +429,17 @@ function MainLayout() {
             <CashbookScreen
               entries={cashbook}
               currency={storeProfile.currency}
+              language={storeProfile.language}
               onAddCashEntry={handleAddCashbookEntry}
             />
           )}
 
           {activeTab === 'reports' && (
-            <ReportsScreen parties={parties} currency={storeProfile.currency} />
+            <ReportsScreen
+              parties={parties}
+              currency={storeProfile.currency}
+              language={storeProfile.language}
+            />
           )}
 
           {activeTab === 'settings' && (
@@ -470,7 +481,7 @@ function MainLayout() {
                   activeTab === 'home' && styles.pillTabLabelActive,
                 ]}
               >
-                Home
+                {t.home}
               </Text>
             </TouchableOpacity>
 
@@ -490,7 +501,7 @@ function MainLayout() {
                   activeTab === 'customers' && styles.pillTabLabelActive,
                 ]}
               >
-                Customers
+                {t.customers}
               </Text>
             </TouchableOpacity>
 
@@ -525,7 +536,7 @@ function MainLayout() {
                   activeTab === 'reports' && styles.pillTabLabelActive,
                 ]}
               >
-                Reports
+                {t.reports}
               </Text>
             </TouchableOpacity>
 
@@ -545,7 +556,7 @@ function MainLayout() {
                   activeTab === 'settings' && styles.pillTabLabelActive,
                 ]}
               >
-                Settings
+                {t.settings}
               </Text>
             </TouchableOpacity>
           </View>
@@ -576,6 +587,7 @@ function MainLayout() {
         party={selectedParty}
         transactions={transactions}
         currency={storeProfile.currency}
+        language={storeProfile.language}
         storeName={storeProfile.name}
         onClose={() => setSelectedParty(null)}
         onAddGave={() => {
@@ -606,18 +618,22 @@ function MainLayout() {
         type={txnModalState.type}
         partyName={txnModalState.partyName || ''}
         currency={storeProfile.currency}
+        language={storeProfile.language}
         onClose={() => setTxnModalState({ ...txnModalState, visible: false })}
         onSubmit={handleAddTransactionSubmit}
       />
 
       <AddCustomerModal
         visible={addCustomerModalVisible}
+        language={storeProfile.language}
         onClose={() => setAddCustomerModalVisible(false)}
         onSubmit={handleAddPartySubmit}
       />
 
       <VoiceAssistantModal
         visible={voiceModalVisible}
+        currency={storeProfile.currency}
+        language={storeProfile.language}
         onClose={() => setVoiceModalVisible(false)}
         onParseVoice={handleVoiceParseResult}
       />

@@ -11,9 +11,12 @@ import {
 import { Mic, X, Sparkles, CircleCheck, Volume2, Send } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { createAudioPlayer, useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
+  currency?: string;
+  language?: LanguageCode;
   onClose: () => void;
   onParseVoice: (result: {
     partyName: string;
@@ -25,9 +28,12 @@ interface VoiceAssistantModalProps {
 
 export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   visible,
+  currency = 'Rs',
+  language = 'ur',
   onClose,
   onParseVoice,
 }) => {
+  const t = getTranslation(language);
   const [isListening, setIsListening] = useState(false);
   const [voiceText, setVoiceText] = useState('');
   const [parsedData, setParsedData] = useState<{
@@ -38,9 +44,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   } | null>(null);
 
   const sampleCommands = [
-    'Ramesh ko 500 basmati rice diya',
-    'Sunita Devi se 1000 jama mila',
-    'Amrit Supplier ko 3200 diya',
+    'Ali ko 500 rupay udhaar diye',
+    'Ahmad se 1000 wasool hue',
+    'Kashif ne 1500 jama karwaye',
+    'Babar ko 2500 ka rashan diya',
   ];
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -155,7 +162,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           <View style={styles.headerRow}>
             <View style={styles.brandTitleRow}>
               <Sparkles size={18} color={COLORS.primary} />
-              <Text style={styles.title}>BolKhata Voice Assistant</Text>
+              <Text style={styles.title}>{t.voiceTitle}</Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <X size={18} color="#64748b" />
@@ -164,7 +171,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
           <View style={styles.body}>
             <Text style={styles.subtitle}>
-              Speak or tap a phrase to add a voice transaction (बोलकर खाता जोड़ें)
+              {t.voiceSubtitle}
             </Text>
 
             {/* Mic Button */}
@@ -180,10 +187,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <Mic size={32} color="#ffffff" strokeWidth={2.5} />
               <Text style={styles.micText}>
                 {audioRecorder.isRecording
-                  ? 'Recording... Tap to stop'
+                  ? t.recordingTapToStop
                   : isListening
-                  ? 'Processing...'
-                  : 'Tap & Speak'}
+                  ? t.processing
+                  : t.tapToSpeak}
               </Text>
             </TouchableOpacity>
 
@@ -192,11 +199,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <Volume2 size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.voiceTextInput}
-                placeholder="Spoken entry will appear here..."
+                placeholder={t.spokenPlaceholder}
                 placeholderTextColor="#94a3b8"
                 value={voiceText}
-                onChangeText={(t: string) => {
-                  setVoiceText(t);
+                onChangeText={(tVal: string) => {
+                  setVoiceText(tVal);
                   setParsedData(null);
                 }}
                 onSubmitEditing={() => handleProcessText(voiceText)}
@@ -209,7 +216,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </View>
 
             {/* Quick Sample Prompts */}
-            <Text style={styles.sampleHeader}>Try sample store commands:</Text>
+            <Text style={styles.sampleHeader}>{t.sampleCommandsTitle}</Text>
             <View style={styles.sampleGrid}>
               {sampleCommands.map((cmd, idx) => (
                 <TouchableOpacity
@@ -227,15 +234,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <View style={styles.parsedCard}>
                 <View style={styles.parsedHeader}>
                   <CircleCheck size={16} color={COLORS.gotGreen} />
-                  <Text style={styles.parsedTitle}>Parsed Entry Ready:</Text>
+                  <Text style={styles.parsedTitle}>{t.parsedEntryReady}</Text>
                 </View>
 
                 <Text style={styles.parsedDetailText}>
-                  • Party:{' '}
+                  • {t.party}{' '}
                   <Text style={{ color: '#0f172a', fontWeight: '700' }}>
                     {parsedData.partyName}
                   </Text>
-                  {'\n'}• Type:{' '}
+                  {'\n'}• {t.type}{' '}
                   <Text
                     style={{
                       color:
@@ -246,17 +253,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     }}
                   >
                     {parsedData.type === 'gave'
-                      ? 'You Gave (Udhaar)'
-                      : 'You Received (Jama)'}
+                      ? t.udhaarGaveLabel
+                      : t.jamaGotLabel}
                   </Text>
-                  {'\n'}• Amount:{' '}
+                  {'\n'}• {t.amount}{' '}
                   <Text style={{ color: '#0f172a', fontWeight: '800' }}>
-                    ₹{parsedData.amount}
+                    {currency} {parsedData.amount}
                   </Text>
                 </Text>
 
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
-                  <Text style={styles.confirmBtnText}>Confirm & Save Entry</Text>
+                  <Text style={styles.confirmBtnText}>{t.confirmAndSave}</Text>
                 </TouchableOpacity>
               </View>
             )}

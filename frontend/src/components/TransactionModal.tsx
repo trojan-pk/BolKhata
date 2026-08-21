@@ -11,12 +11,14 @@ import {
 import { X, Check, CreditCard, Banknote, QrCode, FileText } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { TransactionType, PaymentMode } from '../types';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface TransactionModalProps {
   visible: boolean;
   type: TransactionType;
   partyName: string;
   currency?: string;
+  language?: LanguageCode;
   onClose: () => void;
   onSubmit: (data: { amount: number; note: string; paymentMode: PaymentMode }) => void;
 }
@@ -25,10 +27,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   visible,
   type,
   partyName,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
   onClose,
   onSubmit,
 }) => {
+  const t = getTranslation(language);
   const isGave = type === 'gave';
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -37,7 +41,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const handleSubmit = () => {
     const numAmount = parseFloat(amount);
     if (!numAmount || isNaN(numAmount) || numAmount <= 0) {
-      alert('Please enter a valid amount');
+      alert(t.enterAmount);
       return;
     }
     onSubmit({ amount: numAmount, note: note.trim(), paymentMode });
@@ -47,10 +51,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   };
 
   const paymentModes: { key: PaymentMode; label: string; icon: any }[] = [
-    { key: 'cash', label: 'Cash', icon: Banknote },
-    { key: 'upi', label: 'UPI / GPay', icon: QrCode },
+    { key: 'cash', label: t.cash, icon: Banknote },
+    { key: 'upi', label: t.onlineBank, icon: QrCode },
     { key: 'card', label: 'Card', icon: CreditCard },
-    { key: 'credit', label: 'Credit', icon: FileText },
+    { key: 'credit', label: t.creditUdhaar, icon: FileText },
   ];
 
   return (
@@ -61,9 +65,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <View style={[styles.modalHeader, isGave ? styles.gaveHeader : styles.gotHeader]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.modalTitle}>
-                {isGave ? 'You Gave Money (Udhaar)' : 'You Received Money (Jama)'}
+                {isGave ? t.youGaveTitle : t.youGotTitle}
               </Text>
-              <Text style={styles.partySub} numberOfLines={1}>For: {partyName}</Text>
+              <Text style={styles.partySub} numberOfLines={1}>
+                {t.party} {partyName}
+              </Text>
             </View>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
@@ -73,7 +79,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
           <ScrollView style={styles.formBody} contentContainerStyle={{ padding: 16 }}>
             {/* Amount Input */}
-            <Text style={styles.fieldLabel}>Enter Amount ({currency})</Text>
+            <Text style={styles.fieldLabel}>{t.enterAmount} ({currency})</Text>
             <View style={styles.amountInputRow}>
               <Text
                 style={[
@@ -111,7 +117,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </View>
 
             {/* Payment Method Picker */}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Payment Mode</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>{t.paymentMode}</Text>
             <View style={styles.modeGrid}>
               {paymentModes.map((item) => {
                 const Icon = item.icon;
@@ -133,11 +139,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             {/* Item Details / Note */}
             <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
-              Entry Note / Items list (Optional)
+              {t.itemDescriptionNote}
             </Text>
             <TextInput
               style={styles.noteInput}
-              placeholder="e.g. 5kg Basmati Rice, Oil packet..."
+              placeholder="e.g. 5kg Basmati Rice, Oil packet, Cheeni..."
               placeholderTextColor="#94a3b8"
               value={note}
               onChangeText={setNote}
@@ -152,7 +158,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             >
               <Check size={18} color="#ffffff" />
               <Text style={styles.submitText}>
-                Save {isGave ? 'Udhaar' : 'Jama'} Entry
+                {t.saveTransaction}
               </Text>
             </TouchableOpacity>
           </ScrollView>

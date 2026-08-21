@@ -4,18 +4,22 @@ import { Phone, ChevronRight } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { FONTS } from '../theme/typography';
 import { Party } from '../types';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface CustomerCardProps {
   party: Party;
   currency?: string;
+  language?: LanguageCode;
   onPress: () => void;
 }
 
 export const CustomerCard: React.FC<CustomerCardProps> = ({
   party,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
   onPress,
 }) => {
+  const t = getTranslation(language);
   const isReceivable = party.currentBalance > 0;
   const isPayable = party.currentBalance < 0;
   const isSettled = party.currentBalance === 0;
@@ -51,7 +55,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
           </Text>
           <View style={styles.typeBadge}>
             <Text style={styles.typeBadgeText}>
-              {party.type === 'customer' ? 'Customer' : 'Supplier'}
+              {party.type === 'customer' ? t.customer : t.supplier}
             </Text>
           </View>
         </View>
@@ -68,7 +72,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
       <View style={styles.balanceCol}>
         {isReceivable && (
           <View style={styles.badgeContainer}>
-            <Text style={styles.balanceStatusRed}>Aap Lenge</Text>
+            <Text style={styles.balanceStatusRed}>{t.youWillCollect}</Text>
             <Text style={styles.balanceAmountRed} numberOfLines={1}>
               {currency} {party.currentBalance.toLocaleString('en-IN')}
             </Text>
@@ -77,7 +81,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
 
         {isPayable && (
           <View style={styles.badgeContainer}>
-            <Text style={styles.balanceStatusGreen}>Aap Denge</Text>
+            <Text style={styles.balanceStatusGreen}>{t.youWillPay}</Text>
             <Text style={styles.balanceAmountGreen} numberOfLines={1}>
               {currency} {Math.abs(party.currentBalance).toLocaleString('en-IN')}
             </Text>
@@ -86,7 +90,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
 
         {isSettled && (
           <View style={styles.badgeContainer}>
-            <Text style={styles.settledStatus}>Settled</Text>
+            <Text style={styles.settledStatus}>{t.allSettled}</Text>
             <Text style={styles.settledAmount}>{currency} 0</Text>
           </View>
         )}

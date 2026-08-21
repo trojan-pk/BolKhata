@@ -11,9 +11,11 @@ import {
 import { X, UserPlus, Phone, MapPin, UserCheck } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { PartyType } from '../types';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface AddCustomerModalProps {
   visible: boolean;
+  language?: LanguageCode;
   onClose: () => void;
   onSubmit: (data: {
     name: string;
@@ -26,9 +28,11 @@ interface AddCustomerModalProps {
 
 export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   visible,
+  language = 'ur',
   onClose,
   onSubmit,
 }) => {
+  const t = getTranslation(language);
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [address, setAddress] = useState('');
@@ -37,7 +41,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
   const handleSave = () => {
     if (!name.trim()) {
-      alert('Please enter customer/supplier name');
+      alert('Please enter name');
       return;
     }
     if (!mobile.trim()) {
@@ -68,7 +72,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           <View style={styles.headerRow}>
             <View style={styles.titleRow}>
               <UserPlus size={20} color={COLORS.primary} />
-              <Text style={styles.modalTitle}>Add New Party</Text>
+              <Text style={styles.modalTitle}>{t.addNewParty}</Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <X size={18} color="#64748b" />
@@ -77,7 +81,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
           <ScrollView style={{ padding: 16 }}>
             {/* Party Type Selector */}
-            <Text style={styles.fieldLabel}>Party Role</Text>
+            <Text style={styles.fieldLabel}>{t.partyType}</Text>
             <View style={styles.roleGrid}>
               <TouchableOpacity
                 style={[styles.roleCard, type === 'customer' && styles.roleSelected]}
@@ -93,7 +97,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                     type === 'customer' && styles.roleTextSelected,
                   ]}
                 >
-                  Customer (Grahak)
+                  {t.customer}
                 </Text>
               </TouchableOpacity>
 
@@ -111,16 +115,16 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
                     type === 'supplier' && styles.roleTextSelected,
                   ]}
                 >
-                  Supplier (Wholesaler)
+                  {t.supplier}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* Name Input */}
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Full Name *</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{t.ownerName} / {t.customer} *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Ramesh Kumar"
+              placeholder="e.g. Ramesh Kumar, Ali Raza"
               placeholderTextColor="#94a3b8"
               value={name}
               onChangeText={setName}
@@ -128,13 +132,13 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
             {/* Mobile Input */}
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
-              Mobile Phone Number *
+              {t.contactNumber} *
             </Text>
             <View style={styles.inputRow}>
               <Phone size={15} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.flexInput}
-                placeholder="e.g. 9812345678"
+                placeholder="e.g. 03001234567"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
                 value={mobile}
@@ -144,13 +148,13 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
             {/* Address */}
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
-              Shop / Home Address (Optional)
+              {t.addressOptional}
             </Text>
             <View style={styles.inputRow}>
               <MapPin size={15} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.flexInput}
-                placeholder="e.g. Shop #12, Main Market"
+                placeholder="e.g. Shop #12, Main Bazar"
                 placeholderTextColor="#94a3b8"
                 value={address}
                 onChangeText={setAddress}
@@ -159,11 +163,11 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
             {/* Opening Balance */}
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
-              Opening Balance (Optional)
+              {t.openingBalance}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="0 (Positive = You will collect)"
+              placeholder="0"
               placeholderTextColor="#94a3b8"
               keyboardType="numeric"
               value={openingBalance}
@@ -176,7 +180,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
               onPress={handleSave}
               activeOpacity={0.85}
             >
-              <Text style={styles.saveBtnText}>Save Party to Khata</Text>
+              <Text style={styles.saveBtnText}>{t.addNewParty}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

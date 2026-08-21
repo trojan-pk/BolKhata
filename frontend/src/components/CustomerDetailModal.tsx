@@ -20,12 +20,14 @@ import {
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Party, Transaction } from '../types';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface CustomerDetailModalProps {
   visible: boolean;
   party: Party | null;
   transactions: Transaction[];
   currency?: string;
+  language?: LanguageCode;
   storeName?: string;
   onClose: () => void;
   onAddGave: () => void;
@@ -37,8 +39,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   visible,
   party,
   transactions,
-  currency = '₹',
-  storeName = 'Sharma General Store',
+  currency = 'Rs',
+  language = 'ur',
+  storeName = 'BolKhata Store',
   onClose,
   onAddGave,
   onAddGot,
@@ -46,6 +49,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 }) => {
   if (!party) return null;
 
+  const t = getTranslation(language);
   const partyTxns = transactions.filter((t) => t.partyId === party.id);
   const isReceivable = party.currentBalance > 0;
   const isPayable = party.currentBalance < 0;
@@ -53,9 +57,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   // WhatsApp Payment Reminder Generator
   const handleSendWhatsAppReminder = () => {
     const message = encodeURIComponent(
-      `Hello ${party.name},\n\nThis is a friendly reminder from ${storeName}.\nYour total pending balance is ${currency}${Math.abs(
+      `اسلام علیکم ${party.name}،\n\nیہ ${storeName} کی طرف سے کھاتہ کی یاددہانی ہے۔\nآپ کا کل بقایا بیلنس ${currency} ${Math.abs(
         party.currentBalance
-      ).toLocaleString('en-IN')}.\n\nPlease settle via UPI or cash at your convenience. Thank you!`
+      ).toLocaleString('en-IN')} ہے۔\n\nبراہ کرم ادائیگی فرما دیں۔ شکریہ!`
     );
 
     const url = `whatsapp://send?phone=${party.mobile}&text=${message}`;
@@ -113,10 +117,10 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           <View style={{ flex: 1 }}>
             <Text style={styles.balanceLabel}>
               {isReceivable
-                ? 'Amount You Will Collect (Udhaar)'
+                ? t.youWillCollect
                 : isPayable
-                ? 'Amount You Will Pay (Jama)'
-                : 'Khata Balance Cleared'}
+                ? t.youWillPay
+                : t.allSettled}
             </Text>
             <Text
               style={[
@@ -138,75 +142,93 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           {party.currentBalance !== 0 && (
             <TouchableOpacity style={styles.settleBtn} onPress={onSettleUp}>
               <CheckCheck size={14} color="#0f172a" />
-              <Text style={styles.settleBtnText}>Settle Up</Text>
+              <Text style={styles.settleBtnText}>{t.allSettled}</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Ledger Transaction Timeline */}
-        <Text style={styles.timelineHeader}>
-          Ledger Entry History ({partyTxns.length})
-        </Text>
+        {/* WhatsApp Reminder Strip */}
+        {isReceivable && (
+          <TouchableOpacity
+            style={styles.reminderStrip}
+            onPress={handleSendWhatsAppReminder}
+            activeOpacity={0.8}
+          >
+            <MessageCircle size={15} color="#166534" />
+            <Text style={styles.reminderText}>{t.sendWhatsAppReminder}</Text>
+          </TouchableOpacity>
+        )}
 
+        {/* Transactions History Header */}
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>{t.transactionHistory}</Text>
+          <Text style={styles.txnBadge}>{partyTxns.length} Entries</Text>
+        </View>
+
+        {/* Transactions List */}
         <ScrollView
-          style={styles.timelineList}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          style={styles.txnList}
+          contentContainerStyle={{ paddingBottom: 110 }}
         >
           {partyTxns.length === 0 ? (
             <View style={styles.emptyState}>
-              <Tag size={28} color="#94a3b8" />
-              <Text style={styles.emptyText}>No entries recorded yet</Text>
-              <Text style={styles.emptySub}>
-                Use the + Gave or + Got buttons below to record credit/cash
-              </Text>
+              <Text style={styles.emptyText}>{t.noTransactionsYet}</Text>
             </View>
           ) : (
             partyTxns.map((txn) => {
               const isGave = txn.type === 'gave';
               return (
                 <View key={txn.id} style={styles.txnCard}>
-                  <View style={styles.txnMainRow}>
-                    <View style={styles.txnLeftCol}>
-                      <View style={styles.txnDateRow}>
-                        <Calendar size={11} color="#64748b" />
-                        <Text style={styles.txnDate}>{txn.date}</Text>
-                        <View style={styles.modeBadge}>
-                          <Text style={styles.modeBadgeText}>
-                            {txn.paymentMode.toUpperCase()}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {txn.note ? (
-                        <Text style={styles.txnNote} numberOfLines={2}>
-                          {txn.note}
-                        </Text>
+                  <View style={styles.txnLeft}>
+                    <View
+                      style={[
+                        styles.txnIconCircle,
+                        isGave ? styles.gaveIconCircle : styles.gotIconCircle,
+                      ]}
+                    >
+                      {isGave ? (
+                        <CircleMinus size={15} color={COLORS.gaveRed} />
                       ) : (
-                        <Text style={styles.txnNoNote}>No note added</Text>
+                        <CirclePlus size={15} color={COLORS.gotGreen} />
                       )}
                     </View>
 
-                    {/* Amount Col */}
-                    <View style={styles.txnRightCol}>
-                      <Text
-                        style={[
-                          styles.txnAmount,
-                          { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {isGave ? '-' : '+'} {currency}{' '}
-                        {txn.amount.toLocaleString('en-IN')}
+                    <View style={styles.txnInfo}>
+                      <Text style={styles.txnNote} numberOfLines={1}>
+                        {txn.note || (isGave ? t.youGave : t.youGot)}
                       </Text>
-                      <Text
-                        style={[
-                          styles.txnTag,
-                          { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
-                        ]}
-                      >
-                        {isGave ? 'Gave (Udhaar)' : 'Got (Jama)'}
-                      </Text>
+                      <View style={styles.txnMetaRow}>
+                        <Calendar size={11} color="#94a3b8" />
+                        <Text style={styles.txnDate}>{txn.date}</Text>
+                        {txn.paymentMode && (
+                          <>
+                            <Text style={styles.dot}>•</Text>
+                            <Tag size={10} color="#94a3b8" />
+                            <Text style={styles.txnMode}>{txn.paymentMode.toUpperCase()}</Text>
+                          </>
+                        )}
+                      </View>
                     </View>
+                  </View>
+
+                  <View style={styles.txnRight}>
+                    <Text
+                      style={[
+                        styles.txnAmount,
+                        { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                      ]}
+                    >
+                      {isGave ? '-' : '+'} {currency}{' '}
+                      {txn.amount.toLocaleString('en-IN')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.txnTag,
+                        { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                      ]}
+                    >
+                      {isGave ? t.youGave : t.youGot}
+                    </Text>
                   </View>
                 </View>
               );
@@ -222,7 +244,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             activeOpacity={0.85}
           >
             <CircleMinus size={18} color="#ffffff" />
-            <Text style={styles.bottomActionText}>+ YOU GAVE ({currency})</Text>
+            <Text style={styles.bottomActionText}>{t.youGaveBtn} ({currency})</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -231,7 +253,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             activeOpacity={0.85}
           >
             <CirclePlus size={18} color="#ffffff" />
-            <Text style={styles.bottomActionText}>+ YOU GOT ({currency})</Text>
+            <Text style={styles.bottomActionText}>{t.youGotBtn} ({currency})</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -303,6 +325,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     margin: 16,
+    marginBottom: 10,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -344,14 +367,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  timelineHeader: {
-    fontSize: 13,
+  reminderStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  reminderText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#475569',
+    color: '#166534',
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 8,
   },
-  timelineList: {
+  listTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  txnBadge: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  txnList: {
     flex: 1,
     paddingHorizontal: 16,
   },
@@ -366,13 +418,10 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginTop: 8,
   },
-  emptySub: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-    textAlign: 'center',
-  },
   txnCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
@@ -385,49 +434,53 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  txnMainRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  txnLeftCol: {
+  txnLeft: {
     flex: 1,
-    paddingRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  txnDateRow: {
+  txnIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gaveIconCircle: {
+    backgroundColor: COLORS.gaveRedBg,
+  },
+  gotIconCircle: {
+    backgroundColor: COLORS.gotGreenBg,
+  },
+  txnInfo: {
+    flex: 1,
+  },
+  txnNote: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  txnMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
+    marginTop: 2,
   },
   txnDate: {
     fontSize: 11,
     color: '#64748b',
   },
-  modeBadge: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    marginLeft: 6,
+  dot: {
+    fontSize: 10,
+    color: '#94a3b8',
   },
-  modeBadgeText: {
+  txnMode: {
     fontSize: 9,
-    color: '#475569',
+    color: '#64748b',
     fontWeight: '700',
   },
-  txnNote: {
-    fontSize: 13,
-    color: '#0f172a',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  txnNoNote: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-  txnRightCol: {
+  txnRight: {
     alignItems: 'flex-end',
   },
   txnAmount: {

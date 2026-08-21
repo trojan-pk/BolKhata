@@ -10,13 +10,13 @@ const KEYS = {
 
 // Initial realistic seed data for store owners
 export const INITIAL_STORE_PROFILE: StoreProfile = {
-  name: 'Sharma General Store',
-  ownerName: 'Rajesh Sharma',
-  mobile: '+91 98765 43210',
-  currency: '₹',
-  language: 'hi',
-  expressApiUrl: 'http://localhost:5000/api', // Placeholder for Express backend
-  isBackendConnected: false,
+  name: 'Bismillah General Store',
+  ownerName: 'Muhammad Salman',
+  mobile: '+92 300 1234567',
+  currency: 'Rs',
+  language: 'ur',
+  expressApiUrl: 'http://localhost:3000',
+  isBackendConnected: true,
 };
 
 export const INITIAL_PARTIES: Party[] = [

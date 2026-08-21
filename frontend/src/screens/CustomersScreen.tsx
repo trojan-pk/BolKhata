@@ -12,20 +12,24 @@ import { CustomerCard } from '../components/CustomerCard';
 import { Party } from '../types';
 import { COLORS } from '../theme/colors';
 import { FONTS } from '../theme/typography';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface CustomersScreenProps {
   parties: Party[];
   currency?: string;
+  language?: LanguageCode;
   onSelectParty: (party: Party) => void;
   onAddParty: () => void;
 }
 
 export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   parties,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
   onSelectParty,
   onAddParty,
 }) => {
+  const t = getTranslation(language);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'get' | 'give' | 'settled'>('all');
 
@@ -51,7 +55,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
           <Search size={15} color="#94a3b8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search customer or phone..."
+            placeholder={t.searchPlaceholder}
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -60,7 +64,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
 
         <TouchableOpacity style={styles.addBtn} onPress={onAddParty} activeOpacity={0.85}>
           <UserPlus size={16} color="#ffffff" />
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Text style={styles.addBtnText}>+ {t.customer}</Text>
         </TouchableOpacity>
       </View>
 
@@ -72,10 +76,10 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
           contentContainerStyle={styles.filterStrip}
         >
           {[
-            { key: 'all', label: 'All' },
-            { key: 'get', label: "You'll Get (Udhaar)" },
-            { key: 'give', label: "You'll Give (Jama)" },
-            { key: 'settled', label: 'Settled' },
+            { key: 'all', label: t.all },
+            { key: 'get', label: t.toReceive },
+            { key: 'give', label: t.toPay },
+            { key: 'settled', label: t.settledZero },
           ].map((item) => (
             <TouchableOpacity
               key={item.key}
@@ -106,9 +110,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
         {filteredParties.length === 0 ? (
           <View style={styles.emptyState}>
             <Users size={32} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No matching customers found</Text>
+            <Text style={styles.emptyTitle}>{t.noPartiesYet}</Text>
             <Text style={styles.emptySub}>
-              Tap '+ Add' to register a new customer or supplier
+              {t.addCustomerSub}
             </Text>
           </View>
         ) : (
@@ -117,6 +121,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
               key={party.id}
               party={party}
               currency={currency}
+              language={language}
               onPress={() => onSelectParty(party)}
             />
           ))
