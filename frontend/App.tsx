@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ClerkProvider, ClerkLoaded, SignedIn, SignedOut } from '@clerk/expo';
+import { ClerkProvider, ClerkLoaded, Show, useAuth } from '@clerk/expo';
 import { tokenCache } from './src/cache';
 import { AuthScreen } from './src/screens/AuthScreen';
 import {
@@ -98,10 +98,12 @@ function MainLayout() {
     injectWebGoogleFonts();
 
     async function loadData() {
-      const profile = await ApiService.getStoreProfile();
-      const loadedParties = await ApiService.getParties();
-      const loadedTxns = await ApiService.getTransactions();
-      const loadedCashbook = await ApiService.getCashbook();
+      const [profile, loadedParties, loadedTxns, loadedCashbook] = await Promise.all([
+        ApiService.getStoreProfile(),
+        ApiService.getParties(),
+        ApiService.getTransactions(),
+        ApiService.getCashbook()
+      ]);
 
       setStoreProfile(profile);
       setParties(loadedParties);
@@ -764,17 +766,22 @@ if (!publishableKey) {
   throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env');
 }
 
+function Root() {
+  const { isLoaded, isSignedIn } = useAuth();
+  
+  if (!isLoaded) {
+    return null;
+  }
+  
+  return isSignedIn ? <MainLayout /> : <AuthScreen />;
+}
+
 export default function App() {
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <ClerkLoaded>
-        <SignedIn>
-          <MainLayout />
-        </SignedIn>
-        <SignedOut>
-          <AuthScreen />
-        </SignedOut>
-      </ClerkLoaded>
-    </ClerkProvider>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f8fafc' }}>
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <Root />
+      </ClerkProvider>
+    </View>
   );
 }

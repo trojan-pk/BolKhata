@@ -9,14 +9,36 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useSignIn, useSignUp } from '@clerk/expo';
+import { useSignIn, useSignUp, useOAuth } from '@clerk/expo';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { Sparkles, Mail, Lock } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
+
+// Ensure the browser closes when the auth session completes
+WebBrowser.maybeCompleteAuthSession();
 import { FONTS } from '../theme/typography';
 
 export const AuthScreen = () => {
   const { signIn, setActive: setSignInActive, isLoaded: isSignInLoaded } = useSignIn();
   const { signUp, setActive: setSignUpActive, isLoaded: isSignUpLoaded } = useSignUp();
+  
+  const { startOAuthFlow: startGoogleFlow } = useOAuth({ strategy: 'oauth_google' });
+  const { startOAuthFlow: startGithubFlow } = useOAuth({ strategy: 'oauth_github' });
+
+  const onOAuthPress = async (strategy: 'oauth_google' | 'oauth_github') => {
+    try {
+      const flow = strategy === 'oauth_google' ? startGoogleFlow : startGithubFlow;
+      const { createdSessionId, setActive } = await flow({
+        redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' })
+      });
+      if (createdSessionId) {
+        await setActive!({ session: createdSessionId });
+      }
+    } catch (err: any) {
+      setErrorMsg(err.errors?.[0]?.message || `${strategy} login failed`);
+    }
+  };
 
   const [isLogin, setIsLogin] = useState(true);
   const [emailAddress, setEmailAddress] = useState('');
@@ -164,6 +186,26 @@ export const AuthScreen = () => {
                   : 'Already have an account? Log In'}
               </Text>
             </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.oauthBtn}
+              onPress={() => onOAuthPress('oauth_google')}
+            >
+              <Text style={styles.oauthBtnText}>Continue with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.oauthBtn}
+              onPress={() => onOAuthPress('oauth_github')}
+            >
+              <Text style={styles.oauthBtnText}>Continue with GitHub</Text>
+            </TouchableOpacity>
           </>
         )}
 
@@ -266,16 +308,16 @@ const styles = StyleSheet.create({
   },
   mainBtn: {
     backgroundColor: COLORS.primary,
-    height: 48,
     borderRadius: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     marginTop: 8,
   },
   mainBtnText: {
     fontFamily: FONTS.bodyBold,
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
   },
   switchBtn: {
     marginTop: 16,
@@ -284,6 +326,38 @@ const styles = StyleSheet.create({
   switchBtnText: {
     fontFamily: FONTS.bodyMedium,
     color: COLORS.primary,
+    fontSize: 14,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    fontFamily: FONTS.bodyMedium,
+    color: '#94a3b8',
+    marginHorizontal: 10,
     fontSize: 13,
+  },
+  oauthBtn: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  oauthBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    color: '#0f172a',
+    fontSize: 14,
   },
 });
