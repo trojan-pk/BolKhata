@@ -1,40 +1,75 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processVoice = void 0;
-// Urdu & Roman Urdu word-number extractor
+// Urdu & Roman Urdu word-number extractor with Lakh & Thousand support
 function extractAmountFromUrduText(str) {
-    const numMatch = str.match(/\d+/);
+    const numMatch = str.match(/\d[\d,]*/);
     if (numMatch) {
-        let amt = parseInt(numMatch[0], 10);
-        if ((str.includes('ہزار') || str.toLowerCase().includes('hazar') || str.toLowerCase().includes('thousand')) && amt < 1000) {
+        let amt = parseInt(numMatch[0].replace(/,/g, ''), 10);
+        if ((str.includes('لاکھ') || str.toLowerCase().includes('lakh') || str.toLowerCase().includes('lac')) && amt < 1000) {
+            amt = amt * 100000;
+        }
+        else if ((str.includes('ہزار') || str.toLowerCase().includes('hazar') || str.toLowerCase().includes('thousand')) && amt < 1000) {
             amt = amt * 1000;
         }
         return amt;
     }
     const lower = str.toLowerCase();
-    if (str.includes('پانچ ہزار') || lower.includes('paanch hazar') || lower.includes('panch hazar'))
-        return 5000;
-    if (str.includes('دس ہزار') || lower.includes('das hazar'))
-        return 10000;
-    if (str.includes('دو ہزار') || lower.includes('do hazar'))
-        return 2000;
-    if (str.includes('تین ہزار') || lower.includes('teen hazar'))
-        return 3000;
-    if (str.includes('چار ہزار') || lower.includes('char hazar'))
-        return 4000;
-    if (str.includes('ایک ہزار') || lower.includes('ek hazar') || str.includes('ہزار') || lower.includes('hazar'))
-        return 1000;
-    if (str.includes('پانچ سو') || lower.includes('paanch sau') || lower.includes('5 sau'))
-        return 500;
-    if (str.includes('چار سو') || lower.includes('char sau') || lower.includes('4 sau'))
-        return 400;
-    if (str.includes('تین سو') || lower.includes('teen sau') || lower.includes('3 sau'))
-        return 300;
-    if (str.includes('دو سو') || lower.includes('do sau'))
-        return 200;
-    if (str.includes('ایک سو') || lower.includes('ek sau') || str.includes('سو') || lower.includes('sau'))
-        return 100;
-    return 0;
+    let total = 0;
+    // Lakhs calculation
+    if (str.includes('پانچ لاکھ') || lower.includes('paanch lakh') || lower.includes('5 lakh'))
+        total += 500000;
+    else if (str.includes('چار لاکھ') || lower.includes('char lakh') || lower.includes('4 lakh'))
+        total += 400000;
+    else if (str.includes('تین لاکھ') || lower.includes('teen lakh') || lower.includes('3 lakh'))
+        total += 300000;
+    else if (str.includes('دو لاکھ') || lower.includes('do lakh') || lower.includes('2 lakh'))
+        total += 200000;
+    else if (str.includes('ایک لاکھ') || lower.includes('ek lakh') || lower.includes('1 lakh') || str.includes('لاکھ') || lower.includes('lakh'))
+        total += 100000;
+    // Thousands calculation
+    if (str.includes('نوے ہزار') || lower.includes('navway hazar'))
+        total += 90000;
+    else if (str.includes('اسی ہزار') || lower.includes('assi hazar'))
+        total += 80000;
+    else if (str.includes('ستر ہزار') || lower.includes('sattar hazar'))
+        total += 70000;
+    else if (str.includes('ساٹھ ہزار') || lower.includes('saath hazar'))
+        total += 60000;
+    else if (str.includes('پچاس ہزار') || lower.includes('pachaas hazar') || lower.includes('50 hazar'))
+        total += 50000;
+    else if (str.includes('چالیس ہزار') || lower.includes('chalees hazar') || lower.includes('40 hazar'))
+        total += 40000;
+    else if (str.includes('تیس ہزار') || lower.includes('tees hazar') || lower.includes('30 hazar'))
+        total += 30000;
+    else if (str.includes('بیس ہزار') || lower.includes('bees hazar') || lower.includes('20 hazar'))
+        total += 20000;
+    else if (str.includes('پندرہ ہزار') || lower.includes('pandrah hazar') || lower.includes('15 hazar'))
+        total += 15000;
+    else if (str.includes('دس ہزار') || lower.includes('das hazar') || lower.includes('10 hazar'))
+        total += 10000;
+    else if (str.includes('پانچ ہزار') || lower.includes('paanch hazar') || lower.includes('5 hazar'))
+        total += 5000;
+    else if (str.includes('چار ہزار') || lower.includes('char hazar') || lower.includes('4 hazar'))
+        total += 4000;
+    else if (str.includes('تین ہزار') || lower.includes('teen hazar') || lower.includes('3 hazar'))
+        total += 3000;
+    else if (str.includes('دو ہزار') || lower.includes('do hazar') || lower.includes('2 hazar'))
+        total += 2000;
+    else if (str.includes('ایک ہزار') || lower.includes('ek hazar') || (total === 0 && (str.includes('ہزار') || lower.includes('hazar'))))
+        total += 1000;
+    // Hundreds calculation
+    if (str.includes('پانچ سو') || lower.includes('paanch sau'))
+        total += 500;
+    else if (str.includes('چار سو') || lower.includes('char sau'))
+        total += 400;
+    else if (str.includes('تین سو') || lower.includes('teen sau'))
+        total += 300;
+    else if (str.includes('دو سو') || lower.includes('do sau'))
+        total += 200;
+    else if (str.includes('ایک سو') || lower.includes('ek sau') || (total === 0 && (str.includes('سو') || lower.includes('sau'))))
+        total += 100;
+    return total;
 }
 // Helper to calculate relative date (e.g. kal -> yesterday)
 function resolveRelativeDate(text, baseDateStr) {
@@ -101,13 +136,13 @@ function parseFallbackLocally(inputStr, existingPeople = [], currentDate) {
     const amount = extractAmountFromUrduText(inputStr);
     const FILLERS = new Set([
         'gave', 'give', 'got', 'received', 'from', 'to', 'for', 'the', 'a', 'and', 'rupees', 'rs', 'credit', 'cash',
-        'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'rupay', 'rupaye', 'diye', 'diya', 'hue', 'mile', 'wasool', 'jama', 'liye', 'paanch', 'hazar', 'char', 'sau', 'wapis', 'kiye', 'thay', 'tha'
+        'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'rupay', 'rupaye', 'diye', 'diya', 'hue', 'mile', 'wasool', 'jama', 'liye', 'paanch', 'hazar', 'char', 'sau', 'wapis', 'kiye', 'thay', 'tha', 'lakh', 'bees', 'tees', 'ek'
     ]);
     const words = inputStr.trim().split(/\s+/);
     let partyName = 'Customer';
     for (const word of words) {
         const cleaned = word.replace(/[^a-zA-Z\u0600-\u06FF]/g, '');
-        if (cleaned && !FILLERS.has(cleaned.toLowerCase()) && !['پانچ', 'چار', 'ہزار', 'سو', 'روپے', 'لیے', 'دیے', 'سے', 'کو', 'نے'].includes(cleaned)) {
+        if (cleaned && !FILLERS.has(cleaned.toLowerCase()) && !['پانچ', 'چار', 'ہزار', 'سو', 'روپے', 'لیے', 'دیے', 'سے', 'کو', 'نے', 'ایک', 'لاکھ', 'بیس', 'تیس', 'پچاس'].includes(cleaned)) {
             partyName = cleaned;
             break;
         }
@@ -153,44 +188,106 @@ function parseFallbackLocally(inputStr, existingPeople = [], currentDate) {
         confidence: amount > 0 ? 0.95 : 0.7,
     };
 }
-// Ultra-fast Gemini 3.6 Flash / 2.5 Flash Intent Parser
-async function parseWithGemini(text, systemPrompt) {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey)
-        return null;
-    const models = ['gemini-3.6-flash', 'gemini-2.5-flash'];
-    for (const model of models) {
+// Multi-tier Fast LLM Intent Parser (Groq GPT-OSS 20B / Gemini 3.6 Flash / Qwen 27B)
+async function parseWithLLM(text, systemPrompt, groqKey, geminiKey) {
+    // 1. Try Groq openai/gpt-oss-20b (Ultra-fast ~800ms)
+    if (groqKey) {
         try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                    contents: [
-                        { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nJSON Output:` }] }
+                    model: 'openai/gpt-oss-20b',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `Text: "${text}"` }
                     ],
-                    generationConfig: {
-                        responseMimeType: 'application/json',
-                        temperature: 0.1
-                    }
+                    response_format: { type: 'json_object' }
                 })
             });
-            if (res.ok) {
-                const data = (await res.json());
-                const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (rawContent) {
-                    return JSON.parse(rawContent);
+            if (groqRes.ok) {
+                const d = (await groqRes.json());
+                const raw = d.choices?.[0]?.message?.content;
+                if (raw) {
+                    return JSON.parse(raw);
                 }
             }
         }
-        catch (err) {
-            // try next model
+        catch (e) {
+            console.warn('Groq LLM error, falling back to Gemini:', e);
         }
+    }
+    // 2. Try Gemini 3.6 Flash / 2.5 Flash
+    if (geminiKey) {
+        const models = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+        for (const model of models) {
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nJSON Output:` }] }
+                        ],
+                        generationConfig: {
+                            responseMimeType: 'application/json',
+                            temperature: 0.1
+                        }
+                    })
+                });
+                if (res.ok) {
+                    const data = (await res.json());
+                    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (rawContent) {
+                        return JSON.parse(rawContent);
+                    }
+                }
+            }
+            catch (err) {
+                // try next
+            }
+        }
+    }
+    // 3. Try Groq qwen/qwen3.6-27b
+    if (groqKey) {
+        try {
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'qwen/qwen3.6-27b',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `Text: "${text}"` }
+                    ],
+                    response_format: { type: 'json_object' }
+                })
+            });
+            if (groqRes.ok) {
+                const d = (await groqRes.json());
+                const raw = d.choices?.[0]?.message?.content;
+                if (raw) {
+                    return JSON.parse(raw);
+                }
+            }
+        }
+        catch (e) { }
     }
     return null;
 }
 const processVoice = async (req, res, next) => {
+    const totalStartTime = performance.now();
+    let sttDurationMs = 0;
+    let llmDurationMs = 0;
     try {
         const groqKey = process.env.GROQ_API_KEY;
+        const geminiKey = process.env.GEMINI_API_KEY;
         let text = req.body?.text;
         let existingPeople = [];
         try {
@@ -201,21 +298,21 @@ const processVoice = async (req, res, next) => {
         catch (e) { }
         const currentDate = req.body?.current_date || new Date().toISOString().split('T')[0];
         const timezone = req.body?.timezone || 'Asia/Karachi';
-        console.log('\n🎙️ [Voice API] Received incoming request');
+        console.log('\n🎙️ [Voice API] Incoming Voice Request');
         if (req.file) {
-            console.log(`📦 [Voice API] Audio received: ${req.file.originalname} (${req.file.size} bytes)`);
             if (!groqKey) {
                 res.status(500).json({ error: 'GROQ_API_KEY is not configured in backend/.env' });
                 return;
             }
-            // 1. High-Speed STT: Groq whisper-large-v3-turbo (<150ms transcription)
+            // 1. High-Speed STT: Groq whisper-large-v3-turbo
+            const sttStart = performance.now();
             console.log('⚡ [Voice API] Calling Groq Whisper Turbo (whisper-large-v3-turbo)...');
             const extension = req.file.originalname.split('.').pop() || 'm4a';
             const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
             const formData = new FormData();
             formData.append('file', audioBlob, `recording.${extension}`);
             formData.append('model', 'whisper-large-v3-turbo');
-            formData.append('prompt', 'BolKhata hisaab: Zain ko 2000 diye bike tube ke liye, Ali ko 400 diye mobile balance, Papa se 5000 liye, Hamza ne 2000 wapis kiye, Qasim ko 1200 diye, bike repair, rashan, udhaar, jama. زین کو دو ہزار روپے دیے، بائیک کی ٹیوب ڈلوانے کے لیے۔');
+            formData.append('prompt', 'BolKhata: Zain ko 2000 diye, Hasnain se 120000 liye, Ali ko 400 diye, Papa se 50000 liye, bike repair, rashan, udhaar, jama. حسنین سے ایک لاکھ بیس ہزار روپے لیے، زین کو دو ہزار دیے');
             const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: {
@@ -223,6 +320,7 @@ const processVoice = async (req, res, next) => {
                 },
                 body: formData
             });
+            sttDurationMs = Math.round(performance.now() - sttStart);
             if (!whisperResponse.ok) {
                 const errBody = await whisperResponse.text();
                 console.error('❌ Groq Whisper STT error:', errBody);
@@ -231,7 +329,7 @@ const processVoice = async (req, res, next) => {
             }
             const whisperData = (await whisperResponse.json());
             text = whisperData.text;
-            console.log(`✨ [Voice API] Whisper Transcribed: "${text}"`);
+            console.log(`✨ [Voice API] Whisper Transcribed (${sttDurationMs}ms): "${text}"`);
         }
         else if (text) {
             console.log(`📝 [Voice API] Text command received: "${text}"`);
@@ -247,35 +345,43 @@ const processVoice = async (req, res, next) => {
             res.status(400).json({ error: 'No speech detected. Please speak clearly into your mic.' });
             return;
         }
-        // 2. High-Performance Token-Optimized System Prompt (~180 tokens)
+        // 2. High-Performance Token-Optimized System Prompt
         const systemPrompt = `You are BolKhata's rapid financial parser.
-Convert spoken text (Urdu, Roman Urdu, Hindi, English) into JSON.
+Convert spoken text (Urdu script, Roman Urdu, Hindi, English) into JSON.
 
 CONTEXT:
 - Date: "${currentDate}" (${timezone})
 - Store Customers: ${JSON.stringify(existingPeople)}
 
-RULES:
-1. "person.name": English / Latin script TitleCase ONLY (e.g. "زین"->"Zain", "علی"->"Ali", "پاپا"->"Papa", "قاسم"->"Qasim"). NEVER Arabic script. Match Store Customers exactly.
-2. "direction": "gave" (diye/udhaar/paid) | "got" (liye/wasool/mile/wapis kiye).
-3. "amount": number in PKR (e.g., 2000).
-4. "reason": reason in English/Roman text (e.g., "bike tube replacement", "mobile balance", "groceries").
+CRITICAL RULES:
+1. "person.name": English / Latin script TitleCase ONLY (e.g. "حسنین"->"Hasnain", "زین"->"Zain", "علی"->"Ali", "پاپا"->"Papa", "حمزہ"->"Hamza", "بلال"->"Bilal"). NEVER Arabic/Urdu script. Match Store Customers if name matches.
+2. "direction": "gave" (diye/udhaar/paid) | "got" (liye/wasool/mile/wapis kiye/jama).
+3. "amount": Full numeric PKR value:
+   - "ایک لاکھ بیس ہزار" / "1 lakh 20 hazar" = 120000
+   - "ایک لاکھ" / "1 lakh" = 100000
+   - "پچاس ہزار" / "50 hazar" = 50000
+   - "تیس ہزار" / "30 hazar" = 30000
+   - "دس ہزار" / "10 hazar" = 10000
+   - "دو ہزار" = 2000
+4. "reason": reason in English/Roman text or null.
 5. "date": YYYY-MM-DD (kal = yesterday).
 
 JSON SCHEMA ONLY:
 {
   "intent": "create_transaction" | "get_balance" | "get_history",
-  "person": { "name": "string", "matched_person_id": "string or null" },
-  "transaction": { "direction": "gave" | "got", "amount": number, "currency": "PKR", "reason": "string or null", "date": "YYYY-MM-DD", "payment_method": null },
-  "ambiguous": boolean,
-  "candidates": [ { "id": "string", "name": "string" } ],
-  "missing_fields": [ "amount" | "person" ],
-  "confidence": number
+  "person": { "name": "Hasnain", "matched_person_id": null },
+  "transaction": { "direction": "got", "amount": 120000, "currency": "PKR", "reason": null, "date": "${currentDate}", "payment_method": null },
+  "ambiguous": false,
+  "candidates": [],
+  "missing_fields": [],
+  "confidence": 0.98
 }`;
-        let parsedData = await parseWithGemini(text, systemPrompt);
+        const llmStart = performance.now();
+        let parsedData = await parseWithLLM(text, systemPrompt, groqKey, geminiKey);
         if (!parsedData) {
             parsedData = parseFallbackLocally(text, existingPeople, currentDate);
         }
+        llmDurationMs = Math.round(performance.now() - llmStart);
         // Name Normalization
         let rawPersonName = parsedData.person?.name ||
             parsedData.customerName ||
@@ -302,6 +408,7 @@ JSON SCHEMA ONLY:
             parsedData.date ||
             resolveRelativeDate(text, currentDate);
         const intent = parsedData.intent === 'get_balance' ? 'get_balance' : 'create_transaction';
+        const totalDurationMs = Math.round(performance.now() - totalStartTime);
         const normalizedResult = {
             intent,
             customerName: personName,
@@ -328,8 +435,14 @@ JSON SCHEMA ONLY:
             missing_fields: amount <= 0 ? ['amount'] : (parsedData.missing_fields || []),
             confidence: parsedData.confidence || 0.98,
             originalText: text,
+            timings: {
+                sttMs: sttDurationMs,
+                llmMs: llmDurationMs,
+                totalMs: totalDurationMs,
+            },
         };
-        console.log(`⚡ [Voice API] Parsed: Intent="${intent}", Person="${personName}", Amount=${amount}, Direction="${direction}", Reason="${reason}"`);
+        console.log(`⚡ [Voice API] ⏱️ STT: ${sttDurationMs}ms | LLM: ${llmDurationMs}ms | Total: ${totalDurationMs}ms`);
+        console.log(`✅ [Voice API] Parsed: Intent="${intent}", Person="${personName}", Amount=${amount}, Direction="${direction}", Reason="${reason}"`);
         res.json(normalizedResult);
     }
     catch (error) {
