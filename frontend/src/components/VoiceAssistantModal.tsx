@@ -10,23 +10,37 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { Mic, X, Sparkles, CircleCheck, Volume2, Send, Edit2 } from 'lucide-react-native';
+import {
+  Mic,
+  X,
+  Sparkles,
+  CircleCheck,
+  Volume2,
+  Send,
+  AlertCircle,
+  Calendar,
+  User,
+  Users,
+} from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import { getTranslation, LanguageCode } from '../i18n/translations';
 import { ApiService, getApiBaseUrl } from '../services/api';
-import { TransactionType } from '../types';
+import { Party, TransactionType } from '../types';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
   currency?: string;
   language?: LanguageCode;
+  parties?: Party[];
   onClose: () => void;
   onParseVoice: (result: {
     partyName: string;
     amount: number;
     type: 'gave' | 'got';
     note: string;
+    date?: string;
   }) => void;
 }
 
@@ -34,6 +48,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   visible,
   currency = 'Rs',
   language = 'roman_ur',
+  parties = [],
   onClose,
   onParseVoice,
 }) => {
@@ -44,12 +59,18 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [voiceText, setVoiceText] = useState('');
 
-  // Editable parsed fields
+  // Structured parsed state
+  const [parseResult, setParseResult] = useState<any | null>(null);
+
+  // Editable parsed fields for confirmation
   const [partyName, setPartyName] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [txnType, setTxnType] = useState<TransactionType>('gave');
-  const [note, setNote] = useState('');
-  const [hasParsedEntry, setHasParsedEntry] = useState(false);
+  const [reason, setReason] = useState('');
+  const [txnDate, setTxnDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Balance Inquiry state
+  const [balanceInfo, setBalanceInfo] = useState<{ personName: string; balance: number } | null>(null);
 
   // Web MediaRecorder references
   const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -60,37 +81,114 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
 
   const sampleCommands = [
-    'Ali ko 500 rupay udhaar diye',
-    'Ahmad se 1000 wasool hue',
-    'Kashif ne 1500 jama karwaye',
-    'Babar ko 2500 ka rashan diya',
+    'Ali ko 400 diye mobile balance ke liye',
+    'Hamza ne 2000 wapis kiye',
+    'Kal Ali ko 1500 diye thay bike repair ke',
+    'Zain ko 2000 diye bike tube ke liye',
+    'Papa se 5000 liye',
+    'Ali ka hisaab batao',
   ];
 
-  const handleResponse = (resData: any) => {
-    if (resData) {
-      setErrorMessage(null);
-      setStatusMessage('Spoken entry transcribed & parsed! You can edit details below:');
-      
-      if (resData.originalText) {
-        setVoiceText(resData.originalText);
-      }
-      
-      setPartyName(resData.customerName || resData.partyName || 'Customer');
-      setAmountStr((resData.amount || 0).toString());
-      setTxnType(resData.type || 'gave');
-      setNote(resData.description || resData.note || '');
-      setHasParsedEntry(true);
+  // Natural high-clarity voice feedback via Native Device Speech (Urdu / English)
+  const speakNativeConfirmation = (person: string, amount: number, direction: 'gave' | 'got', reasonText?: string) => {
+    try {
+      Speech.stop();
+      const actionUrdu = direction === 'gave' ? 'ادھار دیے گئے ہیں' : 'وصول ہوئے ہیں';
+      const reasonPart = reasonText ? `، ${reasonText} کے لیے` : '';
+      const textToSpeak = `${person} کے ${amount} روپے ${actionUrdu}${reasonPart}۔`;
 
-      if (resData.audioBase64) {
-        try {
-          const sound = new Audio.Sound();
-          sound.loadAsync({ uri: `data:audio/wav;base64,${resData.audioBase64}` }).then(() => {
-            sound.playAsync();
+      Speech.speak(textToSpeak, {
+        language: 'ur-PK',
+        pitch: 1.0,
+        rate: 0.9,
+        onError: () => {
+          Speech.speak(`${direction === 'gave' ? 'Gave' : 'Received'} ${amount} rupees ${direction === 'gave' ? 'to' : 'from'} ${person}`, {
+            language: 'en',
           });
-        } catch (audioErr) {
-          // ignore
-        }
+        },
+      });
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleResponse = (resData: any) => {
+    if (!resData) return;
+    setErrorMessage(null);
+    setParseResult(resData);
+
+    if (resData.originalText) {
+      setVoiceText(resData.originalText);
+    }
+
+    // 1. Balance Inquiry Intent
+    if (resData.intent === 'get_balance') {
+      const pName = resData.person?.name || resData.customerName || resData.partyName || '';
+      const matched = parties.find(
+        (p) => p.name.toLowerCase().includes(pName.toLowerCase()) ||
+               pName.toLowerCase().includes(p.name.toLowerCase())
+      );
+      if (matched) {
+        setBalanceInfo({ personName: matched.name, balance: matched.currentBalance });
+        setStatusMessage(`${matched.name} ka hisaab mil gaya:`);
+        try {
+          Speech.stop();
+          Speech.speak(`${matched.name} ka balance ${matched.currentBalance} rupaye hai.`, { language: 'ur-PK' });
+        } catch (e) {}
+      } else {
+        setErrorMessage(`"${pName}" aap ki customer list mein nahi mila.`);
       }
+      return;
+    }
+
+    // 2. Transaction Intent
+    setBalanceInfo(null);
+
+    const nameValue =
+      resData.person?.name ||
+      resData.customerName ||
+      resData.partyName ||
+      'Customer';
+
+    const amtValue =
+      resData.transaction?.amount ??
+      resData.amount ??
+      0;
+
+    const dirValue: TransactionType =
+      resData.transaction?.direction === 'got' ||
+      resData.type === 'got' ||
+      resData.direction === 'got' ||
+      resData.intent === 'ADD_PAYMENT'
+        ? 'got'
+        : 'gave';
+
+    const reasonValue =
+      resData.transaction?.reason ||
+      resData.description ||
+      resData.note ||
+      '';
+
+    const dateValue =
+      resData.transaction?.date ||
+      resData.date ||
+      new Date().toISOString().split('T')[0];
+
+    // Populate editable form state
+    setPartyName(nameValue);
+    setAmountStr(amtValue > 0 ? amtValue.toString() : '');
+    setTxnType(dirValue);
+    setReason(reasonValue);
+    setTxnDate(dateValue);
+
+    if (resData.ambiguous && resData.candidates && resData.candidates.length > 1) {
+      setStatusMessage(`Aik se zyada "${nameValue}" milay. Please select karein:`);
+    } else if (amtValue <= 0) {
+      setStatusMessage(`"${nameValue}" samajh aa gaya, lekin raqam darj karein:`);
+    } else {
+      setStatusMessage('Voice entry parsed! Verify & confirm below:');
+      // Speak natural device confirmation in clear Urdu
+      speakNativeConfirmation(nameValue, amtValue, dirValue, reasonValue);
     }
   };
 
@@ -98,11 +196,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     if (!text.trim()) return;
     setIsListening(true);
     setErrorMessage(null);
-    setStatusMessage('Processing text command...');
+    setBalanceInfo(null);
+    setStatusMessage('Analyzing intent & context with AI...');
     setVoiceText(text);
 
     try {
-      const response = await ApiService.processVoice({ text });
+      const peoplePayload = parties.map((p) => ({ id: p.id, name: p.name }));
+      const response = await ApiService.processVoice({
+        text,
+        people: peoplePayload,
+        current_date: new Date().toISOString().split('T')[0],
+      });
       handleResponse(response);
     } catch (e: any) {
       setErrorMessage(`Error: ${e?.message || 'Could not connect to voice server'}`);
@@ -115,6 +219,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const startWebRecording = async () => {
     try {
       setErrorMessage(null);
+      setBalanceInfo(null);
+      setParseResult(null);
       setStatusMessage('Listening to microphone...');
       let stream: MediaStream | null = null;
 
@@ -142,7 +248,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       mediaRecorder.start();
       setIsRecordingState(true);
       setVoiceText('');
-      setHasParsedEntry(false);
     } catch (err: any) {
       setErrorMessage('Microphone access denied or not found.');
     }
@@ -158,7 +263,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       mediaRecorder.onstop = async () => {
         setIsRecordingState(false);
         setIsListening(true);
-        setStatusMessage('Transcribing speech with Whisper STT...');
+        setStatusMessage('Transcribing & Parsing with AI...');
 
         if (webStreamRef.current) {
           webStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -167,12 +272,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'speech.webm');
+        formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
+        formData.append('current_date', new Date().toISOString().split('T')[0]);
 
         try {
           const response = await ApiService.processVoice(formData);
           handleResponse(response);
         } catch (e: any) {
-          setErrorMessage(`STT Upload Failed: ${e?.message}`);
+          setErrorMessage(`Voice Process Error: ${e?.message}`);
         } finally {
           setIsListening(false);
           resolve();
@@ -187,6 +294,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const startNativeRecording = async () => {
     try {
       setErrorMessage(null);
+      setBalanceInfo(null);
+      setParseResult(null);
       setStatusMessage('Recording speech on mobile...');
       
       const permission = await Audio.requestPermissionsAsync();
@@ -207,7 +316,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       nativeRecordingRef.current = recording;
       setIsRecordingState(true);
       setVoiceText('');
-      setHasParsedEntry(false);
     } catch (err: any) {
       setErrorMessage(`Mic init error: ${err?.message || err}`);
     }
@@ -220,7 +328,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     try {
       setIsRecordingState(false);
       setIsListening(true);
-      setStatusMessage('Sending audio to Groq Whisper STT on PC...');
+      setStatusMessage('Transcribing & Resolving Intent...');
 
       const recording = nativeRecordingRef.current;
       await recording.stopAndUnloadAsync();
@@ -233,6 +341,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           name: 'speech.m4a',
           type: 'audio/m4a',
         } as any);
+        formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
+        formData.append('current_date', new Date().toISOString().split('T')[0]);
 
         const response = await ApiService.processVoice(formData);
         handleResponse(response);
@@ -247,7 +357,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     }
   };
 
-  // Main Mic Toggle Button Handler
   const handleMicPress = async () => {
     if (Platform.OS === 'web') {
       if (isRecordingState) {
@@ -267,7 +376,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleConfirm = () => {
     const parsedAmount = parseFloat(amountStr) || 0;
     if (!partyName.trim()) {
-      alert('Please enter or verify customer name');
+      alert('Please enter or select a customer name');
       return;
     }
     if (parsedAmount <= 0) {
@@ -279,11 +388,21 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       partyName: partyName.trim(),
       amount: parsedAmount,
       type: txnType,
-      note: note || voiceText,
+      note: reason || voiceText,
+      date: txnDate,
     });
     
+    Speech.stop();
     setVoiceText('');
-    setHasParsedEntry(false);
+    setParseResult(null);
+    setPartyName('');
+    setAmountStr('');
+    setReason('');
+    onClose();
+  };
+
+  const handleCloseModal = () => {
+    Speech.stop();
     onClose();
   };
 
@@ -297,19 +416,20 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <Sparkles size={18} color={COLORS.primary} />
               <Text style={styles.title}>{t.voiceTitle}</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.closeBtn} onPress={handleCloseModal}>
               <X size={18} color="#64748b" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={{ alignItems: 'center' }}>
             <Text style={styles.subtitle}>
-              Endpoint: {getApiBaseUrl()}
+              Natural Speech AI • Groq Whisper + Gemini
             </Text>
 
             {/* Error Message */}
             {errorMessage && (
               <View style={styles.errorBadge}>
+                <AlertCircle size={14} color="#b91c1c" />
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
             )}
@@ -351,7 +471,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               <Volume2 size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.voiceTextInput}
-                placeholder={t.spokenPlaceholder}
+                placeholder="Bol kar bole ya type karein..."
                 placeholderTextColor="#94a3b8"
                 value={voiceText}
                 onChangeText={setVoiceText}
@@ -364,10 +484,61 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               )}
             </View>
 
+            {/* Ambiguity Resolver: Person Candidates Chips */}
+            {parseResult?.ambiguous && parseResult.candidates && parseResult.candidates.length > 1 && (
+              <View style={styles.ambiguousContainer}>
+                <View style={styles.ambiguousHeader}>
+                  <Users size={14} color="#b45309" />
+                  <Text style={styles.ambiguousHeaderText}>Which person do you mean?</Text>
+                </View>
+                <View style={styles.candidateChipsRow}>
+                  {parseResult.candidates.map((c: any) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.candidateChip,
+                        partyName === c.name && styles.candidateChipActive,
+                      ]}
+                      onPress={() => {
+                        setPartyName(c.name);
+                        setParseResult({ ...parseResult, ambiguous: false });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.candidateChipText,
+                          partyName === c.name && styles.candidateChipTextActive,
+                        ]}
+                      >
+                        {c.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Balance Inquiry Result Card */}
+            {balanceInfo && (
+              <View style={styles.balanceInquiryCard}>
+                <User size={20} color={COLORS.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.balancePersonName}>{balanceInfo.personName}</Text>
+                  <Text style={styles.balanceStatusText}>
+                    {balanceInfo.balance > 0
+                      ? `Aap Lenge: ${currency} ${balanceInfo.balance.toLocaleString('en-IN')}`
+                      : balanceInfo.balance < 0
+                      ? `Aap Denge: ${currency} ${Math.abs(balanceInfo.balance).toLocaleString('en-IN')}`
+                      : 'Hisaab Barabar Hai (0)'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Quick Sample Prompts */}
-            {!hasParsedEntry && (
+            {!parseResult && !balanceInfo && (
               <>
-                <Text style={styles.sampleHeader}>{t.sampleCommandsTitle}</Text>
+                <Text style={styles.sampleHeader}>Natural Voice Command Examples:</Text>
                 <View style={styles.sampleGrid}>
                   {sampleCommands.map((cmd, idx) => (
                     <TouchableOpacity
@@ -382,12 +553,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               </>
             )}
 
-            {/* Interactive Editable Parsed Result Card */}
-            {hasParsedEntry && (
+            {/* Interactive Confirmation & Validation Form Card */}
+            {parseResult && parseResult.intent !== 'get_balance' && (
               <View style={styles.parsedCard}>
                 <View style={styles.parsedHeader}>
                   <CircleCheck size={16} color={COLORS.gotGreen} />
-                  <Text style={styles.parsedTitle}>Verify & Edit Entry Details</Text>
+                  <Text style={styles.parsedTitle}>Transaction Confirmation</Text>
                 </View>
 
                 {/* Gave / Got Toggle */}
@@ -428,35 +599,45 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 </View>
 
                 {/* Customer Name */}
-                <Text style={styles.fieldLabel}>{t.party}</Text>
+                <Text style={styles.fieldLabel}>Person / Customer</Text>
                 <TextInput
                   style={styles.fieldInput}
                   value={partyName}
                   onChangeText={setPartyName}
-                  placeholder="Customer Name"
+                  placeholder="e.g. Ali"
                   placeholderTextColor="#94a3b8"
                 />
 
                 {/* Amount */}
-                <Text style={styles.fieldLabel}>{t.amount} ({currency})</Text>
+                <Text style={styles.fieldLabel}>Amount ({currency})</Text>
                 <TextInput
-                  style={[styles.fieldInput, { fontWeight: '800', fontSize: 16 }]}
+                  style={[
+                    styles.fieldInput,
+                    { fontWeight: '800', fontSize: 16 },
+                    (!amountStr || amountStr === '0') && styles.missingFieldHighlight,
+                  ]}
                   keyboardType="numeric"
                   value={amountStr}
                   onChangeText={setAmountStr}
-                  placeholder="0"
+                  placeholder="e.g. 400"
                   placeholderTextColor="#94a3b8"
                 />
 
-                {/* Note */}
-                <Text style={styles.fieldLabel}>Item / Note</Text>
+                {/* Free-form Reason */}
+                <Text style={styles.fieldLabel}>Reason (Optional)</Text>
                 <TextInput
                   style={styles.fieldInput}
-                  value={note}
-                  onChangeText={setNote}
-                  placeholder="e.g. Udhaar Entry"
+                  value={reason}
+                  onChangeText={setReason}
+                  placeholder="e.g. mobile balance, bike repair, rashan"
                   placeholderTextColor="#94a3b8"
                 />
+
+                {/* Date */}
+                <View style={styles.metaRow}>
+                  <Calendar size={12} color="#64748b" />
+                  <Text style={styles.metaText}>Date: {txnDate}</Text>
+                </View>
 
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
                   <Text style={styles.confirmBtnText}>{t.confirmAndSave}</Text>
@@ -529,6 +710,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   errorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#fef2f2',
     borderColor: '#fecaca',
     borderWidth: 1,
@@ -541,8 +725,8 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 11,
     color: '#b91c1c',
-    textAlign: 'center',
     fontWeight: '600',
+    flex: 1,
   },
   statusBadge: {
     backgroundColor: '#eff6ff',
@@ -598,6 +782,74 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#0f172a',
     fontSize: 13,
+  },
+  ambiguousContainer: {
+    width: '100%',
+    backgroundColor: '#fefce8',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#fef08a',
+    marginBottom: 12,
+  },
+  ambiguousHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  ambiguousHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#854d0e',
+  },
+  candidateChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  candidateChip: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  candidateChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  candidateChipText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  candidateChipTextActive: {
+    color: '#ffffff',
+  },
+  balanceInquiryCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.gotGreenBorder,
+    marginBottom: 14,
+  },
+  balancePersonName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  balanceStatusText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+    marginTop: 2,
   },
   sampleHeader: {
     alignSelf: 'flex-start',
@@ -691,6 +943,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0f172a',
     marginBottom: 8,
+  },
+  missingFieldHighlight: {
+    borderColor: COLORS.gaveRed,
+    backgroundColor: '#fff5f5',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  metaText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
   },
   confirmBtn: {
     backgroundColor: COLORS.gotGreen,
