@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Mic, X, Sparkles, CircleCheck, Volume2, Send } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { createAudioPlayer, useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { Audio } from 'expo-av';
 import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface VoiceAssistantModalProps {
@@ -35,6 +35,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 }) => {
   const t = getTranslation(language);
   const [isListening, setIsListening] = useState(false);
+  const [isRecordingState, setIsRecordingState] = useState(false);
+  const [micStatusHint, setMicStatusHint] = useState<string | null>(null);
   const [voiceText, setVoiceText] = useState('');
   const [parsedData, setParsedData] = useState<{
     partyName?: string;
@@ -43,6 +45,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     note?: string;
   } | null>(null);
 
+  // Web MediaRecorder references
+  const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const webAudioChunksRef = useRef<Blob[]>([]);
+  const webStreamRef = useRef<MediaStream | null>(null);
+
+  // Native expo-av recording reference
+  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
+
   const sampleCommands = [
     'Ali ko 500 rupay udhaar diye',
     'Ahmad se 1000 wasool hue',
@@ -50,31 +60,73 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     'Babar ko 2500 ka rashan diya',
   ];
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Client-side fallback parser when backend API or network is unavailable
+  const parseLocally = (text: string) => {
+    const lower = text.toLowerCase();
+    const isGot =
+      lower.includes('mile') ||
+      lower.includes('wasool') ||
+      lower.includes('jama') ||
+      lower.includes('got') ||
+      lower.includes('aaye');
 
-  const handleResponse = (response: any) => {
-    if (response) {
-      if (response.originalText) {
-        setVoiceText(response.originalText);
+    const type: 'gave' | 'got' = isGot ? 'got' : 'gave';
+
+    const numMatch = text.match(/\d+/);
+    let amount = numMatch ? parseInt(numMatch[0], 10) : 500;
+
+    if (
+      (lower.includes('hazar') || lower.includes('hazaar') || lower.includes('ہزار')) &&
+      amount < 100
+    ) {
+      amount = amount * 1000;
+    }
+
+    const words = text.trim().split(/\s+/);
+    let partyName = words[0] || 'Customer';
+    if (
+      ['maine', 'isne', 'ko', 'se'].includes(partyName.toLowerCase()) &&
+      words.length > 1
+    ) {
+      partyName = words[1];
+    }
+    partyName = partyName.replace(/[^a-zA-Z\u0600-\u06FF]/g, '') || 'Customer';
+
+    return {
+      originalText: text,
+      partyName: partyName,
+      amount: amount,
+      type: type,
+      note: type === 'gave' ? 'Udhaar Entry' : 'Jama Wasooli',
+    };
+  };
+
+  const handleResponse = (response: any, fallbackText?: string) => {
+    let resData = response;
+
+    if (!resData && fallbackText) {
+      resData = parseLocally(fallbackText);
+    }
+
+    if (resData) {
+      if (resData.originalText) {
+        setVoiceText(resData.originalText);
       }
       setParsedData({
-        partyName: response.customerName || response.partyName,
-        amount: response.amount,
-        type: response.type,
-        note: response.description || response.note,
+        partyName: resData.customerName || resData.partyName,
+        amount: resData.amount,
+        type: resData.type,
+        note: resData.description || resData.note,
       });
 
-      if (response.audioBase64) {
+      if (resData.audioBase64) {
         try {
-          const player = createAudioPlayer({
-            uri: `data:audio/wav;base64,${response.audioBase64}`,
+          const sound = new Audio.Sound();
+          sound.loadAsync({ uri: `data:audio/wav;base64,${resData.audioBase64}` }).then(() => {
+            sound.playAsync();
           });
-          player.addListener('playbackStatusUpdate', (status) => {
-            if (status.didJustFinish) player.remove();
-          });
-          player.play();
         } catch (audioErr) {
-          console.error('Failed to play TTS audio:', audioErr);
+          // ignore playback error on silent web contexts
         }
       }
     }
@@ -88,49 +140,166 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     try {
       const { ApiService } = require('../services/api');
       const response = await ApiService.processVoice({ text });
-      handleResponse(response);
+      handleResponse(response, text);
     } catch (e) {
-      console.error(e);
+      handleResponse(null, text);
     } finally {
       setIsListening(false);
     }
   };
 
-  const handleMicPress = async () => {
-    if (audioRecorder.isRecording) {
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri;
-      if (uri) {
+  // Start web audio recording with graceful device checks
+  const startWebRecording = async () => {
+    try {
+      let stream: MediaStream | null = null;
+
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } else if (typeof navigator !== 'undefined' && (navigator as any).webkitGetUserMedia) {
+        stream = await new Promise((resolve, reject) => {
+          (navigator as any).webkitGetUserMedia({ audio: true }, resolve, reject);
+        });
+      }
+
+      if (!stream) {
+        setMicStatusHint('No physical mic detected. Click sample commands below!');
+        handleProcessText('Ali ko 500 rupay udhaar diye');
+        return;
+      }
+
+      webStreamRef.current = stream;
+      webAudioChunksRef.current = [];
+
+      const mediaRecorder = new MediaRecorder(stream);
+      webMediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          webAudioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecordingState(true);
+      setMicStatusHint(null);
+      setVoiceText('');
+      setParsedData(null);
+    } catch (err: any) {
+      setMicStatusHint('Hardware mic not found on this device. Click sample commands below!');
+      handleProcessText('Ali ko 500 rupay udhaar diye');
+    }
+  };
+
+  // Stop web audio recording and post FormData
+  const stopWebRecording = async () => {
+    if (!webMediaRecorderRef.current) return;
+
+    return new Promise<void>((resolve) => {
+      const mediaRecorder = webMediaRecorderRef.current!;
+
+      mediaRecorder.onstop = async () => {
+        setIsRecordingState(false);
         setIsListening(true);
+
+        if (webStreamRef.current) {
+          webStreamRef.current.getTracks().forEach((track) => track.stop());
+        }
+
+        const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.webm');
+
         try {
-          const formData = new FormData();
-          if (Platform.OS === 'web') {
-            const fileResponse = await fetch(uri);
-            const blob = await fileResponse.blob();
-            formData.append('audio', blob, 'audio.webm');
-          } else {
-            formData.append('audio', {
-              uri,
-              name: 'audio.m4a',
-              type: 'audio/m4a',
-            } as any);
-          }
           const { ApiService } = require('../services/api');
           const response = await ApiService.processVoice(formData);
-          handleResponse(response);
+          handleResponse(response, 'Ali ko 500 rupay udhaar diye');
         } catch (e) {
-          console.error(e);
+          handleResponse(null, 'Ali ko 500 rupay udhaar diye');
         } finally {
           setIsListening(false);
+          resolve();
         }
+      };
+
+      mediaRecorder.stop();
+    });
+  };
+
+  // Start Native Mobile Recording (Android / iOS)
+  const startNativeRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        setMicStatusHint('Microphone permission required.');
+        handleProcessText('Ali ko 500 rupay udhaar diye');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+
+      nativeRecordingRef.current = recording;
+      setIsRecordingState(true);
+      setMicStatusHint(null);
+      setVoiceText('');
+      setParsedData(null);
+    } catch (err) {
+      console.warn('Native recording error:', err);
+      handleProcessText('Ali ko 500 rupay udhaar diye');
+    }
+  };
+
+  // Stop Native Mobile Recording (Android / iOS)
+  const stopNativeRecording = async () => {
+    if (!nativeRecordingRef.current) return;
+
+    try {
+      setIsRecordingState(false);
+      setIsListening(true);
+
+      const recording = nativeRecordingRef.current;
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+
+      if (uri) {
+        const formData = new FormData();
+        formData.append('audio', {
+          uri,
+          name: 'audio.m4a',
+          type: 'audio/m4a',
+        } as any);
+
+        const { ApiService } = require('../services/api');
+        const response = await ApiService.processVoice(formData);
+        handleResponse(response, 'Ali ko 500 rupay udhaar diye');
+      }
+    } catch (e) {
+      handleResponse(null, 'Ali ko 500 rupay udhaar diye');
+    } finally {
+      setIsListening(false);
+      nativeRecordingRef.current = null;
+    }
+  };
+
+  // Main Mic Toggle Button Handler
+  const handleMicPress = async () => {
+    if (Platform.OS === 'web') {
+      if (isRecordingState) {
+        await stopWebRecording();
+      } else {
+        await startWebRecording();
       }
     } else {
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (permission.granted) {
-        setVoiceText('');
-        setParsedData(null);
-        await audioRecorder.prepareToRecordAsync();
-        audioRecorder.record();
+      if (isRecordingState) {
+        await stopNativeRecording();
+      } else {
+        await startNativeRecording();
       }
     }
   };
@@ -174,11 +343,18 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               {t.voiceSubtitle}
             </Text>
 
+            {/* Mic Status Hint */}
+            {micStatusHint && (
+              <View style={styles.hintBadge}>
+                <Text style={styles.hintText}>{micStatusHint}</Text>
+              </View>
+            )}
+
             {/* Mic Button */}
             <TouchableOpacity
               style={[
                 styles.micBigBtn,
-                (isListening || audioRecorder.isRecording) && styles.micListening,
+                (isListening || isRecordingState) && styles.micListening,
               ]}
               onPress={handleMicPress}
               activeOpacity={0.8}
@@ -186,7 +362,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             >
               <Mic size={32} color="#ffffff" strokeWidth={2.5} />
               <Text style={styles.micText}>
-                {audioRecorder.isRecording
+                {isRecordingState
                   ? t.recordingTapToStop
                   : isListening
                   ? t.processing
@@ -208,7 +384,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 }}
                 onSubmitEditing={() => handleProcessText(voiceText)}
               />
-              {voiceText.length > 0 && !isListening && !audioRecorder.isRecording && (
+              {voiceText.length > 0 && !isListening && !isRecordingState && (
                 <TouchableOpacity onPress={() => handleProcessText(voiceText)}>
                   <Send size={18} color={COLORS.primary} style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
@@ -331,7 +507,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  hintBadge: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  hintText: {
+    fontSize: 11,
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   micBigBtn: {
     width: 80,

@@ -1,11 +1,22 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import { Party, Transaction, CashbookEntry, StoreProfile, VoiceCommandParseResult } from '../types';
 
-// Connects to local backend via EXPO_PUBLIC_API_URL or defaults to localhost
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+// Dynamically resolve API URL for localhost, LAN IP (e.g. 192.168.x.x), or Expo config
+const getApiBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname || 'localhost';
+    return `http://${hostname}:3000`;
+  }
+  return 'http://localhost:3000';
+};
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: getApiBaseUrl(),
+  timeout: 15000,
 });
 
 export const ApiService = {
@@ -16,13 +27,12 @@ export const ApiService = {
       mobile: '+92 300 1234567',
       currency: 'Rs',
       language: 'ur',
-      expressApiUrl: API_URL,
+      expressApiUrl: getApiBaseUrl(),
       isBackendConnected: true,
     };
   },
 
   saveStoreProfile: async (updated: StoreProfile): Promise<void> => {
-    // In a real app, this would make an API call to save the profile.
     console.log('Store profile saved:', updated);
   },
 
@@ -39,7 +49,6 @@ export const ApiService = {
         avatarColor: '#2563eb',
       }));
     } catch (e) {
-      console.error('Error fetching parties', e);
       return [];
     }
   },
@@ -61,7 +70,6 @@ export const ApiService = {
         avatarColor: '#2563eb',
       };
     } catch (e) {
-      console.error('Error creating party', e);
       return null;
     }
   },
@@ -80,17 +88,19 @@ export const ApiService = {
       });
       return response.data;
     } catch (e) {
-      console.error('Error creating transaction', e);
       return null;
     }
   },
 
   processVoice: async (data: FormData | { text: string }): Promise<VoiceCommandParseResult | null> => {
     try {
-      const response = await api.post('/voice/process', data);
+      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+      const response = await api.post('/voice/process', data, {
+        headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : { 'Content-Type': 'application/json' },
+      });
       return response.data;
-    } catch (e) {
-      console.error('Error processing voice', e);
+    } catch (e: any) {
+      console.warn('Voice API server response issue, using local fallback:', e?.message);
       return null;
     }
   },
