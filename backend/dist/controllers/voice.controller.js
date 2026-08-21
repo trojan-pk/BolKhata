@@ -40,12 +40,54 @@ async function generateTTS(text) {
         return null;
     }
 }
-// Fallback rule parser when LLM API keys are missing.
-// Understands both English and Urdu / Roman-Urdu phrasing, but always emits
-// English descriptions so the ledger stays English.
+// Urdu & Roman Urdu word-number dictionary
+function extractAmountFromUrduText(str) {
+    const numMatch = str.match(/\d+/);
+    if (numMatch) {
+        let amt = parseInt(numMatch[0], 10);
+        if ((str.includes('ہزار') || str.toLowerCase().includes('hazar') || str.toLowerCase().includes('thousand')) && amt < 1000) {
+            amt = amt * 1000;
+        }
+        return amt;
+    }
+    // Word mappings
+    const wordMap = {
+        'ایک': 1, 'do': 2, 'دو': 2, 'teen': 3, 'تین': 3, 'char': 4, 'چار': 4,
+        'paanch': 5, 'panch': 5, 'پانچ': 5, 'chhe': 6, 'چھ': 6, 'saat': 7, 'سات': 7,
+        'aath': 8, 'آٹھ': 8, 'nau': 9, 'نو': 9, 'das': 10, 'دس': 10,
+        'bees': 20, 'بیس': 20, 'tees': 30, 'تیس': 30, 'chalees': 40, 'چالیس': 40,
+        'pachas': 50, 'پچاس': 50, 'sau': 100, 'سو': 100,
+        'hazar': 1000, 'hazaar': 1000, 'ہزار': 1000,
+        'laakh': 100000, 'lakh': 100000, 'لاکھ': 100000
+    };
+    const lower = str.toLowerCase();
+    let total = 0;
+    let currentMultiplier = 1;
+    if (str.includes('پانچ ہزار') || lower.includes('paanch hazar') || lower.includes('panch hazar'))
+        return 5000;
+    if (str.includes('دس ہزار') || lower.includes('das hazar'))
+        return 10000;
+    if (str.includes('دو ہزار') || lower.includes('do hazar'))
+        return 2000;
+    if (str.includes('تین ہزار') || lower.includes('teen hazar'))
+        return 3000;
+    if (str.includes('چار ہزار') || lower.includes('char hazar'))
+        return 4000;
+    if (str.includes('ایک ہزار') || lower.includes('ek hazar') || str.includes('ہزار') || lower.includes('hazar'))
+        return 1000;
+    if (str.includes('پانچ سو') || lower.includes('paanch sau') || lower.includes('5 sau'))
+        return 500;
+    if (str.includes('دو سو') || lower.includes('do sau'))
+        return 200;
+    if (str.includes('تین سو') || lower.includes('teen sau'))
+        return 300;
+    if (str.includes('سو') || lower.includes('sau'))
+        return 100;
+    return 0;
+}
+// Fallback rule parser
 function parseFallbackLocally(inputStr) {
     const lower = inputStr.toLowerCase();
-    // "Money came in" signals — English first, then Roman Urdu, then Urdu script.
     const isGot = lower.includes('received') ||
         lower.includes('receive') ||
         lower.includes('collected') ||
@@ -56,33 +98,22 @@ function parseFallbackLocally(inputStr) {
         lower.includes('wasool') ||
         lower.includes('jama') ||
         lower.includes('aaye') ||
+        lower.includes('liye') ||
+        inputStr.includes('لیے') ||
         inputStr.includes('وصول') ||
+        inputStr.includes('ملے') ||
         inputStr.includes('جمع');
     const type = isGot ? 'got' : 'gave';
-    const numMatch = inputStr.match(/\d+/);
-    let amount = numMatch ? parseInt(numMatch[0], 10) : 0;
-    if ((lower.includes('thousand') || lower.includes('hazar') || lower.includes('hazaar') || lower.includes('ہزار')) &&
-        amount > 0 && amount < 100) {
-        amount = amount * 1000;
-    }
-    // Pick the first token that looks like a name: alphabetic (Latin or Urdu)
-    // and not a grammatical filler in either language. This handles English word
-    // order ("Gave Ali 500") and Urdu word order ("Ali ko 500 diye") alike.
+    const amount = extractAmountFromUrduText(inputStr);
     const FILLERS = new Set([
-        // English
-        'gave', 'give', 'given', 'got', 'get', 'received', 'receive', 'collected',
-        'paid', 'pay', 'payment', 'from', 'to', 'for', 'the', 'a', 'an', 'and',
-        'rupees', 'rupee', 'rs', 'credit', 'cash', 'took', 'take', 'worth', 'of',
-        'on', 'against', 'his', 'her', 'their', 'balance', 'i', 'me', 'my',
-        // Roman Urdu
-        'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'udhar',
-        'rupay', 'rupaye', 'diye', 'diya', 'hue', 'hua', 'mile', 'wasool', 'jama',
+        'gave', 'give', 'got', 'received', 'from', 'to', 'for', 'the', 'a', 'and', 'rupees', 'rs', 'credit', 'cash',
+        'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'rupay', 'rupaye', 'diye', 'diya', 'hue', 'mile', 'wasool', 'jama', 'liye', 'paanch', 'hazar'
     ]);
     const words = inputStr.trim().split(/\s+/);
     let partyName = 'Customer';
     for (const word of words) {
         const cleaned = word.replace(/[^a-zA-Z\u0600-\u06FF]/g, '');
-        if (cleaned && !FILLERS.has(cleaned.toLowerCase())) {
+        if (cleaned && !FILLERS.has(cleaned.toLowerCase()) && !['پانچ', 'ہزار', 'روپے', 'لیے', 'دیے', 'سے', 'کو'].includes(cleaned)) {
             partyName = cleaned;
             break;
         }
@@ -95,39 +126,40 @@ function parseFallbackLocally(inputStr) {
         type: type,
     };
 }
-// Helper to parse bookkeeping intent using Google Gemini 3.6 Flash
+// Helper to parse bookkeeping intent using Google Gemini 2.5 Flash / 2.0 Flash / 1.5 Flash
 async function parseWithGemini(text, systemPrompt) {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey)
         return null;
-    try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [
-                    { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nReturn JSON:` }] }
-                ],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    temperature: 0.1
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    for (const model of models) {
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [
+                        { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nReturn JSON ONLY:` }] }
+                    ],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        temperature: 0.1
+                    }
+                })
+            });
+            if (res.ok) {
+                const data = (await res.json());
+                const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (rawContent) {
+                    return JSON.parse(rawContent);
                 }
-            })
-        });
-        if (!res.ok) {
-            console.warn('Gemini API responded with status:', res.status, await res.text());
-            return null;
+            }
         }
-        const data = (await res.json());
-        const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawContent)
-            return null;
-        return JSON.parse(rawContent);
+        catch (err) {
+            // try next model
+        }
     }
-    catch (err) {
-        console.warn('Gemini parser warning:', err);
-        return null;
-    }
+    return null;
 }
 const processVoice = async (req, res, next) => {
     try {
@@ -135,9 +167,9 @@ const processVoice = async (req, res, next) => {
         let text = req.body?.text;
         console.log('\n🎙️ [Voice API] Received incoming request');
         if (req.file) {
-            console.log(`📦 [Voice API] Audio buffer received: ${req.file.originalname} (${req.file.size} bytes, type: ${req.file.mimetype})`);
+            console.log(`📦 [Voice API] Audio file received: ${req.file.originalname} (${req.file.size} bytes)`);
             if (!groqKey) {
-                res.status(500).json({ error: 'GROQ_API_KEY is not configured for Whisper transcription' });
+                res.status(500).json({ error: 'GROQ_API_KEY is not configured in backend/.env' });
                 return;
             }
             // 1. Transcribe audio using Groq Whisper API
@@ -147,9 +179,7 @@ const processVoice = async (req, res, next) => {
             const formData = new FormData();
             formData.append('file', audioBlob, `recording.${extension}`);
             formData.append('model', 'whisper-large-v3');
-            // Bilingual hint: biases Whisper toward shop-ledger vocabulary in BOTH
-            // English and Urdu/Roman Urdu, so the shopkeeper can speak either one.
-            formData.append('prompt', 'BolKhata shop ledger bookkeeping. English: Gave Ali 500 rupees on credit, received 1000 from Ahmad, payment collected, outstanding balance, stock purchased, cash sale, expense. Roman Urdu: Ali ko 500 rupaye diye, Ahmad se 1000 mile, udhaar, jama, wasool, rokar, baqi, maal bheja, payment aayi. اردو: علی کو پانچ سو روپے ادھار دیے، احمد سے ہزار روپے وصول ہوئے۔');
+            formData.append('prompt', 'BolKhata dukandari hisaab: Ali ko 500 diye, Papa se 5000 liye, Ahmad se 1000 wasool hue, udhaar, jama, wasool. علی کو پانچ سو روپے دیے، پاپا سے پانچ ہزار روپے وصول کیے۔');
             const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: {
@@ -165,7 +195,7 @@ const processVoice = async (req, res, next) => {
             }
             const whisperData = (await whisperResponse.json());
             text = whisperData.text;
-            console.log(`✨ [Voice API] Whisper transcribed live speech: "${text}"`);
+            console.log(`✨ [Voice API] Whisper Transcribed: "${text}"`);
         }
         else if (text) {
             console.log(`📝 [Voice API] Text command received: "${text}"`);
@@ -178,20 +208,19 @@ const processVoice = async (req, res, next) => {
             res.status(400).json({ error: 'Audio was silent or no speech detected.' });
             return;
         }
-        // 2. Parse text with Gemini 3.6 Flash / Groq LLM
-        const systemPrompt = `You are an expert multilingual ledger and bookkeeping AI for a digital khata app called "BolKhata" used by shopkeepers in Pakistan and India.
+        // 2. Parse text with Gemini / Groq LLM
+        const systemPrompt = `You are an expert multilingual ledger AI for "BolKhata" store ledger app.
+Extract transaction details from spoken voice transcripts in Urdu (Urdu script or Roman Urdu), Hindi, or English.
 
-INPUT: The spoken transcript may be in English, Urdu (Urdu script or Roman Urdu), or Hindi. Understand all of them equally well and detect the language automatically.
+IMPORTANT NUMBER WORDS RULES:
+- "پانچ ہزار" / "paanch hazar" = 5000
+- "ہزار" / "hazar" = 1000
+- "دس ہزار" / "das hazar" = 10000
+- "پانچ سو" / "500" = 500
+- "لیے" / "wasool" / "mile" / "jama" / "received" = type: "got", intent: "ADD_PAYMENT"
+- "دیے" / "udhaar" / "gave" = type: "gave", intent: "ADD_CREDIT"
 
-OUTPUT: Always respond in ENGLISH, regardless of the input language. The app's interface is English-only.
-- "customerName": transliterate names into Latin script (e.g. "علی" -> "Ali", "احمد" -> "Ahmad"). Never return Urdu or Devanagari script.
-- "description": a short English summary of the item or reason (e.g. "5 bags of rice", "part payment", "monthly ration credit"). Never return Urdu or Devanagari script.
-- "amount": a plain number. Resolve spoken numbers in any language ("paanch sau" / "پانچ سو" / "five hundred" -> 500, "hazaar" / "ہزار" / "thousand" -> 1000).
-
-Use "gave" / ADD_CREDIT when the shopkeeper handed over money or goods on credit (udhaar diya).
-Use "got" / ADD_PAYMENT when the shopkeeper received money (jama / wasool hua).
-
-Respond ONLY with a valid JSON object matching this structure:
+Respond ONLY with valid JSON:
 {
   "intent": "ADD_CREDIT" | "ADD_PAYMENT",
   "customerName": "string",
@@ -209,7 +238,7 @@ Respond ONLY with a valid JSON object matching this structure:
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'qwen/qwen3.6-27b',
+                        model: 'llama-3.3-70b-versatile',
                         messages: [
                             { role: 'system', content: systemPrompt },
                             { role: 'user', content: text }
@@ -227,17 +256,23 @@ Respond ONLY with a valid JSON object matching this structure:
             }
         }
         // Fallback if LLM parsing not reached
-        if (!parsedData) {
-            parsedData = parseFallbackLocally(text);
+        if (!parsedData || !parsedData.amount) {
+            const fallback = parseFallbackLocally(text);
+            if (!parsedData) {
+                parsedData = fallback;
+            }
+            else if (!parsedData.amount && fallback.amount) {
+                parsedData.amount = fallback.amount;
+            }
         }
-        console.log(`🧠 [Voice API] Parsed result: Customer="${parsedData.customerName}", Amount=${parsedData.amount}, Type=${parsedData.type}`);
-        // 3. Generate natural voice feedback using Alibaba Qwen TTS (English —
-        // the app UI is English, so the spoken confirmation matches it).
-        const actionText = parsedData.type === 'gave'
-            ? `was given ${parsedData.amount} rupees on credit`
-            : `paid ${parsedData.amount} rupees`;
-        const speechText = `${parsedData.customerName} ${actionText}. Press confirm to save this entry to the ledger.`;
+        console.log(`🧠 [Voice API] Parsed Result: Customer="${parsedData.customerName}", Amount=${parsedData.amount}, Type=${parsedData.type}`);
+        // 3. Generate natural voice feedback using Alibaba Qwen TTS
+        const actionText = parsedData.type === 'gave' ? 'udhaar diye gaye hain' : 'jama wasool hue hain';
+        const speechText = `${parsedData.customerName} ke ${parsedData.amount} rupaye ${actionText}. Khata save karne ke liye confirm dabayein.`;
         const audioBase64 = await generateTTS(speechText);
+        if (audioBase64) {
+            console.log('🔊 [Voice API] Audio feedback voice note generated successfully.');
+        }
         res.json({
             ...parsedData,
             audioBase64,
