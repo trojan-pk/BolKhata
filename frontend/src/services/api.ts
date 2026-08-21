@@ -21,6 +21,11 @@ export const ApiService = {
     };
   },
 
+  saveStoreProfile: async (updated: StoreProfile): Promise<void> => {
+    // In a real app, this would make an API call to save the profile.
+    console.log('Store profile saved:', updated);
+  },
+
   getParties: async (): Promise<Party[]> => {
     try {
       const response = await api.get('/customers');
@@ -91,7 +96,8 @@ export const ApiService = {
   },
   
   // Stubs for remaining
-  saveParties: async () => {},
-  saveTransactions: async () => {},
+  saveParties: async (newParties: Party[]) => {},
+  saveTransactions: async (newTxns: Transaction[]) => {},
   getCashbook: async (): Promise<CashbookEntry[]> => [],
+  saveCashbook: async (entries: CashbookEntry[]) => {},
 };
