@@ -27,15 +27,17 @@ export const injectWebGoogleFonts = () => {
   }
 };
 
-const URDU_SANS =
-  "'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+// Latin-first stacks: the app UI is English, so Inter / Plus Jakarta Sans lead.
+// The Urdu & Arabic faces stay at the end of the stack purely as fallbacks, so
+// Urdu still renders correctly if it is picked in Settings.
+const URDU_FALLBACK = "'Noto Nastaliq Urdu', 'Noto Sans Arabic'";
 const SYSTEM_SANS =
-  "'Inter', 'Noto Nastaliq Urdu', 'Noto Sans Arabic', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  `'Inter', ${URDU_FALLBACK}, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
 
 export const FONTS = {
   // Headings, Brand Title, Big Numeric Ledger Figures
   heading: Platform.select({
-    web: URDU_SANS,
+    web: `'Plus Jakarta Sans', ${SYSTEM_SANS}`,
     default: 'System',
   }),
   headingBold: Platform.select({

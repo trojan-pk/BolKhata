@@ -7,11 +7,15 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { Mic, X, Sparkles, CircleCheck, Volume2, Send } from 'lucide-react-native';
+import { Mic, X, Sparkles, CircleCheck, Volume2, Send, Edit2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Audio } from 'expo-av';
 import { getTranslation, LanguageCode } from '../i18n/translations';
+import { ApiService, getApiBaseUrl } from '../services/api';
+import { TransactionType } from '../types';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
@@ -29,21 +33,23 @@ interface VoiceAssistantModalProps {
 export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   visible,
   currency = 'Rs',
-  language = 'ur',
+  language = 'roman_ur',
   onClose,
   onParseVoice,
 }) => {
   const t = getTranslation(language);
   const [isListening, setIsListening] = useState(false);
   const [isRecordingState, setIsRecordingState] = useState(false);
-  const [micStatusHint, setMicStatusHint] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [voiceText, setVoiceText] = useState('');
-  const [parsedData, setParsedData] = useState<{
-    partyName?: string;
-    amount?: number;
-    type?: 'gave' | 'got';
-    note?: string;
-  } | null>(null);
+
+  // Editable parsed fields
+  const [partyName, setPartyName] = useState('');
+  const [amountStr, setAmountStr] = useState('');
+  const [txnType, setTxnType] = useState<TransactionType>('gave');
+  const [note, setNote] = useState('');
+  const [hasParsedEntry, setHasParsedEntry] = useState(false);
 
   // Web MediaRecorder references
   const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -60,64 +66,20 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     'Babar ko 2500 ka rashan diya',
   ];
 
-  // Client-side fallback parser when backend API or network is unavailable
-  const parseLocally = (text: string) => {
-    const lower = text.toLowerCase();
-    const isGot =
-      lower.includes('mile') ||
-      lower.includes('wasool') ||
-      lower.includes('jama') ||
-      lower.includes('got') ||
-      lower.includes('aaye');
-
-    const type: 'gave' | 'got' = isGot ? 'got' : 'gave';
-
-    const numMatch = text.match(/\d+/);
-    let amount = numMatch ? parseInt(numMatch[0], 10) : 500;
-
-    if (
-      (lower.includes('hazar') || lower.includes('hazaar') || lower.includes('ہزار')) &&
-      amount < 100
-    ) {
-      amount = amount * 1000;
-    }
-
-    const words = text.trim().split(/\s+/);
-    let partyName = words[0] || 'Customer';
-    if (
-      ['maine', 'isne', 'ko', 'se'].includes(partyName.toLowerCase()) &&
-      words.length > 1
-    ) {
-      partyName = words[1];
-    }
-    partyName = partyName.replace(/[^a-zA-Z\u0600-\u06FF]/g, '') || 'Customer';
-
-    return {
-      originalText: text,
-      partyName: partyName,
-      amount: amount,
-      type: type,
-      note: type === 'gave' ? 'Udhaar Entry' : 'Jama Wasooli',
-    };
-  };
-
-  const handleResponse = (response: any, fallbackText?: string) => {
-    let resData = response;
-
-    if (!resData && fallbackText) {
-      resData = parseLocally(fallbackText);
-    }
-
+  const handleResponse = (resData: any) => {
     if (resData) {
+      setErrorMessage(null);
+      setStatusMessage('Spoken entry transcribed & parsed! You can edit details below:');
+      
       if (resData.originalText) {
         setVoiceText(resData.originalText);
       }
-      setParsedData({
-        partyName: resData.customerName || resData.partyName,
-        amount: resData.amount,
-        type: resData.type,
-        note: resData.description || resData.note,
-      });
+      
+      setPartyName(resData.customerName || resData.partyName || 'Customer');
+      setAmountStr((resData.amount || 0).toString());
+      setTxnType(resData.type || 'gave');
+      setNote(resData.description || resData.note || '');
+      setHasParsedEntry(true);
 
       if (resData.audioBase64) {
         try {
@@ -126,7 +88,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             sound.playAsync();
           });
         } catch (audioErr) {
-          // ignore playback error on silent web contexts
+          // ignore
         }
       }
     }
@@ -135,35 +97,33 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleProcessText = async (text: string) => {
     if (!text.trim()) return;
     setIsListening(true);
+    setErrorMessage(null);
+    setStatusMessage('Processing text command...');
     setVoiceText(text);
 
     try {
-      const { ApiService } = require('../services/api');
       const response = await ApiService.processVoice({ text });
-      handleResponse(response, text);
-    } catch (e) {
-      handleResponse(null, text);
+      handleResponse(response);
+    } catch (e: any) {
+      setErrorMessage(`Error: ${e?.message || 'Could not connect to voice server'}`);
     } finally {
       setIsListening(false);
     }
   };
 
-  // Start web audio recording with graceful device checks
+  // Start web audio recording
   const startWebRecording = async () => {
     try {
+      setErrorMessage(null);
+      setStatusMessage('Listening to microphone...');
       let stream: MediaStream | null = null;
 
       if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } else if (typeof navigator !== 'undefined' && (navigator as any).webkitGetUserMedia) {
-        stream = await new Promise((resolve, reject) => {
-          (navigator as any).webkitGetUserMedia({ audio: true }, resolve, reject);
-        });
       }
 
       if (!stream) {
-        setMicStatusHint('No physical mic detected. Click sample commands below!');
-        handleProcessText('Ali ko 500 rupay udhaar diye');
+        setErrorMessage('Microphone not accessible. Please type or tap a sample command.');
         return;
       }
 
@@ -181,16 +141,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       mediaRecorder.start();
       setIsRecordingState(true);
-      setMicStatusHint(null);
       setVoiceText('');
-      setParsedData(null);
+      setHasParsedEntry(false);
     } catch (err: any) {
-      setMicStatusHint('Hardware mic not found on this device. Click sample commands below!');
-      handleProcessText('Ali ko 500 rupay udhaar diye');
+      setErrorMessage('Microphone access denied or not found.');
     }
   };
 
-  // Stop web audio recording and post FormData
+  // Stop web audio recording
   const stopWebRecording = async () => {
     if (!webMediaRecorderRef.current) return;
 
@@ -200,6 +158,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       mediaRecorder.onstop = async () => {
         setIsRecordingState(false);
         setIsListening(true);
+        setStatusMessage('Transcribing speech with Whisper STT...');
 
         if (webStreamRef.current) {
           webStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -207,14 +166,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
         const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'audio.webm');
+        formData.append('audio', audioBlob, 'speech.webm');
 
         try {
-          const { ApiService } = require('../services/api');
           const response = await ApiService.processVoice(formData);
-          handleResponse(response, 'Ali ko 500 rupay udhaar diye');
-        } catch (e) {
-          handleResponse(null, 'Ali ko 500 rupay udhaar diye');
+          handleResponse(response);
+        } catch (e: any) {
+          setErrorMessage(`STT Upload Failed: ${e?.message}`);
         } finally {
           setIsListening(false);
           resolve();
@@ -228,10 +186,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   // Start Native Mobile Recording (Android / iOS)
   const startNativeRecording = async () => {
     try {
+      setErrorMessage(null);
+      setStatusMessage('Recording speech on mobile...');
+      
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
-        setMicStatusHint('Microphone permission required.');
-        handleProcessText('Ali ko 500 rupay udhaar diye');
+        setErrorMessage('Microphone permission denied. Please enable in settings.');
         return;
       }
 
@@ -246,12 +206,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       nativeRecordingRef.current = recording;
       setIsRecordingState(true);
-      setMicStatusHint(null);
       setVoiceText('');
-      setParsedData(null);
-    } catch (err) {
-      console.warn('Native recording error:', err);
-      handleProcessText('Ali ko 500 rupay udhaar diye');
+      setHasParsedEntry(false);
+    } catch (err: any) {
+      setErrorMessage(`Mic init error: ${err?.message || err}`);
     }
   };
 
@@ -262,6 +220,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     try {
       setIsRecordingState(false);
       setIsListening(true);
+      setStatusMessage('Sending audio to Groq Whisper STT on PC...');
 
       const recording = nativeRecordingRef.current;
       await recording.stopAndUnloadAsync();
@@ -271,16 +230,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         const formData = new FormData();
         formData.append('audio', {
           uri,
-          name: 'audio.m4a',
+          name: 'speech.m4a',
           type: 'audio/m4a',
         } as any);
 
-        const { ApiService } = require('../services/api');
         const response = await ApiService.processVoice(formData);
-        handleResponse(response, 'Ali ko 500 rupay udhaar diye');
+        handleResponse(response);
+      } else {
+        setErrorMessage('No audio recorded from device.');
       }
-    } catch (e) {
-      handleResponse(null, 'Ali ko 500 rupay udhaar diye');
+    } catch (e: any) {
+      setErrorMessage(`API Connection Error to ${getApiBaseUrl()}: ${e?.message}`);
     } finally {
       setIsListening(false);
       nativeRecordingRef.current = null;
@@ -305,22 +265,26 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   };
 
   const handleConfirm = () => {
-    if (
-      parsedData &&
-      parsedData.partyName &&
-      parsedData.amount &&
-      parsedData.type
-    ) {
-      onParseVoice({
-        partyName: parsedData.partyName,
-        amount: parsedData.amount,
-        type: parsedData.type,
-        note: parsedData.note || voiceText,
-      });
-      setVoiceText('');
-      setParsedData(null);
-      onClose();
+    const parsedAmount = parseFloat(amountStr) || 0;
+    if (!partyName.trim()) {
+      alert('Please enter or verify customer name');
+      return;
     }
+    if (parsedAmount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    onParseVoice({
+      partyName: partyName.trim(),
+      amount: parsedAmount,
+      type: txnType,
+      note: note || voiceText,
+    });
+    
+    setVoiceText('');
+    setHasParsedEntry(false);
+    onClose();
   };
 
   return (
@@ -338,15 +302,22 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <View style={styles.body}>
+          <ScrollView style={styles.body} contentContainerStyle={{ alignItems: 'center' }}>
             <Text style={styles.subtitle}>
-              {t.voiceSubtitle}
+              Endpoint: {getApiBaseUrl()}
             </Text>
 
-            {/* Mic Status Hint */}
-            {micStatusHint && (
-              <View style={styles.hintBadge}>
-                <Text style={styles.hintText}>{micStatusHint}</Text>
+            {/* Error Message */}
+            {errorMessage && (
+              <View style={styles.errorBadge}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
+
+            {/* Status Message */}
+            {statusMessage && !errorMessage && (
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>{statusMessage}</Text>
               </View>
             )}
 
@@ -354,19 +325,24 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             <TouchableOpacity
               style={[
                 styles.micBigBtn,
-                (isListening || isRecordingState) && styles.micListening,
+                isRecordingState && styles.micRecording,
+                isListening && styles.micListening,
               ]}
               onPress={handleMicPress}
               activeOpacity={0.8}
               disabled={isListening}
             >
-              <Mic size={32} color="#ffffff" strokeWidth={2.5} />
+              {isListening ? (
+                <ActivityIndicator color="#ffffff" size="large" />
+              ) : (
+                <Mic size={32} color="#ffffff" strokeWidth={2.5} />
+              )}
               <Text style={styles.micText}>
                 {isRecordingState
-                  ? t.recordingTapToStop
+                  ? 'Recording... Tap to Stop'
                   : isListening
-                  ? t.processing
-                  : t.tapToSpeak}
+                  ? 'Processing Speech...'
+                  : 'Tap to Speak'}
               </Text>
             </TouchableOpacity>
 
@@ -378,10 +354,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 placeholder={t.spokenPlaceholder}
                 placeholderTextColor="#94a3b8"
                 value={voiceText}
-                onChangeText={(tVal: string) => {
-                  setVoiceText(tVal);
-                  setParsedData(null);
-                }}
+                onChangeText={setVoiceText}
                 onSubmitEditing={() => handleProcessText(voiceText)}
               />
               {voiceText.length > 0 && !isListening && !isRecordingState && (
@@ -392,58 +365,105 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </View>
 
             {/* Quick Sample Prompts */}
-            <Text style={styles.sampleHeader}>{t.sampleCommandsTitle}</Text>
-            <View style={styles.sampleGrid}>
-              {sampleCommands.map((cmd, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.sampleChip}
-                  onPress={() => handleProcessText(cmd)}
-                >
-                  <Text style={styles.sampleChipText}>"{cmd}"</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!hasParsedEntry && (
+              <>
+                <Text style={styles.sampleHeader}>{t.sampleCommandsTitle}</Text>
+                <View style={styles.sampleGrid}>
+                  {sampleCommands.map((cmd, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.sampleChip}
+                      onPress={() => handleProcessText(cmd)}
+                    >
+                      <Text style={styles.sampleChipText}>"{cmd}"</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
-            {/* Parsed Result Box */}
-            {parsedData && (
+            {/* Interactive Editable Parsed Result Card */}
+            {hasParsedEntry && (
               <View style={styles.parsedCard}>
                 <View style={styles.parsedHeader}>
                   <CircleCheck size={16} color={COLORS.gotGreen} />
-                  <Text style={styles.parsedTitle}>{t.parsedEntryReady}</Text>
+                  <Text style={styles.parsedTitle}>Verify & Edit Entry Details</Text>
                 </View>
 
-                <Text style={styles.parsedDetailText}>
-                  • {t.party}{' '}
-                  <Text style={{ color: '#0f172a', fontWeight: '700' }}>
-                    {parsedData.partyName}
-                  </Text>
-                  {'\n'}• {t.type}{' '}
-                  <Text
-                    style={{
-                      color:
-                        parsedData.type === 'gave'
-                          ? COLORS.gaveRed
-                          : COLORS.gotGreen,
-                      fontWeight: '800',
-                    }}
+                {/* Gave / Got Toggle */}
+                <View style={styles.typeRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeBtn,
+                      txnType === 'gave' && styles.typeBtnGaveActive,
+                    ]}
+                    onPress={() => setTxnType('gave')}
                   >
-                    {parsedData.type === 'gave'
-                      ? t.udhaarGaveLabel
-                      : t.jamaGotLabel}
-                  </Text>
-                  {'\n'}• {t.amount}{' '}
-                  <Text style={{ color: '#0f172a', fontWeight: '800' }}>
-                    {currency} {parsedData.amount}
-                  </Text>
-                </Text>
+                    <Text
+                      style={[
+                        styles.typeBtnText,
+                        txnType === 'gave' && styles.typeBtnTextActive,
+                      ]}
+                    >
+                      {t.youGaveBtn}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.typeBtn,
+                      txnType === 'got' && styles.typeBtnGotActive,
+                    ]}
+                    onPress={() => setTxnType('got')}
+                  >
+                    <Text
+                      style={[
+                        styles.typeBtnText,
+                        txnType === 'got' && styles.typeBtnTextActive,
+                      ]}
+                    >
+                      {t.youGotBtn}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Customer Name */}
+                <Text style={styles.fieldLabel}>{t.party}</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={partyName}
+                  onChangeText={setPartyName}
+                  placeholder="Customer Name"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                {/* Amount */}
+                <Text style={styles.fieldLabel}>{t.amount} ({currency})</Text>
+                <TextInput
+                  style={[styles.fieldInput, { fontWeight: '800', fontSize: 16 }]}
+                  keyboardType="numeric"
+                  value={amountStr}
+                  onChangeText={setAmountStr}
+                  placeholder="0"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                {/* Note */}
+                <Text style={styles.fieldLabel}>Item / Note</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="e.g. Udhaar Entry"
+                  placeholderTextColor="#94a3b8"
+                />
 
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
                   <Text style={styles.confirmBtnText}>{t.confirmAndSave}</Text>
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -453,18 +473,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   modalCard: {
     width: '100%',
     maxWidth: 420,
+    maxHeight: '90%',
     backgroundColor: '#ffffff',
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
@@ -501,28 +520,45 @@ const styles = StyleSheet.create({
   },
   body: {
     padding: 16,
-    alignItems: 'center',
+    width: '100%',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  hintBadge: {
-    backgroundColor: '#fef3c7',
-    borderColor: '#fde68a',
+  errorBadge: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 6,
     marginBottom: 10,
+    width: '100%',
   },
-  hintText: {
+  errorText: {
     fontSize: 11,
-    color: '#92400e',
+    color: '#b91c1c',
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 10,
+    width: '100%',
+  },
+  statusText: {
+    fontSize: 11,
+    color: '#1d4ed8',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   micBigBtn: {
     width: 80,
@@ -531,16 +567,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
+  },
+  micRecording: {
+    backgroundColor: COLORS.gaveRed,
   },
   micListening: {
-    backgroundColor: COLORS.gaveRed,
+    backgroundColor: '#6366f1',
   },
   micText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     marginTop: 4,
+    textAlign: 'center',
   },
   inputBox: {
     width: '100%',
@@ -549,10 +589,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: 42,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   voiceTextInput: {
     flex: 1,
@@ -571,7 +611,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sampleChip: {
     backgroundColor: '#f1f5f9',
@@ -587,35 +627,78 @@ const styles = StyleSheet.create({
   },
   parsedCard: {
     width: '100%',
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#f8fafc',
     borderRadius: 14,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: COLORS.gotGreenBorder,
+    borderColor: '#cbd5e1',
+    marginTop: 4,
   },
   parsedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 10,
   },
   parsedTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#166534',
+    color: '#0f172a',
   },
-  parsedDetailText: {
-    fontSize: 12,
-    color: '#334155',
-    lineHeight: 18,
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginBottom: 10,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  typeBtnGaveActive: {
+    backgroundColor: '#fef2f2',
+    borderColor: COLORS.gaveRed,
+  },
+  typeBtnGotActive: {
+    backgroundColor: '#f0fdf4',
+    borderColor: COLORS.gotGreen,
+  },
+  typeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  typeBtnTextActive: {
+    color: '#0f172a',
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  fieldInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
+    color: '#0f172a',
+    marginBottom: 8,
   },
   confirmBtn: {
     backgroundColor: COLORS.gotGreen,
-    height: 38,
+    height: 40,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 4,
   },
   confirmBtnText: {
     color: '#ffffff',

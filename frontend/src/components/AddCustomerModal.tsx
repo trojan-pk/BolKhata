@@ -28,7 +28,7 @@ interface AddCustomerModalProps {
 
 export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   visible,
-  language = 'ur',
+  language = 'en',
   onClose,
   onSubmit,
 }) => {

@@ -23,7 +23,7 @@ interface CashbookScreenProps {
 export const CashbookScreen: React.FC<CashbookScreenProps> = ({
   entries,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   onAddCashEntry,
 }) => {
   const t = getTranslation(language);

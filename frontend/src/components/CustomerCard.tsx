@@ -16,7 +16,7 @@ interface CustomerCardProps {
 export const CustomerCard: React.FC<CustomerCardProps> = ({
   party,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   onPress,
 }) => {
   const t = getTranslation(language);

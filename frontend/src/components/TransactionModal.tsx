@@ -28,7 +28,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   type,
   partyName,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   onClose,
   onSubmit,
 }) => {

@@ -6,6 +6,7 @@ const KEYS = {
   PARTIES: 'bolkhata_parties',
   TRANSACTIONS: 'bolkhata_transactions',
   CASHBOOK: 'bolkhata_cashbook',
+  ENGLISH_MIGRATION: 'bolkhata_migrated_to_english_v1',
 };
 
 // Initial realistic seed data for store owners
@@ -14,7 +15,7 @@ export const INITIAL_STORE_PROFILE: StoreProfile = {
   ownerName: 'Muhammad Salman',
   mobile: '+92 300 1234567',
   currency: 'Rs',
-  language: 'ur',
+  language: 'en',
   expressApiUrl: 'http://localhost:3000',
   isBackendConnected: true,
 };
@@ -154,7 +155,22 @@ export const StorageService = {
   getStoreProfile: async (): Promise<StoreProfile> => {
     try {
       const data = await AsyncStorage.getItem(KEYS.STORE_PROFILE);
-      return data ? JSON.parse(data) : INITIAL_STORE_PROFILE;
+      if (!data) return INITIAL_STORE_PROFILE;
+
+      const profile: StoreProfile = JSON.parse(data);
+
+      // One-time migration: the app used to ship with Urdu as the default UI
+      // language. Reset existing installs to English once. After this runs, a
+      // language the user picks in Settings is respected and never overridden.
+      const alreadyMigrated = await AsyncStorage.getItem(KEYS.ENGLISH_MIGRATION);
+      if (!alreadyMigrated) {
+        const migrated: StoreProfile = { ...profile, language: 'en' };
+        await AsyncStorage.setItem(KEYS.STORE_PROFILE, JSON.stringify(migrated));
+        await AsyncStorage.setItem(KEYS.ENGLISH_MIGRATION, 'true');
+        return migrated;
+      }
+
+      return profile;
     } catch (e) {
       return INITIAL_STORE_PROFILE;
     }

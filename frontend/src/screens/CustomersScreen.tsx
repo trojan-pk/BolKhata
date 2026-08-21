@@ -25,7 +25,7 @@ interface CustomersScreenProps {
 export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   parties,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   onSelectParty,
   onAddParty,
 }) => {

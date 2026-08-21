@@ -4,10 +4,8 @@ exports.processVoice = void 0;
 // Helper to call Alibaba DashScope Qwen TTS Flash
 async function generateTTS(text) {
     const apiKey = process.env.DASHSCOPE_API_KEY || process.env.ALIBABA_API_KEY;
-    if (!apiKey) {
-        console.warn('⚠️ No DASHSCOPE_API_KEY found in .env, skipping TTS audio generation.');
+    if (!apiKey)
         return null;
-    }
     try {
         const response = await fetch('https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
             method: 'POST',
@@ -24,15 +22,11 @@ async function generateTTS(text) {
                 }
             })
         });
-        if (!response.ok) {
-            console.error('DashScope TTS error:', await response.text());
+        if (!response.ok)
             return null;
-        }
         const data = (await response.json());
-        if (data.code) {
-            console.error('DashScope TTS error:', data.code, data.message);
+        if (data.code)
             return null;
-        }
         const audioUrl = data.output?.audio?.url;
         if (!audioUrl)
             return null;
@@ -43,36 +37,61 @@ async function generateTTS(text) {
         return Buffer.from(arrayBuffer).toString('base64');
     }
     catch (error) {
-        console.error('Failed to generate TTS:', error);
         return null;
     }
 }
-// Fallback rule parser when LLM API keys are missing
+// Fallback rule parser when LLM API keys are missing.
+// Understands both English and Urdu / Roman-Urdu phrasing, but always emits
+// English descriptions so the ledger stays English.
 function parseFallbackLocally(inputStr) {
     const lower = inputStr.toLowerCase();
-    const isGot = lower.includes('mile') ||
+    // "Money came in" signals — English first, then Roman Urdu, then Urdu script.
+    const isGot = lower.includes('received') ||
+        lower.includes('receive') ||
+        lower.includes('collected') ||
+        lower.includes('payment') ||
+        lower.includes('paid me') ||
+        lower.includes('got') ||
+        lower.includes('mile') ||
         lower.includes('wasool') ||
         lower.includes('jama') ||
-        lower.includes('got') ||
-        lower.includes('aaye');
+        lower.includes('aaye') ||
+        inputStr.includes('وصول') ||
+        inputStr.includes('جمع');
     const type = isGot ? 'got' : 'gave';
     const numMatch = inputStr.match(/\d+/);
-    let amount = numMatch ? parseInt(numMatch[0], 10) : 500;
-    if ((lower.includes('hazar') || lower.includes('hazaar') || lower.includes('ہزار')) &&
-        amount < 100) {
+    let amount = numMatch ? parseInt(numMatch[0], 10) : 0;
+    if ((lower.includes('thousand') || lower.includes('hazar') || lower.includes('hazaar') || lower.includes('ہزار')) &&
+        amount > 0 && amount < 100) {
         amount = amount * 1000;
     }
+    // Pick the first token that looks like a name: alphabetic (Latin or Urdu)
+    // and not a grammatical filler in either language. This handles English word
+    // order ("Gave Ali 500") and Urdu word order ("Ali ko 500 diye") alike.
+    const FILLERS = new Set([
+        // English
+        'gave', 'give', 'given', 'got', 'get', 'received', 'receive', 'collected',
+        'paid', 'pay', 'payment', 'from', 'to', 'for', 'the', 'a', 'an', 'and',
+        'rupees', 'rupee', 'rs', 'credit', 'cash', 'took', 'take', 'worth', 'of',
+        'on', 'against', 'his', 'her', 'their', 'balance', 'i', 'me', 'my',
+        // Roman Urdu
+        'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'udhar',
+        'rupay', 'rupaye', 'diye', 'diya', 'hue', 'hua', 'mile', 'wasool', 'jama',
+    ]);
     const words = inputStr.trim().split(/\s+/);
-    let partyName = words[0] || 'Customer';
-    if (['ko', 'se', 'ne', 'ka', 'ke', 'maine'].includes(partyName.toLowerCase()) && words.length > 1) {
-        partyName = words[1];
+    let partyName = 'Customer';
+    for (const word of words) {
+        const cleaned = word.replace(/[^a-zA-Z\u0600-\u06FF]/g, '');
+        if (cleaned && !FILLERS.has(cleaned.toLowerCase())) {
+            partyName = cleaned;
+            break;
+        }
     }
-    partyName = partyName.replace(/[^a-zA-Z\u0600-\u06FF]/g, '') || 'Customer';
     return {
         intent: type === 'gave' ? 'ADD_CREDIT' : 'ADD_PAYMENT',
         customerName: partyName,
         amount: amount,
-        description: type === 'gave' ? 'Udhaar Entry' : 'Jama Wasooli',
+        description: type === 'gave' ? 'Credit given (voice entry)' : 'Payment received (voice entry)',
         type: type,
     };
 }
@@ -106,51 +125,71 @@ async function parseWithGemini(text, systemPrompt) {
         return JSON.parse(rawContent);
     }
     catch (err) {
-        console.error('Gemini parser error:', err);
+        console.warn('Gemini parser warning:', err);
         return null;
     }
 }
 const processVoice = async (req, res, next) => {
     try {
         const groqKey = process.env.GROQ_API_KEY;
-        let text = req.body.text; // Support text fallback
+        let text = req.body?.text;
+        console.log('\n🎙️ [Voice API] Received incoming request');
         if (req.file) {
+            console.log(`📦 [Voice API] Audio buffer received: ${req.file.originalname} (${req.file.size} bytes, type: ${req.file.mimetype})`);
             if (!groqKey) {
-                console.warn('⚠️ GROQ_API_KEY is not set in backend/.env. Using text fallback simulation for audio file.');
-                text = 'Ali ko 500 rupay udhaar diye';
+                res.status(500).json({ error: 'GROQ_API_KEY is not configured for Whisper transcription' });
+                return;
             }
-            else {
-                // 1. Transcribe audio using Groq Whisper
-                const extension = req.file.originalname.split('.').pop() || 'webm';
-                const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/webm' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, `audio.${extension}`);
-                formData.append('model', 'whisper-large-v3');
-                formData.append('prompt', 'BolKhata dukandari hisaab khata: Ali ko 500 rupaye diye, Ahmad se 1000 mile, udhaar, jama, wasool, rokar, baqi, maal bheja, payment aayi. علی کو پانچ سو روپے ادھار دیے، احمد سے ہزار روپے وصول ہوئے۔');
-                const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${groqKey}`
-                    },
-                    body: formData
-                });
-                if (!whisperResponse.ok) {
-                    console.error('Whisper STT error:', await whisperResponse.text());
-                    text = 'Ali ko 500 rupay udhaar diye';
-                }
-                else {
-                    const whisperData = (await whisperResponse.json());
-                    text = whisperData.text;
-                }
+            // 1. Transcribe audio using Groq Whisper API
+            console.log('🚀 [Voice API] Calling Groq Whisper STT (whisper-large-v3)...');
+            const extension = req.file.originalname.split('.').pop() || 'm4a';
+            const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
+            const formData = new FormData();
+            formData.append('file', audioBlob, `recording.${extension}`);
+            formData.append('model', 'whisper-large-v3');
+            // Bilingual hint: biases Whisper toward shop-ledger vocabulary in BOTH
+            // English and Urdu/Roman Urdu, so the shopkeeper can speak either one.
+            formData.append('prompt', 'BolKhata shop ledger bookkeeping. English: Gave Ali 500 rupees on credit, received 1000 from Ahmad, payment collected, outstanding balance, stock purchased, cash sale, expense. Roman Urdu: Ali ko 500 rupaye diye, Ahmad se 1000 mile, udhaar, jama, wasool, rokar, baqi, maal bheja, payment aayi. اردو: علی کو پانچ سو روپے ادھار دیے، احمد سے ہزار روپے وصول ہوئے۔');
+            const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`
+                },
+                body: formData
+            });
+            if (!whisperResponse.ok) {
+                const errBody = await whisperResponse.text();
+                console.error('❌ Groq Whisper STT error:', errBody);
+                res.status(500).json({ error: 'Whisper STT failed: ' + errBody });
+                return;
             }
+            const whisperData = (await whisperResponse.json());
+            text = whisperData.text;
+            console.log(`✨ [Voice API] Whisper transcribed live speech: "${text}"`);
         }
-        if (!text) {
-            text = 'Ali ko 500 rupay udhaar diye';
+        else if (text) {
+            console.log(`📝 [Voice API] Text command received: "${text}"`);
         }
-        // 2. Parse text with Gemini 3.6 Flash (or Groq LLaMA / local fallback)
+        else {
+            res.status(400).json({ error: 'No audio file or text received.' });
+            return;
+        }
+        if (!text || !text.trim()) {
+            res.status(400).json({ error: 'Audio was silent or no speech detected.' });
+            return;
+        }
+        // 2. Parse text with Gemini 3.6 Flash / Groq LLM
         const systemPrompt = `You are an expert multilingual ledger and bookkeeping AI for a digital khata app called "BolKhata" used by shopkeepers in Pakistan and India.
 
-Extract transaction details from spoken voice transcripts in Urdu (Urdu script or Roman Urdu), Hindi, or English.
+INPUT: The spoken transcript may be in English, Urdu (Urdu script or Roman Urdu), or Hindi. Understand all of them equally well and detect the language automatically.
+
+OUTPUT: Always respond in ENGLISH, regardless of the input language. The app's interface is English-only.
+- "customerName": transliterate names into Latin script (e.g. "علی" -> "Ali", "احمد" -> "Ahmad"). Never return Urdu or Devanagari script.
+- "description": a short English summary of the item or reason (e.g. "5 bags of rice", "part payment", "monthly ration credit"). Never return Urdu or Devanagari script.
+- "amount": a plain number. Resolve spoken numbers in any language ("paanch sau" / "پانچ سو" / "five hundred" -> 500, "hazaar" / "ہزار" / "thousand" -> 1000).
+
+Use "gave" / ADD_CREDIT when the shopkeeper handed over money or goods on credit (udhaar diya).
+Use "got" / ADD_PAYMENT when the shopkeeper received money (jama / wasool hua).
 
 Respond ONLY with a valid JSON object matching this structure:
 {
@@ -187,13 +226,17 @@ Respond ONLY with a valid JSON object matching this structure:
                 console.warn('Groq LLM parser error:', llmErr);
             }
         }
-        // Local fallback if no LLM API keys are configured
+        // Fallback if LLM parsing not reached
         if (!parsedData) {
             parsedData = parseFallbackLocally(text);
         }
-        // 3. Generate natural voice feedback using Alibaba Qwen TTS (if DASHSCOPE_API_KEY is present)
-        const actionText = parsedData.type === 'gave' ? 'udhaar diye gaye hain' : 'jama wasool hue hain';
-        const speechText = `${parsedData.customerName} ke ${parsedData.amount} rupaye ${actionText}. Khata save karne ke liye confirm dabayein.`;
+        console.log(`🧠 [Voice API] Parsed result: Customer="${parsedData.customerName}", Amount=${parsedData.amount}, Type=${parsedData.type}`);
+        // 3. Generate natural voice feedback using Alibaba Qwen TTS (English —
+        // the app UI is English, so the spoken confirmation matches it).
+        const actionText = parsedData.type === 'gave'
+            ? `was given ${parsedData.amount} rupees on credit`
+            : `paid ${parsedData.amount} rupees`;
+        const speechText = `${parsedData.customerName} ${actionText}. Press confirm to save this entry to the ledger.`;
         const audioBase64 = await generateTTS(speechText);
         res.json({
             ...parsedData,
@@ -202,6 +245,7 @@ Respond ONLY with a valid JSON object matching this structure:
         });
     }
     catch (error) {
+        console.error('Error in processVoice:', error);
         next(error);
     }
 };
