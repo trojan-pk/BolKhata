@@ -1,7 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ClerkProvider, ClerkLoaded, Show, useAuth } from '@clerk/expo';
-import { tokenCache } from './src/cache';
-import { AuthScreen } from './src/screens/AuthScreen';
 import {
   StyleSheet,
   View,
@@ -14,15 +11,15 @@ import {
   Easing,
 } from 'react-native';
 import {
-  House,
+  Home,
   Users,
-  ChartPie,
+  PieChart,
   Settings as SettingsIcon,
   Mic,
 } from 'lucide-react-native';
 
 // Services, Theme & Typography
-import { ApiService } from './src/services/api';
+import { StorageService } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
 import { FONTS, injectWebGoogleFonts } from './src/theme/typography';
 import {
@@ -53,7 +50,7 @@ import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { getTranslation } from './src/i18n/translations';
 
-function MainLayout() {
+export default function App() {
   const [showSplashOverlay, setShowSplashOverlay] = useState(true);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const dashboardFade = useRef(new Animated.Value(0)).current;
@@ -66,7 +63,7 @@ function MainLayout() {
     currency: 'Rs',
     language: 'ur',
     expressApiUrl: 'http://localhost:3000',
-    isBackendConnected: false,
+    isBackendConnected: true,
   });
 
   const t = getTranslation(storeProfile.language);
@@ -101,12 +98,10 @@ function MainLayout() {
     injectWebGoogleFonts();
 
     async function loadData() {
-      const [profile, loadedParties, loadedTxns, loadedCashbook] = await Promise.all([
-        ApiService.getStoreProfile(),
-        ApiService.getParties(),
-        ApiService.getTransactions(),
-        ApiService.getCashbook()
-      ]);
+      const profile = await StorageService.getStoreProfile();
+      const loadedParties = await StorageService.getParties();
+      const loadedTxns = await StorageService.getTransactions();
+      const loadedCashbook = await StorageService.getCashbook();
 
       setStoreProfile(profile);
       setParties(loadedParties);
@@ -161,8 +156,8 @@ function MainLayout() {
   const updatePartiesAndTxns = async (newParties: Party[], newTxns: Transaction[]) => {
     setParties(newParties);
     setTransactions(newTxns);
-    await ApiService.saveParties(newParties);
-    await ApiService.saveTransactions(newTxns);
+    await StorageService.saveParties(newParties);
+    await StorageService.saveTransactions(newTxns);
   };
 
   // Add new customer / supplier
@@ -185,8 +180,7 @@ function MainLayout() {
     };
 
     const updated = [newParty, ...parties];
-    setParties(updated);
-    await ApiService.saveParties(updated);
+    await updatePartiesAndTxns(updated, transactions);
   };
 
   // Record Gave / Got transaction
@@ -256,7 +250,7 @@ function MainLayout() {
       type: settlementType,
       amount: amount,
       date: new Date().toISOString().split('T')[0],
-      note: 'Full balance settled',
+      note: t.allSettled || 'Full balance settled',
       paymentMode: 'cash',
       createdAt: Date.now(),
     };
@@ -282,28 +276,59 @@ function MainLayout() {
   };
 
   // Voice assistant parsed entry callback
-  const handleVoiceParseResult = (result: {
+  const handleVoiceParseResult = async (result: {
     partyName: string;
     amount: number;
     type: TransactionType;
     note: string;
   }) => {
     let matchedParty = parties.find(
-      (p) => p.name.toLowerCase() === result.partyName.toLowerCase()
+      (p) => p.name.toLowerCase().includes(result.partyName.toLowerCase()) ||
+             result.partyName.toLowerCase().includes(p.name.toLowerCase())
     );
 
     if (!matchedParty) {
-      matchedParty = parties[0];
+      matchedParty = {
+        id: 'p_' + Date.now(),
+        name: result.partyName,
+        mobile: '',
+        address: '',
+        type: 'customer',
+        currentBalance: 0,
+        lastUpdated: new Date().toISOString().split('T')[0],
+        avatarColor: COLORS.primary,
+      };
+      parties.unshift(matchedParty);
     }
 
-    if (matchedParty) {
-      setTxnModalState({
-        visible: true,
-        type: result.type,
-        partyId: matchedParty.id,
-        partyName: matchedParty.name,
-      });
-    }
+    const isGave = result.type === 'gave';
+    const newTxn: Transaction = {
+      id: 't_' + Date.now(),
+      partyId: matchedParty.id,
+      partyName: matchedParty.name,
+      type: result.type,
+      amount: result.amount,
+      date: new Date().toISOString().split('T')[0],
+      note: result.note || (isGave ? 'Udhaar Voice Entry' : 'Jama Voice Entry'),
+      paymentMode: 'cash',
+      createdAt: Date.now(),
+    };
+
+    const balanceChange = isGave ? result.amount : -result.amount;
+    const updatedBalance = matchedParty.currentBalance + balanceChange;
+
+    const updatedParties = parties.map((p) =>
+      p.id === matchedParty!.id
+        ? {
+            ...p,
+            currentBalance: updatedBalance,
+            lastUpdated: new Date().toISOString().split('T')[0],
+          }
+        : p
+    );
+
+    const updatedTxns = [newTxn, ...transactions];
+    await updatePartiesAndTxns(updatedParties, updatedTxns);
   };
 
   // Add Cashbook Entry
@@ -325,7 +350,7 @@ function MainLayout() {
 
     const updated = [newEntry, ...cashbook];
     setCashbook(updated);
-    await ApiService.saveCashbook(updated);
+    await StorageService.saveCashbook(updated);
   };
 
   // Totals
@@ -402,7 +427,7 @@ function MainLayout() {
               </View>
 
               <View style={{ paddingHorizontal: 16 }}>
-                {parties.slice(0, 4).map((party) => (
+                {parties.slice(0, 5).map((party) => (
                   <CustomerCard
                     key={party.id}
                     party={party}
@@ -447,7 +472,7 @@ function MainLayout() {
               storeProfile={storeProfile}
               onUpdateStore={async (updated) => {
                 setStoreProfile(updated);
-                await ApiService.saveStoreProfile(updated);
+                await StorageService.saveStoreProfile(updated);
               }}
               onOpenApiConfig={() => setApiConfigModalVisible(true)}
             />
@@ -471,7 +496,7 @@ function MainLayout() {
               onPress={() => handleTabChange('home', 0)}
               activeOpacity={0.8}
             >
-              <House
+              <Home
                 size={18}
                 color={activeTab === 'home' ? '#ffffff' : '#94a3b8'}
               />
@@ -517,7 +542,7 @@ function MainLayout() {
               <View style={styles.centerMicPillButton}>
                 <Mic size={18} color="#000000" strokeWidth={2.5} />
               </View>
-              <Text style={styles.centerMicPillLabel}>BolKhata</Text>
+              <Text style={styles.centerMicPillLabel}>{t.voice}</Text>
             </TouchableOpacity>
 
             {/* Tab 4: Reports */}
@@ -526,7 +551,7 @@ function MainLayout() {
               onPress={() => handleTabChange('reports', 3)}
               activeOpacity={0.8}
             >
-              <ChartPie
+              <PieChart
                 size={18}
                 color={activeTab === 'reports' ? '#ffffff' : '#94a3b8'}
               />
@@ -630,6 +655,7 @@ function MainLayout() {
         onSubmit={handleAddPartySubmit}
       />
 
+      {/* Voice Assistant Powered by Groq Whisper STT & Gemini */}
       <VoiceAssistantModal
         visible={voiceModalVisible}
         currency={storeProfile.currency}
@@ -649,7 +675,7 @@ function MainLayout() {
             isBackendConnected: isConnected,
           };
           setStoreProfile(updated);
-          await ApiService.saveStoreProfile(updated);
+          await StorageService.saveStoreProfile(updated);
         }}
       />
     </SafeAreaView>
@@ -713,7 +739,7 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     height: 58,
     borderRadius: 29,
-    backgroundColor: '#0f172a', // Dark theme slate background
+    backgroundColor: '#0f172a',
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -730,7 +756,7 @@ const styles = StyleSheet.create({
     width: '18%',
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#334155', // Charcoal highlight indicator
+    backgroundColor: '#334155',
     top: 4,
   },
   pillTabItem: {
@@ -758,7 +784,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ffffff', // Crisp white contrast
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#ffffff',
@@ -775,29 +801,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-
-if (!publishableKey) {
-  throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env');
-}
-
-function Root() {
-  const { isLoaded, isSignedIn } = useAuth();
-  
-  if (!isLoaded) {
-    return null;
-  }
-  
-  return isSignedIn ? <MainLayout /> : <AuthScreen />;
-}
-
-export default function App() {
-  return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f8fafc' }}>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <Root />
-      </ClerkProvider>
-    </View>
-  );
-}

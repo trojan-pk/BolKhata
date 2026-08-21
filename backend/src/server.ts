@@ -13,7 +13,13 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Enable CORS for all origins, methods, and headers
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+}));
+
 app.use(express.json());
 
 // Basic health check
@@ -31,6 +37,6 @@ app.use('/dashboard', dashboardRoutes);
 // Global Error Handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT} (all interfaces)`);
 });

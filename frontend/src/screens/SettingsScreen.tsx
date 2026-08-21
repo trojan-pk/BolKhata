@@ -10,7 +10,6 @@ import {
 import { Store, Globe, Server, LogOut } from 'lucide-react-native';
 import { StoreProfile } from '../types';
 import { COLORS } from '../theme/colors';
-import { useAuth } from '@clerk/expo';
 import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface SettingsScreenProps {
@@ -24,8 +23,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onUpdateStore,
   onOpenApiConfig,
 }) => {
-  const { signOut } = useAuth();
-  
   const [name, setName] = useState(storeProfile.name);
   const [ownerName, setOwnerName] = useState(storeProfile.ownerName);
   const [mobile, setMobile] = useState(storeProfile.mobile);
@@ -53,10 +50,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       language,
     });
     alert(t.settingsSavedSuccess);
-  };
-
-  const handleSignOut = () => {
-    signOut();
   };
 
   return (
@@ -159,17 +152,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         activeOpacity={0.85}
       >
         <Text style={styles.saveBtnText}>{t.saveSettings}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.saveBtn, { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', marginTop: 16 }]}
-        onPress={handleSignOut}
-        activeOpacity={0.85}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <LogOut size={16} color={COLORS.gaveRed} />
-          <Text style={[styles.saveBtnText, { color: COLORS.gaveRed }]}>{t.signOut}</Text>
-        </View>
       </TouchableOpacity>
     </ScrollView>
   );
