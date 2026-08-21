@@ -22,7 +22,7 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
   todayCashIn,
   todayCashOut,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   onPressReceivable,
   onPressPayable,
 }) => {

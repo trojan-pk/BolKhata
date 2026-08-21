@@ -33,6 +33,7 @@ interface CustomerDetailModalProps {
   onAddGave: () => void;
   onAddGot: () => void;
   onSettleUp: () => void;
+  onEditTransaction?: (txn: Transaction) => void;
 }
 
 export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
@@ -40,12 +41,13 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   party,
   transactions,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
   storeName = 'BolKhata Store',
   onClose,
   onAddGave,
   onAddGot,
   onSettleUp,
+  onEditTransaction,
 }) => {
   if (!party) return null;
 
@@ -57,9 +59,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   // WhatsApp Payment Reminder Generator
   const handleSendWhatsAppReminder = () => {
     const message = encodeURIComponent(
-      `اسلام علیکم ${party.name}،\n\nیہ ${storeName} کی طرف سے کھاتہ کی یاددہانی ہے۔\nآپ کا کل بقایا بیلنس ${currency} ${Math.abs(
+      `Hello ${party.name},\n\nThis is a ledger reminder from ${storeName}.\nYour total outstanding balance is ${currency} ${Math.abs(
         party.currentBalance
-      ).toLocaleString('en-IN')} ہے۔\n\nبراہ کرم ادائیگی فرما دیں۔ شکریہ!`
+      ).toLocaleString('en-IN')}.\n\nKindly arrange the payment at your convenience. Thank you!`
     );
 
     const url = `whatsapp://send?phone=${party.mobile}&text=${message}`;
@@ -178,7 +180,12 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             partyTxns.map((txn) => {
               const isGave = txn.type === 'gave';
               return (
-                <View key={txn.id} style={styles.txnCard}>
+                <TouchableOpacity
+                  key={txn.id}
+                  style={styles.txnCard}
+                  onPress={() => onEditTransaction && onEditTransaction(txn)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.txnLeft}>
                     <View
                       style={[
@@ -207,6 +214,8 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                             <Text style={styles.txnMode}>{txn.paymentMode.toUpperCase()}</Text>
                           </>
                         )}
+                        <Text style={styles.dot}>•</Text>
+                        <Text style={{ fontSize: 10, color: COLORS.primary, fontWeight: '600' }}>Tap to Edit</Text>
                       </View>
                     </View>
                   </View>
@@ -230,7 +239,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       {isGave ? t.youGave : t.youGot}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}

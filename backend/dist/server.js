@@ -14,8 +14,13 @@ const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"))
 const errorHandler_1 = require("./middleware/errorHandler");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 3000;
-app.use((0, cors_1.default)());
+const PORT = Number(process.env.PORT) || 3000;
+// Enable CORS for all origins, methods, and headers
+app.use((0, cors_1.default)({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+}));
 app.use(express_1.default.json());
 // Basic health check
 app.get('/', (req, res) => {
@@ -29,6 +34,6 @@ app.use('/voice', voice_routes_1.default);
 app.use('/dashboard', dashboard_routes_1.default);
 // Global Error Handler
 app.use(errorHandler_1.errorHandler);
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on http://0.0.0.0:${PORT} (all interfaces)`);
 });

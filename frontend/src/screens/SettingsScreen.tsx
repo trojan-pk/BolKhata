@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Store, Globe, Server, LogOut } from 'lucide-react-native';
+import { Store, Globe, Server } from 'lucide-react-native';
 import { StoreProfile } from '../types';
 import { COLORS } from '../theme/colors';
 import { getTranslation, LanguageCode } from '../i18n/translations';
@@ -33,6 +33,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const currencies = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
   const languages: { key: LanguageCode; label: string }[] = [
+    { key: 'roman_ur', label: 'Roman Urdu (رومن اردو)' },
     { key: 'ur', label: 'اردو (Urdu)' },
     { key: 'en', label: 'English' },
     { key: 'hi', label: 'हिंदी (Hindi)' },
@@ -81,39 +82,59 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Store Profile Section */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
-          <Store size={16} color={COLORS.primary} />
+          <Store size={18} color={COLORS.primary} />
           <Text style={styles.sectionTitle}>{t.storeDetails}</Text>
         </View>
 
         <Text style={styles.label}>{t.shopName}</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} />
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Bismillah General Store"
+        />
 
-        <Text style={[styles.label, { marginTop: 10 }]}>{t.ownerName}</Text>
-        <TextInput style={styles.input} value={ownerName} onChangeText={setOwnerName} />
+        <Text style={styles.label}>{t.ownerName}</Text>
+        <TextInput
+          style={styles.input}
+          value={ownerName}
+          onChangeText={setOwnerName}
+          placeholder="e.g. Muhammad Salman"
+        />
 
-        <Text style={[styles.label, { marginTop: 10 }]}>{t.contactNumber}</Text>
-        <TextInput style={styles.input} value={mobile} onChangeText={setMobile} />
+        <Text style={styles.label}>{t.contactNumber}</Text>
+        <TextInput
+          style={styles.input}
+          value={mobile}
+          onChangeText={setMobile}
+          placeholder="e.g. +92 300 1234567"
+          keyboardType="phone-pad"
+        />
       </View>
 
-      {/* Currency & Localization */}
+      {/* Regional & Language Settings */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
-          <Globe size={16} color={COLORS.primary} />
+          <Globe size={18} color={COLORS.primary} />
           <Text style={styles.sectionTitle}>{t.currencyAndRegional}</Text>
         </View>
 
+        {/* Currency Picker */}
         <Text style={styles.label}>{t.shopCurrency}</Text>
-        <View style={styles.currencyRow}>
+        <View style={styles.chipsRow}>
           {currencies.map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.currPill, currency === c && styles.currPillActive]}
+              style={[
+                styles.chip,
+                currency === c && styles.chipActive,
+              ]}
               onPress={() => setCurrency(c)}
             >
               <Text
                 style={[
-                  styles.currText,
-                  currency === c && styles.currTextActive,
+                  styles.chipText,
+                  currency === c && styles.chipTextActive,
                 ]}
               >
                 {c}
@@ -122,21 +143,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           ))}
         </View>
 
+        {/* Language Picker */}
         <Text style={[styles.label, { marginTop: 12 }]}>{t.appLanguage}</Text>
-        <View style={styles.langGrid}>
+        <View style={styles.chipsRow}>
           {languages.map((l) => (
             <TouchableOpacity
               key={l.key}
               style={[
-                styles.langCard,
-                language === l.key && styles.langCardActive,
+                styles.chip,
+                language === l.key && styles.chipActive,
               ]}
               onPress={() => setLanguage(l.key)}
             >
               <Text
                 style={[
-                  styles.langText,
-                  language === l.key && styles.langTextActive,
+                  styles.chipText,
+                  language === l.key && styles.chipTextActive,
                 ]}
               >
                 {l.label}
@@ -233,77 +255,51 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 10,
     paddingHorizontal: 12,
-    height: 42,
-    color: '#0f172a',
+    paddingVertical: 8,
     fontSize: 13,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    color: '#0f172a',
+    marginBottom: 10,
   },
-  currencyRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  currPill: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  currPillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  currText: {
-    fontSize: 15,
-    color: '#475569',
-    fontWeight: '700',
-  },
-  currTextActive: {
-    color: '#ffffff',
-  },
-  langGrid: {
+  chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  langCard: {
-    backgroundColor: '#f8fafc',
+  chip: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  langCardActive: {
+  chipActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
   },
-  langText: {
+  chipText: {
     fontSize: 12,
     color: '#475569',
     fontWeight: '600',
   },
-  langTextActive: {
-    color: COLORS.primary,
+  chipTextActive: {
+    color: '#ffffff',
     fontWeight: '700',
   },
   saveBtn: {
     backgroundColor: COLORS.primary,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
   },
   saveBtnText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

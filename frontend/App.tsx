@@ -4,11 +4,11 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import {
   Home,
@@ -38,6 +38,7 @@ import { Header } from './src/components/Header';
 import { DashboardCards } from './src/components/DashboardCards';
 import { CustomerCard } from './src/components/CustomerCard';
 import { TransactionModal } from './src/components/TransactionModal';
+import { EditTransactionModal } from './src/components/EditTransactionModal';
 import { AddCustomerModal } from './src/components/AddCustomerModal';
 import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
 import { ApiConfigModal } from './src/components/ApiConfigModal';
@@ -61,7 +62,7 @@ export default function App() {
     ownerName: 'Muhammad Salman',
     mobile: '+92 300 1234567',
     currency: 'Rs',
-    language: 'ur',
+    language: 'en',
     expressApiUrl: 'http://localhost:3000',
     isBackendConnected: true,
   });
@@ -79,6 +80,7 @@ export default function App() {
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [addCustomerModalVisible, setAddCustomerModalVisible] = useState(false);
   const [apiConfigModalVisible, setApiConfigModalVisible] = useState(false);
+  const [selectedEditTxn, setSelectedEditTxn] = useState<Transaction | null>(null);
 
   // Animated Pill Navigation Dock Indicator
   const tabAnimIndex = useRef(new Animated.Value(0)).current;
@@ -309,7 +311,7 @@ export default function App() {
       type: result.type,
       amount: result.amount,
       date: new Date().toISOString().split('T')[0],
-      note: result.note || (isGave ? 'Udhaar Voice Entry' : 'Jama Voice Entry'),
+      note: result.note || (isGave ? 'Credit given (voice entry)' : 'Payment received (voice entry)'),
       paymentMode: 'cash',
       createdAt: Date.now(),
     };
@@ -329,6 +331,73 @@ export default function App() {
 
     const updatedTxns = [newTxn, ...transactions];
     await updatePartiesAndTxns(updatedParties, updatedTxns);
+  };
+
+  // Save edited transaction and recalculate party balance
+  const handleSaveEditedTransaction = async (updatedTxn: Transaction) => {
+    const updatedTxns = transactions.map((t) =>
+      t.id === updatedTxn.id ? updatedTxn : t
+    );
+
+    const partyTxns = updatedTxns.filter((t) => t.partyId === updatedTxn.partyId);
+    const newBal = partyTxns.reduce(
+      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
+      0
+    );
+
+    const updatedParties = parties.map((p) =>
+      p.id === updatedTxn.partyId
+        ? {
+            ...p,
+            currentBalance: newBal,
+            lastUpdated: new Date().toISOString().split('T')[0],
+          }
+        : p
+    );
+
+    await updatePartiesAndTxns(updatedParties, updatedTxns);
+
+    if (selectedParty && selectedParty.id === updatedTxn.partyId) {
+      setSelectedParty({
+        ...selectedParty,
+        currentBalance: newBal,
+        lastUpdated: new Date().toISOString().split('T')[0],
+      });
+    }
+  };
+
+  // Delete transaction and recalculate party balance
+  const handleDeleteTransaction = async (txnId: string) => {
+    const txnToDelete = transactions.find((t) => t.id === txnId);
+    if (!txnToDelete) return;
+
+    const updatedTxns = transactions.filter((t) => t.id !== txnId);
+
+    const partyTxns = updatedTxns.filter((t) => t.partyId === txnToDelete.partyId);
+    const newBal = partyTxns.reduce(
+      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
+      0
+    );
+
+    const updatedParties = parties.map((p) =>
+      p.id === txnToDelete.partyId
+        ? {
+            ...p,
+            currentBalance: newBal,
+            lastUpdated: new Date().toISOString().split('T')[0],
+          }
+        : p
+    );
+
+    await updatePartiesAndTxns(updatedParties, updatedTxns);
+
+    if (selectedParty && selectedParty.id === txnToDelete.partyId) {
+      setSelectedParty({
+        ...selectedParty,
+        currentBalance: newBal,
+        lastUpdated: new Date().toISOString().split('T')[0],
+      });
+    }
   };
 
   // Add Cashbook Entry
@@ -377,7 +446,7 @@ export default function App() {
   });
 
   return (
-    <SafeAreaView style={styles.safeContainer}>
+    <View style={styles.safeContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* Main Responsive Dashboard Container */}
@@ -636,6 +705,18 @@ export default function App() {
           }
         }}
         onSettleUp={handleSettleUpParty}
+        onEditTransaction={(txn) => setSelectedEditTxn(txn)}
+      />
+
+      {/* 1-Tap Transaction Editor Modal */}
+      <EditTransactionModal
+        visible={!!selectedEditTxn}
+        transaction={selectedEditTxn}
+        currency={storeProfile.currency}
+        language={storeProfile.language}
+        onClose={() => setSelectedEditTxn(null)}
+        onSave={handleSaveEditedTransaction}
+        onDelete={handleDeleteTransaction}
       />
 
       <TransactionModal
@@ -678,7 +759,7 @@ export default function App() {
           await StorageService.saveStoreProfile(updated);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -686,6 +767,7 @@ const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
   },
   appResponsiveWrapper: {
     flex: 1,

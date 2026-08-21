@@ -20,7 +20,7 @@ interface ReportsScreenProps {
 export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   parties,
   currency = 'Rs',
-  language = 'ur',
+  language = 'en',
 }) => {
   const t = getTranslation(language);
   const debtors = parties.filter((p) => p.currentBalance > 0);

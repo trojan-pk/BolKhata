@@ -44,7 +44,7 @@ export interface StoreProfile {
   ownerName: string;
   mobile: string;
   currency: string; // e.g. 'Rs', 'PKR', '₹', '$', '৳'
-  language: 'ur' | 'en' | 'hi' | 'bn' | 'es';
+  language: 'ur' | 'roman_ur' | 'en' | 'hi' | 'bn' | 'es';
   expressApiUrl?: string; // Configurable backend API endpoint for future Express connection
   isBackendConnected?: boolean;
 }
