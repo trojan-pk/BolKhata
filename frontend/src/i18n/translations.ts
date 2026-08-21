@@ -136,6 +136,32 @@ export interface Translations {
   confirmAndSave: string;
   udhaarGaveLabel: string;
   jamaGotLabel: string;
+
+  // Voice Assistant - spoken samples, live status, errors & confirm form
+  voiceSamples: string[];
+  voiceAnalyzing: string;
+  voiceMicListening: string;
+  voiceTranscribing: string;
+  voiceRecordingMobile: string;
+  voiceParsedVerify: string;
+  voiceWhichPerson: string;
+  voiceTxnConfirmation: string;
+  voicePersonField: string;
+  voiceReasonField: string;
+  voiceDateField: string;
+  voiceBalanceFound: string;
+  voicePersonNotFound: string;
+  voiceMultipleMatches: string;
+  voiceAmountMissing: string;
+  voiceMicNotAccessible: string;
+  voiceMicDenied: string;
+  voiceMicPermissionDenied: string;
+  voiceNoAudio: string;
+  voiceEnterName: string;
+  voiceEnterValidAmount: string;
+  voicePersonPlaceholder: string;
+  voiceAmountPlaceholder: string;
+  voiceReasonPlaceholder: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, Translations> = {
@@ -264,6 +290,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'Tasdeeq Karein Aur Save Karein',
     udhaarGaveLabel: 'Aap Ne Diya (Udhaar)',
     jamaGotLabel: 'Aap Ko Mila (Jama)',
+
+    voiceSamples: [
+      'Ali ko 400 diye mobile balance ke liye',
+      'Hamza ne 2000 wapis kiye',
+      'Kal Ali ko 1500 diye thay bike repair ke',
+      'Papa se 5000 liye',
+      'Ali ka hisaab batao',
+    ],
+    voiceAnalyzing: 'AI matlab samajh raha hai...',
+    voiceMicListening: 'Microphone sun raha hai...',
+    voiceTranscribing: 'AI transcribe aur parse kar raha hai...',
+    voiceRecordingMobile: 'Mobile par awaz record ho rahi hai...',
+    voiceParsedVerify: 'Voice entry taiyar hai! Neeche check kar ke confirm karein:',
+    voiceWhichPerson: 'Aap kis banday ki baat kar rahe hain?',
+    voiceTxnConfirmation: 'Lain deyn ki tasdeeq',
+    voicePersonField: 'Banda / Grahak',
+    voiceReasonField: 'Wajah (Optional)',
+    voiceDateField: 'Tareekh',
+    voiceBalanceFound: '{name} ka hisaab mil gaya:',
+    voicePersonNotFound: '"{name}" aap ki customer list mein nahi mila.',
+    voiceMultipleMatches: 'Aik se zyada "{name}" milay. Please select karein:',
+    voiceAmountMissing: '"{name}" samajh aa gaya, lekin raqam darj karein:',
+    voiceMicNotAccessible: 'Microphone available nahi hai. Type karein ya sample jumla dabayein.',
+    voiceMicDenied: 'Microphone ki ijazat nahi mili ya mic mojood nahi hai.',
+    voiceMicPermissionDenied: 'Microphone ki ijazat nahi di gayi. Settings mein enable karein.',
+    voiceNoAudio: 'Device se koi awaz record nahi hui.',
+    voiceEnterName: 'Baraye meherbani grahak ka naam likhein ya select karein',
+    voiceEnterValidAmount: 'Baraye meherbani sahi raqam darj karein',
+    voicePersonPlaceholder: 'misal: Ali',
+    voiceAmountPlaceholder: 'misal: 400',
+    voiceReasonPlaceholder: 'misal: mobile balance, bike repair, rashan',
   },
 
   ur: {
@@ -391,6 +448,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'تصدیق اور کھاتہ محفوظ کریں',
     udhaarGaveLabel: 'آپ نے دیا (ادھار)',
     jamaGotLabel: 'آپ کو ملا (جمع)',
+
+    voiceSamples: [
+      'علی کو چار سو دیے موبائل بیلنس کے لیے',
+      'حمزہ نے دو ہزار واپس کیے',
+      'کل علی کو پندرہ سو دیے تھے بائیک مرمت کے',
+      'ابو سے پانچ ہزار لیے',
+      'علی کا حساب بتاؤ',
+    ],
+    voiceAnalyzing: 'اے آئی مطلب سمجھ رہا ہے...',
+    voiceMicListening: 'مائیکروفون سن رہا ہے...',
+    voiceTranscribing: 'اے آئی تحریر اور تجزیہ کر رہا ہے...',
+    voiceRecordingMobile: 'موبائل پر آواز ریکارڈ ہو رہی ہے...',
+    voiceParsedVerify: 'وائس انٹری تیار ہے! نیچے دیکھ کر تصدیق کریں:',
+    voiceWhichPerson: 'آپ کس شخص کی بات کر رہے ہیں؟',
+    voiceTxnConfirmation: 'لین دین کی تصدیق',
+    voicePersonField: 'شخص / گاہک',
+    voiceReasonField: 'وجہ (اختیاری)',
+    voiceDateField: 'تاریخ',
+    voiceBalanceFound: '{name} کا حساب مل گیا:',
+    voicePersonNotFound: '"{name}" آپ کی گاہک لسٹ میں نہیں ملا۔',
+    voiceMultipleMatches: 'ایک سے زیادہ "{name}" ملے۔ براہ کرم منتخب کریں:',
+    voiceAmountMissing: '"{name}" سمجھ آ گیا، لیکن رقم درج کریں:',
+    voiceMicNotAccessible: 'مائیکروفون دستیاب نہیں۔ ٹائپ کریں یا نمونہ جملہ دبائیں۔',
+    voiceMicDenied: 'مائیکروفون کی اجازت نہیں ملی یا مائیک موجود نہیں ہے۔',
+    voiceMicPermissionDenied: 'مائیکروفون کی اجازت نہیں دی گئی۔ ترتیبات میں فعال کریں۔',
+    voiceNoAudio: 'ڈیوائس سے کوئی آواز ریکارڈ نہیں ہوئی۔',
+    voiceEnterName: 'براہ کرم گاہک کا نام لکھیں یا منتخب کریں',
+    voiceEnterValidAmount: 'براہ کرم درست رقم درج کریں',
+    voicePersonPlaceholder: 'مثلاً: علی',
+    voiceAmountPlaceholder: 'مثلاً: 400',
+    voiceReasonPlaceholder: 'مثلاً: موبائل بیلنس، بائیک مرمت، راشن',
   },
 
   en: {
@@ -518,6 +606,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'Confirm & Save to Ledger',
     udhaarGaveLabel: 'You Gave (Credit)',
     jamaGotLabel: 'You Got (Payment)',
+
+    voiceSamples: [
+      'Gave Ali 400 for mobile balance',
+      'Hamza returned 2000',
+      'Gave Ali 1500 yesterday for bike repair',
+      'Received 5000 from Dad',
+      "What is Ali's balance",
+    ],
+    voiceAnalyzing: 'Analyzing intent & context with AI...',
+    voiceMicListening: 'Listening to microphone...',
+    voiceTranscribing: 'Transcribing & parsing with AI...',
+    voiceRecordingMobile: 'Recording speech on mobile...',
+    voiceParsedVerify: 'Voice entry parsed! Verify & confirm below:',
+    voiceWhichPerson: 'Which person do you mean?',
+    voiceTxnConfirmation: 'Transaction Confirmation',
+    voicePersonField: 'Person / Customer',
+    voiceReasonField: 'Reason (Optional)',
+    voiceDateField: 'Date',
+    voiceBalanceFound: 'Found the balance for {name}:',
+    voicePersonNotFound: '"{name}" was not found in your customer list.',
+    voiceMultipleMatches: 'More than one "{name}" found. Please select one:',
+    voiceAmountMissing: 'Understood "{name}", but please enter the amount:',
+    voiceMicNotAccessible: 'Microphone not accessible. Please type or tap a sample command.',
+    voiceMicDenied: 'Microphone access denied or not found.',
+    voiceMicPermissionDenied: 'Microphone permission denied. Please enable it in settings.',
+    voiceNoAudio: 'No audio recorded from device.',
+    voiceEnterName: 'Please enter or select a customer name',
+    voiceEnterValidAmount: 'Please enter a valid amount',
+    voicePersonPlaceholder: 'e.g. Ali',
+    voiceAmountPlaceholder: 'e.g. 400',
+    voiceReasonPlaceholder: 'e.g. mobile balance, bike repair, groceries',
   },
 
   hi: {
@@ -645,6 +764,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'पुष्टि करें और खाता सहेजें',
     udhaarGaveLabel: 'आपने दिया (उधार)',
     jamaGotLabel: 'आपको मिला (जमा)',
+
+    voiceSamples: [
+      'अली को 400 दिए मोबाइल बैलेंस के लिए',
+      'हमजा ने 2000 वापस किए',
+      'कल अली को 1500 दिए थे बाइक मरम्मत के',
+      'पापा से 5000 लिए',
+      'अली का हिसाब बताओ',
+    ],
+    voiceAnalyzing: 'AI मतलब समझ रहा है...',
+    voiceMicListening: 'माइक्रोफ़ोन सुन रहा है...',
+    voiceTranscribing: 'AI ट्रांसक्राइब और पार्स कर रहा है...',
+    voiceRecordingMobile: 'मोबाइल पर आवाज़ रिकॉर्ड हो रही है...',
+    voiceParsedVerify: 'वॉइस एंट्री तैयार है! नीचे जाँच कर पुष्टि करें:',
+    voiceWhichPerson: 'आप किस व्यक्ति की बात कर रहे हैं?',
+    voiceTxnConfirmation: 'लेन-देन की पुष्टि',
+    voicePersonField: 'व्यक्ति / ग्राहक',
+    voiceReasonField: 'कारण (वैकल्पिक)',
+    voiceDateField: 'तारीख़',
+    voiceBalanceFound: '{name} का हिसाब मिल गया:',
+    voicePersonNotFound: '"{name}" आपकी ग्राहक सूची में नहीं मिला।',
+    voiceMultipleMatches: 'एक से ज़्यादा "{name}" मिले। कृपया चुनें:',
+    voiceAmountMissing: '"{name}" समझ आ गया, लेकिन राशि दर्ज करें:',
+    voiceMicNotAccessible: 'माइक्रोफ़ोन उपलब्ध नहीं है। टाइप करें या नमूना वाक्य दबाएँ।',
+    voiceMicDenied: 'माइक्रोफ़ोन की अनुमति नहीं मिली या माइक मौजूद नहीं है।',
+    voiceMicPermissionDenied: 'माइक्रोफ़ोन की अनुमति नहीं दी गई। सेटिंग्स में चालू करें।',
+    voiceNoAudio: 'डिवाइस से कोई आवाज़ रिकॉर्ड नहीं हुई।',
+    voiceEnterName: 'कृपया ग्राहक का नाम लिखें या चुनें',
+    voiceEnterValidAmount: 'कृपया सही राशि दर्ज करें',
+    voicePersonPlaceholder: 'जैसे: अली',
+    voiceAmountPlaceholder: 'जैसे: 400',
+    voiceReasonPlaceholder: 'जैसे: मोबाइल बैलेंस, बाइक मरम्मत, राशन',
   },
 
   bn: {
@@ -772,6 +922,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'নিশ্চিত করুন এবং সেভ করুন',
     udhaarGaveLabel: 'আপনি দিলেন (বাকি)',
     jamaGotLabel: 'আপনি পেলেন (জমা)',
+
+    voiceSamples: [
+      'আলীকে 400 দিলাম মোবাইল ব্যালেন্সের জন্য',
+      'হামজা 2000 ফেরত দিয়েছে',
+      'গতকাল আলীকে 1500 দিয়েছিলাম বাইক মেরামতের জন্য',
+      'বাবার কাছ থেকে 5000 নিলাম',
+      'আলীর হিসাব বলো',
+    ],
+    voiceAnalyzing: 'AI অর্থ বুঝছে...',
+    voiceMicListening: 'মাইক্রোফোন শুনছে...',
+    voiceTranscribing: 'AI প্রতিলিপি ও বিশ্লেষণ করছে...',
+    voiceRecordingMobile: 'মোবাইলে কথা রেকর্ড হচ্ছে...',
+    voiceParsedVerify: 'ভয়েস এন্ট্রি তৈরি! নিচে দেখে নিশ্চিত করুন:',
+    voiceWhichPerson: 'আপনি কোন ব্যক্তির কথা বলছেন?',
+    voiceTxnConfirmation: 'লেনদেন নিশ্চিতকরণ',
+    voicePersonField: 'ব্যক্তি / ক্রেতা',
+    voiceReasonField: 'কারণ (ঐচ্ছিক)',
+    voiceDateField: 'তারিখ',
+    voiceBalanceFound: '{name} এর হিসাব পাওয়া গেছে:',
+    voicePersonNotFound: '"{name}" আপনার ক্রেতা তালিকায় পাওয়া যায়নি।',
+    voiceMultipleMatches: 'একাধিক "{name}" পাওয়া গেছে। অনুগ্রহ করে নির্বাচন করুন:',
+    voiceAmountMissing: '"{name}" বোঝা গেছে, তবে পরিমাণ লিখুন:',
+    voiceMicNotAccessible: 'মাইক্রোফোন পাওয়া যাচ্ছে না। টাইপ করুন বা নমুনা বাক্য চাপুন।',
+    voiceMicDenied: 'মাইক্রোফোনের অনুমতি মেলেনি বা মাইক নেই।',
+    voiceMicPermissionDenied: 'মাইক্রোফোনের অনুমতি দেওয়া হয়নি। সেটিংসে চালু করুন।',
+    voiceNoAudio: 'ডিভাইস থেকে কোনো শব্দ রেকর্ড হয়নি।',
+    voiceEnterName: 'অনুগ্রহ করে ক্রেতার নাম লিখুন বা নির্বাচন করুন',
+    voiceEnterValidAmount: 'অনুগ্রহ করে সঠিক পরিমাণ লিখুন',
+    voicePersonPlaceholder: 'যেমন: আলী',
+    voiceAmountPlaceholder: 'যেমন: 400',
+    voiceReasonPlaceholder: 'যেমন: মোবাইল ব্যালেন্স, বাইক মেরামত, বাজার',
   },
 
   es: {
@@ -899,6 +1080,37 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     confirmAndSave: 'Confirmar y Guardar',
     udhaarGaveLabel: 'Entregó (Crédito)',
     jamaGotLabel: 'Recibió (Pago)',
+
+    voiceSamples: [
+      'Le di 400 a Ali para saldo del móvil',
+      'Hamza devolvió 2000',
+      'Ayer le di 1500 a Ali para reparar la moto',
+      'Recibí 5000 de papá',
+      '¿Cuál es el saldo de Ali?',
+    ],
+    voiceAnalyzing: 'Analizando la intención con IA...',
+    voiceMicListening: 'Escuchando el micrófono...',
+    voiceTranscribing: 'Transcribiendo y analizando con IA...',
+    voiceRecordingMobile: 'Grabando voz en el móvil...',
+    voiceParsedVerify: '¡Entrada de voz lista! Verifique y confirme abajo:',
+    voiceWhichPerson: '¿A qué persona se refiere?',
+    voiceTxnConfirmation: 'Confirmación de transacción',
+    voicePersonField: 'Persona / Cliente',
+    voiceReasonField: 'Motivo (Opcional)',
+    voiceDateField: 'Fecha',
+    voiceBalanceFound: 'Se encontró el saldo de {name}:',
+    voicePersonNotFound: '"{name}" no se encontró en su lista de clientes.',
+    voiceMultipleMatches: 'Se encontró más de un "{name}". Seleccione uno:',
+    voiceAmountMissing: 'Se entendió "{name}", pero ingrese el importe:',
+    voiceMicNotAccessible: 'Micrófono no disponible. Escriba o pulse un comando de ejemplo.',
+    voiceMicDenied: 'Acceso al micrófono denegado o no encontrado.',
+    voiceMicPermissionDenied: 'Permiso de micrófono denegado. Actívelo en los ajustes.',
+    voiceNoAudio: 'No se grabó audio desde el dispositivo.',
+    voiceEnterName: 'Ingrese o seleccione el nombre de un cliente',
+    voiceEnterValidAmount: 'Ingrese un importe válido',
+    voicePersonPlaceholder: 'p. ej. Ali',
+    voiceAmountPlaceholder: 'p. ej. 400',
+    voiceReasonPlaceholder: 'p. ej. saldo móvil, reparación, comestibles',
   },
 };
 

@@ -4,19 +4,16 @@ import { Party, Transaction, CashbookEntry, StoreProfile, VoiceCommandParseResul
 
 // Dynamically resolve API URL for Web, LAN IP, and Mobile Expo Go
 export const getApiBaseUrl = () => {
-  // 1. Check explicit remote API URL (if set and not localhost)
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
     return envUrl;
   }
 
-  // 2. Web browser: use window.location.hostname
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname || 'localhost';
     return `http://${hostname}:3000`;
   }
 
-  // 3. Mobile Device (Expo Go): automatically extract host machine's Wi-Fi IP from Metro
   try {
     const hostUri =
       Constants.expoConfig?.hostUri ||
@@ -39,11 +36,11 @@ export const getApiBaseUrl = () => {
 export const ApiService = {
   getStoreProfile: async (): Promise<StoreProfile> => {
     return {
-      name: 'Bismillah General Store',
-      ownerName: 'Muhammad Salman',
-      mobile: '+92 300 1234567',
+      name: 'My Store',
+      ownerName: 'Shopkeeper',
+      mobile: '',
       currency: 'Rs',
-      language: 'en',
+      language: 'roman_ur',
       expressApiUrl: getApiBaseUrl(),
       isBackendConnected: true,
     };
@@ -59,14 +56,14 @@ export const ApiService = {
 
   createTransaction: async (data: { partyId: string; type: string; amount: number; description: string }) => null,
 
-  processVoice: async (data: FormData | { text: string }): Promise<VoiceCommandParseResult> => {
+  processVoice: async (
+    data: FormData | { text: string; people?: { id: string; name: string }[]; current_date?: string }
+  ): Promise<VoiceCommandParseResult> => {
     const targetUrl = `${getApiBaseUrl()}/voice/process`;
-    console.log('[ApiService] Sending voice request to:', targetUrl);
     
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
     
     if (isFormData) {
-      // Native fetch for bulletproof FormData multipart upload
       const response = await fetch(targetUrl, {
         method: 'POST',
         body: data,
@@ -76,13 +73,19 @@ export const ApiService = {
       });
       
       if (!response.ok) {
-        const errText = await response.text();
-        console.error('[ApiService] Voice server error:', response.status, errText);
-        throw new Error(`Server Error (${response.status}): ${errText}`);
+        let errMessage = `Server Error (${response.status})`;
+        try {
+          const errJson = await response.json();
+          if (errJson?.error) errMessage = errJson.error;
+        } catch (e) {
+          errMessage = await response.text();
+        }
+        throw new Error(errMessage);
       }
       
       const resJson = await response.json();
-      console.log('[ApiService] Voice result:', resJson);
+      const { audioBase64, ...cleanLog } = resJson;
+      console.log('[ApiService] Voice result:', cleanLog);
       return resJson;
     } else {
       const response = await fetch(targetUrl, {
@@ -95,11 +98,20 @@ export const ApiService = {
       });
       
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Server Error (${response.status}): ${errText}`);
+        let errMessage = `Server Error (${response.status})`;
+        try {
+          const errJson = await response.json();
+          if (errJson?.error) errMessage = errJson.error;
+        } catch (e) {
+          errMessage = await response.text();
+        }
+        throw new Error(errMessage);
       }
       
-      return await response.json();
+      const resJson = await response.json();
+      const { audioBase64, ...cleanLog } = resJson;
+      console.log('[ApiService] Voice result:', cleanLog);
+      return resJson;
     }
   },
   

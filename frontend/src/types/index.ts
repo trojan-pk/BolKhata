@@ -1,21 +1,6 @@
 export type TransactionType = 'gave' | 'got';
-
-export type PaymentMode = 'cash' | 'upi' | 'card' | 'bank' | 'credit' | 'other';
-
+export type PaymentMode = 'cash' | 'online' | 'credit' | 'upi' | 'card';
 export type PartyType = 'customer' | 'supplier';
-
-export interface Transaction {
-  id: string;
-  partyId: string;
-  partyName: string;
-  type: TransactionType; // 'gave' = Udhaar (You gave money/goods), 'got' = Jama (You received money)
-  amount: number;
-  date: string;
-  note?: string;
-  paymentMode: PaymentMode;
-  billPhotoUrl?: string;
-  createdAt: number;
-}
 
 export interface Party {
   id: string;
@@ -23,10 +8,22 @@ export interface Party {
   mobile: string;
   address?: string;
   type: PartyType;
-  // Positive balance means "You will get" (Udhaar given), negative means "You will pay" (Jama received)
-  currentBalance: number;
+  currentBalance: number; // Derived/cached sum of (gave - got)
   lastUpdated: string;
   avatarColor?: string;
+}
+
+export interface Transaction {
+  id: string;
+  partyId: string;
+  partyName: string;
+  type: TransactionType; // 'gave' | 'got'
+  amount: number;
+  date: string; // YYYY-MM-DD
+  note?: string; // Reason / Item description
+  paymentMode?: string;
+  source?: 'voice' | 'manual';
+  createdAt: number;
 }
 
 export interface CashbookEntry {
@@ -43,19 +40,30 @@ export interface StoreProfile {
   name: string;
   ownerName: string;
   mobile: string;
-  currency: string; // e.g. 'Rs', 'PKR', '₹', '$', '৳'
+  currency: string;
   language: 'ur' | 'roman_ur' | 'en' | 'hi' | 'bn' | 'es';
-  expressApiUrl?: string; // Configurable backend API endpoint for future Express connection
+  expressApiUrl?: string;
   isBackendConnected?: boolean;
 }
 
 export interface VoiceCommandParseResult {
-  intent?: 'ADD_CREDIT' | 'ADD_PAYMENT' | 'GET_BALANCE';
-  customerName?: string;
-  partyName?: string;
-  amount?: number;
-  description?: string;
-  note?: string;
-  type?: TransactionType;
+  intent: 'create_transaction' | 'get_balance' | 'get_history' | 'search_person' | 'unknown';
+  person: {
+    name: string;
+    matched_person_id?: string | null;
+  };
+  transaction?: {
+    direction: 'gave' | 'got';
+    amount: number;
+    currency: string;
+    reason?: string | null;
+    date: string;
+    payment_method?: string | null;
+  };
+  ambiguous?: boolean;
+  candidates?: { id: string; name: string }[];
+  missing_fields?: string[];
+  confidence?: number;
   audioBase64?: string;
+  originalText?: string;
 }

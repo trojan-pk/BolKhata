@@ -11,6 +11,7 @@
     "expo-asset": "~12.0.13",
     "expo-av": "~16.0.8",
     "expo-linking": "~8.0.12",
+    "expo-speech": "~14.0.7",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.11",
     "lucide-react-native": "^0.475.0",

@@ -283,6 +283,7 @@ export default function App() {
     amount: number;
     type: TransactionType;
     note: string;
+    date?: string;
   }) => {
     let matchedParty = parties.find(
       (p) => p.name.toLowerCase().includes(result.partyName.toLowerCase()) ||
@@ -297,7 +298,7 @@ export default function App() {
         address: '',
         type: 'customer',
         currentBalance: 0,
-        lastUpdated: new Date().toISOString().split('T')[0],
+        lastUpdated: result.date || new Date().toISOString().split('T')[0],
         avatarColor: COLORS.primary,
       };
       parties.unshift(matchedParty);
@@ -310,26 +311,32 @@ export default function App() {
       partyName: matchedParty.name,
       type: result.type,
       amount: result.amount,
-      date: new Date().toISOString().split('T')[0],
+      date: result.date || new Date().toISOString().split('T')[0],
       note: result.note || (isGave ? 'Credit given (voice entry)' : 'Payment received (voice entry)'),
       paymentMode: 'cash',
+      source: 'voice',
       createdAt: Date.now(),
     };
 
-    const balanceChange = isGave ? result.amount : -result.amount;
-    const updatedBalance = matchedParty.currentBalance + balanceChange;
+    const updatedTxns = [newTxn, ...transactions];
+
+    // Compute balance dynamically from all transactions
+    const partyTxns = updatedTxns.filter((t) => t.partyId === matchedParty!.id);
+    const updatedBalance = partyTxns.reduce(
+      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
+      0
+    );
 
     const updatedParties = parties.map((p) =>
       p.id === matchedParty!.id
         ? {
             ...p,
             currentBalance: updatedBalance,
-            lastUpdated: new Date().toISOString().split('T')[0],
+            lastUpdated: result.date || new Date().toISOString().split('T')[0],
           }
         : p
     );
 
-    const updatedTxns = [newTxn, ...transactions];
     await updatePartiesAndTxns(updatedParties, updatedTxns);
   };
 
@@ -741,6 +748,7 @@ export default function App() {
         visible={voiceModalVisible}
         currency={storeProfile.currency}
         language={storeProfile.language}
+        parties={parties}
         onClose={() => setVoiceModalVisible(false)}
         onParseVoice={handleVoiceParseResult}
       />
