@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Mic, X, Sparkles, CheckCircle, Volume2 } from 'lucide-react-native';
+import { Mic, X, Sparkles, CircleCheck, Volume2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
@@ -60,10 +60,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
         if (response.audioBase64) {
           try {
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: `data:audio/wav;base64,${response.audioBase64}` },
-              { shouldPlay: true }
-            );
+            const player = createAudioPlayer({
+              uri: `data:audio/wav;base64,${response.audioBase64}`,
+            });
+            // Unlike expo-av's Sound, a player from createAudioPlayer is never
+            // released automatically, so drop it once playback finishes.
+            player.addListener('playbackStatusUpdate', (status) => {
+              if (status.didJustFinish) player.remove();
+            });
+            player.play();
           } catch (audioErr) {
             console.error('Failed to play TTS audio:', audioErr);
           }
@@ -160,7 +165,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             {parsedData && (
               <View style={styles.parsedCard}>
                 <View style={styles.parsedHeader}>
-                  <CheckCircle size={16} color={COLORS.gotGreen} />
+                  <CircleCheck size={16} color={COLORS.gotGreen} />
                   <Text style={styles.parsedTitle}>Parsed Entry Ready:</Text>
                 </View>
 

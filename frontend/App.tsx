@@ -14,9 +14,9 @@ import {
   Easing,
 } from 'react-native';
 import {
-  Home,
+  House,
   Users,
-  PieChart,
+  ChartPie,
   Settings as SettingsIcon,
   Mic,
 } from 'lucide-react-native';
@@ -460,7 +460,7 @@ function MainLayout() {
               onPress={() => handleTabChange('home', 0)}
               activeOpacity={0.8}
             >
-              <Home
+              <House
                 size={18}
                 color={activeTab === 'home' ? '#ffffff' : '#94a3b8'}
               />
@@ -515,7 +515,7 @@ function MainLayout() {
               onPress={() => handleTabChange('reports', 3)}
               activeOpacity={0.8}
             >
-              <PieChart
+              <ChartPie
                 size={18}
                 color={activeTab === 'reports' ? '#ffffff' : '#94a3b8'}
               />
@@ -556,7 +556,7 @@ function MainLayout() {
       {showSplashOverlay && (
         <Animated.View
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             styles.splashOverlayContainer,
             { opacity: splashOpacity },
           ]}
