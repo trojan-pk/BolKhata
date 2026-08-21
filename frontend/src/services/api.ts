@@ -85,9 +85,9 @@ export const ApiService = {
     }
   },
 
-  processVoice: async (): Promise<VoiceCommandParseResult | null> => {
+  processVoice: async (data: FormData | { text: string }): Promise<VoiceCommandParseResult | null> => {
     try {
-      const response = await api.post('/voice/process', {});
+      const response = await api.post('/voice/process', data);
       return response.data;
     } catch (e) {
       console.error('Error processing voice', e);

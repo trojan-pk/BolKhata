@@ -43,21 +43,71 @@ async function generateTTS(text: string): Promise<string | null> {
 
 export const processVoice = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // For MVP hackathon, we will mock the Groq Whisper + LLM extraction
-    // Wait for 1 second to simulate AI processing
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // In a real scenario, we would parse req.file (audio), send to Groq API, then send to LLM.
-    // For this mock, we return a standard Udhaar structure.
-    const parsedData = {
-      intent: 'ADD_CREDIT',
-      customerName: 'Mocked Customer',
-      amount: 500,
-      description: 'Items from voice recording',
-      type: 'gave' as const
-    };
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      res.status(500).json({ error: 'GROQ_API_KEY is not configured' });
+      return;
+    }
 
-    // Generate voice feedback using Alibaba Qwen TTS
+    let text = req.body.text; // Support text fallback
+
+    if (req.file) {
+      // 1. Transcribe audio using Groq Whisper
+      const extension = req.file.originalname.split('.').pop() || 'm4a';
+      const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
+      const formData = new FormData();
+      formData.append('file', audioBlob, `audio.${extension}`);
+      formData.append('model', 'whisper-large-v3');
+
+      const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`
+        },
+        body: formData as any
+      });
+
+      if (!whisperResponse.ok) {
+        throw new Error(`Whisper error: ${await whisperResponse.text()}`);
+      }
+
+      const whisperData = await whisperResponse.json();
+      text = whisperData.text;
+    }
+
+    if (!text) {
+      res.status(400).json({ error: 'No audio file or text provided' });
+      return;
+    }
+
+    // 2. Parse text with Groq LLM
+    const llmResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.6-27b',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant for a ledger app called BolKhata. Extract transaction details from the given text. Respond ONLY in valid JSON format exactly matching this structure: {"intent": "ADD_CREDIT" | "ADD_PAYMENT", "customerName": "string", "amount": number, "description": "string", "type": "gave" | "got"}. If someone gave items/money (Udhaar), type is "gave". If they paid money (Jama), type is "got".'
+          },
+          { role: 'user', content: text }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!llmResponse.ok) {
+      throw new Error(`LLM error: ${await llmResponse.text()}`);
+    }
+
+    const llmData = await llmResponse.json();
+    const parsedData = JSON.parse(llmData.choices[0].message.content);
+
+    // 3. Generate voice feedback using Alibaba Qwen TTS
     const actionText = parsedData.type === 'gave' ? 'diye hain' : 'mile hain';
     const speechText = `${parsedData.customerName} ki entry samajh aagayi hai. ${parsedData.amount} rupay ${actionText}. Save karne ke liye confirm dabayein.`;
     
@@ -65,7 +115,8 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
 
     res.json({
       ...parsedData,
-      audioBase64
+      audioBase64,
+      originalText: text
     });
   } catch (error) { 
     next(error); 

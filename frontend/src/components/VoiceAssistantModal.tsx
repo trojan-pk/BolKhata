@@ -6,10 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Platform,
 } from 'react-native';
-import { Mic, X, Sparkles, CircleCheck, Volume2 } from 'lucide-react-native';
+import { Mic, X, Sparkles, CircleCheck, Volume2, Send } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { createAudioPlayer } from 'expo-audio';
+import { createAudioPlayer, useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 
 interface VoiceAssistantModalProps {
   visible: boolean;
@@ -42,42 +43,88 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     'Amrit Supplier ko 3200 diya',
   ];
 
-  const handleSimulateVoice = async (phrase: string) => {
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  const handleResponse = (response: any) => {
+    if (response) {
+      if (response.originalText) {
+        setVoiceText(response.originalText);
+      }
+      setParsedData({
+        partyName: response.customerName || response.partyName,
+        amount: response.amount,
+        type: response.type,
+        note: response.description || response.note,
+      });
+
+      if (response.audioBase64) {
+        try {
+          const player = createAudioPlayer({
+            uri: `data:audio/wav;base64,${response.audioBase64}`,
+          });
+          player.addListener('playbackStatusUpdate', (status) => {
+            if (status.didJustFinish) player.remove();
+          });
+          player.play();
+        } catch (audioErr) {
+          console.error('Failed to play TTS audio:', audioErr);
+        }
+      }
+    }
+  };
+
+  const handleProcessText = async (text: string) => {
+    if (!text.trim()) return;
     setIsListening(true);
-    setVoiceText(phrase);
+    setVoiceText(text);
 
     try {
       const { ApiService } = require('../services/api');
-      const response = await ApiService.processVoice();
-      
-      if (response) {
-        setParsedData({
-          partyName: response.customerName || response.partyName,
-          amount: response.amount,
-          type: response.type,
-          note: response.description || response.note,
-        });
-
-        if (response.audioBase64) {
-          try {
-            const player = createAudioPlayer({
-              uri: `data:audio/wav;base64,${response.audioBase64}`,
-            });
-            // Unlike expo-av's Sound, a player from createAudioPlayer is never
-            // released automatically, so drop it once playback finishes.
-            player.addListener('playbackStatusUpdate', (status) => {
-              if (status.didJustFinish) player.remove();
-            });
-            player.play();
-          } catch (audioErr) {
-            console.error('Failed to play TTS audio:', audioErr);
-          }
-        }
-      }
+      const response = await ApiService.processVoice({ text });
+      handleResponse(response);
     } catch (e) {
       console.error(e);
     } finally {
       setIsListening(false);
+    }
+  };
+
+  const handleMicPress = async () => {
+    if (audioRecorder.isRecording) {
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      if (uri) {
+        setIsListening(true);
+        try {
+          const formData = new FormData();
+          if (Platform.OS === 'web') {
+            const fileResponse = await fetch(uri);
+            const blob = await fileResponse.blob();
+            formData.append('audio', blob, 'audio.webm');
+          } else {
+            formData.append('audio', {
+              uri,
+              name: 'audio.m4a',
+              type: 'audio/m4a',
+            } as any);
+          }
+          const { ApiService } = require('../services/api');
+          const response = await ApiService.processVoice(formData);
+          handleResponse(response);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsListening(false);
+        }
+      }
+    } else {
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (permission.granted) {
+        setVoiceText('');
+        setParsedData(null);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+      }
     }
   };
 
@@ -122,13 +169,21 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
             {/* Mic Button */}
             <TouchableOpacity
-              style={[styles.micBigBtn, isListening && styles.micListening]}
-              onPress={() => handleSimulateVoice('Ramesh ko 500 basmati rice diya')}
+              style={[
+                styles.micBigBtn,
+                (isListening || audioRecorder.isRecording) && styles.micListening,
+              ]}
+              onPress={handleMicPress}
               activeOpacity={0.8}
+              disabled={isListening}
             >
               <Mic size={32} color="#ffffff" strokeWidth={2.5} />
               <Text style={styles.micText}>
-                {isListening ? 'Listening...' : 'Tap & Speak'}
+                {audioRecorder.isRecording
+                  ? 'Recording... Tap to stop'
+                  : isListening
+                  ? 'Processing...'
+                  : 'Tap & Speak'}
               </Text>
             </TouchableOpacity>
 
@@ -144,7 +199,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   setVoiceText(t);
                   setParsedData(null);
                 }}
+                onSubmitEditing={() => handleProcessText(voiceText)}
               />
+              {voiceText.length > 0 && !isListening && !audioRecorder.isRecording && (
+                <TouchableOpacity onPress={() => handleProcessText(voiceText)}>
+                  <Send size={18} color={COLORS.primary} style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Quick Sample Prompts */}
@@ -154,7 +215,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 <TouchableOpacity
                   key={idx}
                   style={styles.sampleChip}
-                  onPress={() => handleSimulateVoice(cmd)}
+                  onPress={() => handleProcessText(cmd)}
                 >
                   <Text style={styles.sampleChipText}>"{cmd}"</Text>
                 </TouchableOpacity>
