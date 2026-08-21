@@ -12,8 +12,8 @@ import {
   X,
   Phone,
   MessageCircle,
-  PlusCircle,
-  MinusCircle,
+  CirclePlus,
+  CircleMinus,
   CheckCheck,
   Calendar,
   Tag,
@@ -221,7 +221,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             onPress={onAddGave}
             activeOpacity={0.85}
           >
-            <MinusCircle size={18} color="#ffffff" />
+            <CircleMinus size={18} color="#ffffff" />
             <Text style={styles.bottomActionText}>+ YOU GAVE ({currency})</Text>
           </TouchableOpacity>
 
@@ -230,7 +230,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             onPress={onAddGot}
             activeOpacity={0.85}
           >
-            <PlusCircle size={18} color="#ffffff" />
+            <CirclePlus size={18} color="#ffffff" />
             <Text style={styles.bottomActionText}>+ YOU GOT ({currency})</Text>
           </TouchableOpacity>
         </View>
