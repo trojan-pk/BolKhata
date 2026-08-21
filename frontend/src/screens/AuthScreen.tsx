@@ -34,13 +34,12 @@ export const AuthScreen = () => {
   const { signIn } = useSignIn();
   const { signUp } = useSignUp();
   
-  const { startSSOFlow: startGoogleFlow } = useSSO({ strategy: 'oauth_google' });
-  const { startSSOFlow: startGithubFlow } = useSSO({ strategy: 'oauth_github' });
+  const { startSSOFlow } = useSSO();
 
   const onOAuthPress = async (strategy: 'oauth_google' | 'oauth_github') => {
     try {
-      const flow = strategy === 'oauth_google' ? startGoogleFlow : startGithubFlow;
-      const { createdSessionId, setActive } = await flow({
+      const { createdSessionId, setActive } = await startSSOFlow({
+        strategy,
         redirectUrl: Linking.createURL('/dashboard', { scheme: 'bolkhata' })
       });
       if (createdSessionId && setActive) {
@@ -65,9 +64,8 @@ export const AuthScreen = () => {
     setErrorMsg('');
 
     try {
-      const { error } = await signIn.create({
-        strategy: 'password',
-        identifier: emailAddress,
+      const { error } = await signIn.password({
+        emailAddress: emailAddress,
         password,
       });
 
@@ -95,7 +93,7 @@ export const AuthScreen = () => {
     setErrorMsg('');
 
     try {
-      const { error: createError } = await signUp.create({
+      const { error: createError } = await signUp.password({
         emailAddress,
         password,
       });
@@ -104,7 +102,7 @@ export const AuthScreen = () => {
         return;
       }
 
-      const { error: prepError } = await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      const { error: prepError } = await signUp.verifications.sendEmailCode();
       if (prepError) {
         setErrorMsg('Failed to prepare verification.');
         return;
@@ -123,7 +121,7 @@ export const AuthScreen = () => {
     setErrorMsg('');
 
     try {
-      const { error } = await signUp.attemptEmailAddressVerification({
+      const { error } = await signUp.verifications.verifyEmailCode({
         code,
       });
       if (error) {

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { processVoice } from '../controllers/voice.controller';
 
-const router = Router();
+import multer from 'multer';
 
-// In a real app we'd use multer to handle multipart/form-data audio uploads
-// For this mock MVP, we'll just accept a POST request.
-router.post('/process', processVoice);
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.post('/process', upload.single('audio'), processVoice);
 
 export default router;
