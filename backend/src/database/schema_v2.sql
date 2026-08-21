@@ -1,5 +1,5 @@
 -- =========================================================
--- BolKhata Multi-Tenant Database Schema (v2)
+-- BolKhata Multi-Tenant Database Schema (Clean Production)
 -- Run this in Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- =========================================================
 
@@ -7,9 +7,9 @@
 CREATE TABLE IF NOT EXISTS public.stores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-    name TEXT NOT NULL DEFAULT 'Bismillah General Store',
-    owner_name TEXT NOT NULL DEFAULT 'Muhammad Salman',
-    phone TEXT DEFAULT '+92 300 1234567',
+    name TEXT NOT NULL DEFAULT 'My Store',
+    owner_name TEXT NOT NULL DEFAULT 'Shopkeeper',
+    phone TEXT,
     currency TEXT DEFAULT 'Rs',
     language TEXT DEFAULT 'roman_ur',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -71,15 +71,3 @@ CREATE POLICY "Allow public all access on stores" ON public.stores FOR ALL USING
 CREATE POLICY "Allow public all access on customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all access on transactions" ON public.transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all access on cashbook" ON public.cashbook FOR ALL USING (true) WITH CHECK (true);
-
--- 7. Insert Initial Store & Sample Customers
-INSERT INTO public.stores (id, user_id, name, owner_name, phone, currency, language)
-VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'Bismillah General Store', 'Muhammad Salman', '+92 300 1234567', 'Rs', 'roman_ur')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.customers (id, store_id, user_id, name, phone, address, type, balance)
-VALUES 
-  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'Ramesh Kumar (Grocery)', '+92 300 1234567', 'Shop #12, Main Market', 'customer', 4500),
-  ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'Sunita Devi', '+92 301 9876543', 'House 44, Civil Lines', 'customer', 1850),
-  ('33333333-3333-3333-3333-333333333333', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'Amrit Rice Supplier', '+92 321 4455667', 'Grain Market Yard', 'supplier', -3200)
-ON CONFLICT (id) DO NOTHING;

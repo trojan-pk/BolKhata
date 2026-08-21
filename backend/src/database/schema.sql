@@ -1,5 +1,5 @@
 -- =========================================================
--- BolKhata Complete Supabase Database Schema
+-- BolKhata Clean Database Schema
 -- Run this in your Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- =========================================================
 
@@ -45,11 +45,3 @@ ALTER TABLE public.cashbook ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public all access on customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all access on transactions" ON public.transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public all access on cashbook" ON public.cashbook FOR ALL USING (true) WITH CHECK (true);
-
--- 5. Insert Sample Store Customers
-INSERT INTO public.customers (name, phone, address, type, balance)
-VALUES 
-  ('Ramesh Kumar (Grocery)', '+92 300 1234567', 'Shop #12, Main Market', 'customer', 4500),
-  ('Sunita Devi', '+92 301 9876543', 'House 44, Civil Lines', 'customer', 1850),
-  ('Amrit Rice Supplier', '+92 321 4455667', 'Grain Market Yard', 'supplier', -3200)
-ON CONFLICT DO NOTHING;
