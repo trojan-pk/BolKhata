@@ -11,22 +11,26 @@ import {
 import { TrendingUp, TrendingDown, Plus, Minus, X, Calendar } from 'lucide-react-native';
 import { CashbookEntry } from '../types';
 import { COLORS } from '../theme/colors';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface CashbookScreenProps {
   entries: CashbookEntry[];
   currency?: string;
+  language?: LanguageCode;
   onAddCashEntry: (entry: { type: 'in' | 'out'; amount: number; category: string; note: string }) => void;
 }
 
 export const CashbookScreen: React.FC<CashbookScreenProps> = ({
   entries,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
   onAddCashEntry,
 }) => {
+  const t = getTranslation(language);
   const [modalVisible, setModalVisible] = useState(false);
   const [entryType, setEntryType] = useState<'in' | 'out'>('in');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Daily Cash Sale');
+  const [category, setCategory] = useState(t.sales);
   const [note, setNote] = useState('');
 
   const totalIn = entries
@@ -39,7 +43,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
 
   const handleOpenModal = (type: 'in' | 'out') => {
     setEntryType(type);
-    setCategory(type === 'in' ? 'Daily Cash Sale' : 'Shop Expense');
+    setCategory(type === 'in' ? t.sales : t.expense);
     setAmount('');
     setNote('');
     setModalVisible(true);
@@ -48,7 +52,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
   const handleSave = () => {
     const num = parseFloat(amount);
     if (!num || isNaN(num) || num <= 0) {
-      alert('Please enter valid amount');
+      alert(t.enterAmount);
       return;
     }
 
@@ -69,7 +73,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
         <View style={styles.summaryCol}>
           <View style={styles.iconLabel}>
             <TrendingUp size={13} color={COLORS.gotGreen} />
-            <Text style={styles.summaryLabel}>Total Cash In</Text>
+            <Text style={styles.summaryLabel}>{t.todayCashIn}</Text>
           </View>
           <Text style={styles.valIn} numberOfLines={1}>
             + {currency} {totalIn.toLocaleString('en-IN')}
@@ -81,7 +85,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
         <View style={styles.summaryCol}>
           <View style={styles.iconLabel}>
             <TrendingDown size={13} color={COLORS.gaveRed} />
-            <Text style={styles.summaryLabel}>Total Cash Out</Text>
+            <Text style={styles.summaryLabel}>{t.todayCashOut}</Text>
           </View>
           <Text style={styles.valOut} numberOfLines={1}>
             - {currency} {totalOut.toLocaleString('en-IN')}
@@ -97,7 +101,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
           activeOpacity={0.85}
         >
           <Plus size={16} color="#ffffff" />
-          <Text style={styles.btnText}>+ CASH IN</Text>
+          <Text style={styles.btnText}>+ {t.cashIn}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -106,12 +110,12 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
           activeOpacity={0.85}
         >
           <Minus size={16} color="#ffffff" />
-          <Text style={styles.btnText}>- CASH OUT</Text>
+          <Text style={styles.btnText}>- {t.cashOut}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Cashbook History */}
-      <Text style={styles.sectionTitle}>Daily Cash Movement Log</Text>
+      <Text style={styles.sectionTitle}>{t.dailyCashbook}</Text>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
         {entries.map((item) => {
@@ -156,7 +160,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
               ]}
             >
               <Text style={styles.modalTitle}>
-                {entryType === 'in' ? 'Record Cash In' : 'Record Cash Out'}
+                {entryType === 'in' ? `+ ${t.cashIn}` : `- ${t.cashOut}`}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <X size={18} color="#ffffff" />
@@ -164,7 +168,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
             </View>
 
             <View style={{ padding: 16 }}>
-              <Text style={styles.fieldLabel}>Amount ({currency})</Text>
+              <Text style={styles.fieldLabel}>{t.enterAmount} ({currency})</Text>
               <TextInput
                 style={styles.input}
                 placeholder="0"
@@ -175,16 +179,16 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
                 autoFocus
               />
 
-              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Category</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{t.category}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Daily Cash Sale, Tea, Electric Bill"
+                placeholder="e.g. Sales, Rashan, Tea, Electric Bill"
                 placeholderTextColor="#94a3b8"
                 value={category}
                 onChangeText={setCategory}
               />
 
-              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Note / Description</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{t.itemDescriptionNote}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Optional details..."
@@ -200,7 +204,7 @@ export const CashbookScreen: React.FC<CashbookScreenProps> = ({
                 ]}
                 onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>Save Cash Entry</Text>
+                <Text style={styles.saveBtnText}>{t.saveTransaction}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -11,11 +11,11 @@ const api = axios.create({
 export const ApiService = {
   getStoreProfile: async (): Promise<StoreProfile> => {
     return {
-      name: 'Sharma General Store',
-      ownerName: 'Rajesh Sharma',
-      mobile: '+91 98765 43210',
-      currency: '₹',
-      language: 'hi',
+      name: 'Bismillah General Store',
+      ownerName: 'Muhammad Salman',
+      mobile: '+92 300 1234567',
+      currency: 'Rs',
+      language: 'ur',
       expressApiUrl: API_URL,
       isBackendConnected: true,
     };

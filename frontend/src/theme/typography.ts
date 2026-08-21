@@ -21,19 +21,21 @@ export const injectWebGoogleFonts = () => {
       link.id = fontId;
       link.rel = 'stylesheet';
       link.href =
-        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap';
+        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap';
       document.head.appendChild(link);
     }
   }
 };
 
+const URDU_SANS =
+  "'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const SYSTEM_SANS =
-  "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  "'Inter', 'Noto Nastaliq Urdu', 'Noto Sans Arabic', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 export const FONTS = {
-  // Plus Jakarta Sans: For Headings, Brand Title, Big Numeric Ledger Figures
+  // Headings, Brand Title, Big Numeric Ledger Figures
   heading: Platform.select({
-    web: `'Plus Jakarta Sans', ${SYSTEM_SANS}`,
+    web: URDU_SANS,
     default: 'System',
   }),
   headingBold: Platform.select({

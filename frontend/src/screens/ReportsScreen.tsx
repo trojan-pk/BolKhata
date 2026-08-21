@@ -9,16 +9,20 @@ import {
 import { Download } from 'lucide-react-native';
 import { Party } from '../types';
 import { COLORS } from '../theme/colors';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface ReportsScreenProps {
   parties: Party[];
   currency?: string;
+  language?: LanguageCode;
 }
 
 export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   parties,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
 }) => {
+  const t = getTranslation(language);
   const debtors = parties.filter((p) => p.currentBalance > 0);
   const creditors = parties.filter((p) => p.currentBalance < 0);
 
@@ -26,7 +30,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const totalJama = creditors.reduce((sum, p) => sum + Math.abs(p.currentBalance), 0);
 
   const handleExportPDF = () => {
-    alert('PDF Statement generated! Downloading shop ledger report...');
+    alert(t.downloadPdf);
   };
 
   return (
@@ -37,8 +41,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       {/* Action Header */}
       <View style={styles.actionHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Reports & Analytics</Text>
-          <Text style={styles.pageSub}>Download statements & debt insights</Text>
+          <Text style={styles.pageTitle}>{t.reportsTitle}</Text>
+          <Text style={styles.pageSub}>{t.reportsSubtitle}</Text>
         </View>
 
         <TouchableOpacity
@@ -47,41 +51,41 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           activeOpacity={0.85}
         >
           <Download size={15} color="#ffffff" />
-          <Text style={styles.exportBtnText}>PDF Report</Text>
+          <Text style={styles.exportBtnText}>{t.downloadPdf}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Summary Metrics */}
       <View style={styles.metricsGrid}>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Total Debtors (Grahak)</Text>
+          <Text style={styles.metricLabel}>{t.totalMarketUdhaar}</Text>
           <Text style={styles.metricValRed} numberOfLines={1}>
             {debtors.length} Parties
           </Text>
           <Text style={styles.metricSub} numberOfLines={1}>
-            {currency} {totalUdhaar.toLocaleString('en-IN')} pending
+            {currency} {totalUdhaar.toLocaleString('en-IN')}
           </Text>
         </View>
 
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Total Creditors (Suppliers)</Text>
+          <Text style={styles.metricLabel}>{t.totalSupplierPayable}</Text>
           <Text style={styles.metricValGreen} numberOfLines={1}>
             {creditors.length} Parties
           </Text>
           <Text style={styles.metricSub} numberOfLines={1}>
-            {currency} {totalJama.toLocaleString('en-IN')} payable
+            {currency} {totalJama.toLocaleString('en-IN')}
           </Text>
         </View>
       </View>
 
       {/* Top Pending Debtors List */}
       <Text style={styles.sectionHeader}>
-        Top Pending Debtors (Action Required)
+        {t.topCustomersUdhaar}
       </Text>
 
       {debtors.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>All customer balances cleared!</Text>
+          <Text style={styles.emptyText}>{t.allSettled}</Text>
         </View>
       ) : (
         debtors
@@ -96,7 +100,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               </View>
 
               <View style={styles.debtorValBox}>
-                <Text style={styles.debtorStatus}>Aap Lenge</Text>
+                <Text style={styles.debtorStatus}>{t.youWillCollect}</Text>
                 <Text style={styles.debtorAmount} numberOfLines={1}>
                   {currency} {party.currentBalance.toLocaleString('en-IN')}
                 </Text>

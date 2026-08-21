@@ -11,6 +11,7 @@ import { Store, Globe, Server, LogOut } from 'lucide-react-native';
 import { StoreProfile } from '../types';
 import { COLORS } from '../theme/colors';
 import { useAuth } from '@clerk/expo';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface SettingsScreenProps {
   storeProfile: StoreProfile;
@@ -29,13 +30,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [ownerName, setOwnerName] = useState(storeProfile.ownerName);
   const [mobile, setMobile] = useState(storeProfile.mobile);
   const [currency, setCurrency] = useState(storeProfile.currency);
-  const [language, setLanguage] = useState(storeProfile.language);
+  const [language, setLanguage] = useState<LanguageCode>(storeProfile.language);
 
-  const currencies = ['₹', '$', '৳', '€', '£'];
-  const languages: { key: 'en' | 'hi' | 'bn' | 'es'; label: string }[] = [
+  const t = getTranslation(language);
+
+  const currencies = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
+  const languages: { key: LanguageCode; label: string }[] = [
+    { key: 'ur', label: 'اردو (Urdu)' },
+    { key: 'en', label: 'English' },
     { key: 'hi', label: 'हिंदी (Hindi)' },
     { key: 'bn', label: 'বাংলা (Bengali)' },
-    { key: 'en', label: 'English' },
     { key: 'es', label: 'Español' },
   ];
 
@@ -48,7 +52,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       currency,
       language,
     });
-    alert('Store profile & settings updated successfully!');
+    alert(t.settingsSavedSuccess);
   };
 
   const handleSignOut = () => {
@@ -60,7 +64,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 100 }}
     >
-      <Text style={styles.pageTitle}>Shop Settings</Text>
+      <Text style={styles.pageTitle}>{t.shopSettings}</Text>
 
       {/* Express API Connector Banner */}
       <TouchableOpacity
@@ -70,31 +74,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <Server size={20} color={COLORS.primary} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.apiTitle}>Node.js Express API Connection</Text>
+          <Text style={styles.apiTitle}>{t.apiConnection}</Text>
           <Text style={styles.apiSub} numberOfLines={1}>
             Status:{' '}
             {storeProfile.isBackendConnected
-              ? 'Connected to Express'
-              : 'Offline Mobile UI Mode'}
+              ? t.apiConnected
+              : t.apiOffline}
           </Text>
         </View>
-        <Text style={styles.configureText}>Configure</Text>
+        <Text style={styles.configureText}>{t.configure}</Text>
       </TouchableOpacity>
 
       {/* Store Profile Section */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Store size={16} color={COLORS.primary} />
-          <Text style={styles.sectionTitle}>Store Details</Text>
+          <Text style={styles.sectionTitle}>{t.storeDetails}</Text>
         </View>
 
-        <Text style={styles.label}>Shop / Business Name</Text>
+        <Text style={styles.label}>{t.shopName}</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} />
 
-        <Text style={[styles.label, { marginTop: 10 }]}>Owner Name</Text>
+        <Text style={[styles.label, { marginTop: 10 }]}>{t.ownerName}</Text>
         <TextInput style={styles.input} value={ownerName} onChangeText={setOwnerName} />
 
-        <Text style={[styles.label, { marginTop: 10 }]}>Contact Number</Text>
+        <Text style={[styles.label, { marginTop: 10 }]}>{t.contactNumber}</Text>
         <TextInput style={styles.input} value={mobile} onChangeText={setMobile} />
       </View>
 
@@ -102,10 +106,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Globe size={16} color={COLORS.primary} />
-          <Text style={styles.sectionTitle}>Currency & Regional Settings</Text>
+          <Text style={styles.sectionTitle}>{t.currencyAndRegional}</Text>
         </View>
 
-        <Text style={styles.label}>Shop Currency</Text>
+        <Text style={styles.label}>{t.shopCurrency}</Text>
         <View style={styles.currencyRow}>
           {currencies.map((c) => (
             <TouchableOpacity
@@ -125,7 +129,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           ))}
         </View>
 
-        <Text style={[styles.label, { marginTop: 12 }]}>App Language</Text>
+        <Text style={[styles.label, { marginTop: 12 }]}>{t.appLanguage}</Text>
         <View style={styles.langGrid}>
           {languages.map((l) => (
             <TouchableOpacity
@@ -154,7 +158,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         onPress={handleSave}
         activeOpacity={0.85}
       >
-        <Text style={styles.saveBtnText}>Save Settings</Text>
+        <Text style={styles.saveBtnText}>{t.saveSettings}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -164,7 +168,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <LogOut size={16} color={COLORS.gaveRed} />
-          <Text style={[styles.saveBtnText, { color: COLORS.gaveRed }]}>Sign Out of Clerk</Text>
+          <Text style={[styles.saveBtnText, { color: COLORS.gaveRed }]}>{t.signOut}</Text>
         </View>
       </TouchableOpacity>
     </ScrollView>

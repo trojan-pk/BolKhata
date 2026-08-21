@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { FONTS } from '../theme/typography';
+import { getTranslation, LanguageCode } from '../i18n/translations';
 
 interface DashboardCardsProps {
   totalReceivable: number;
@@ -10,6 +11,7 @@ interface DashboardCardsProps {
   todayCashIn: number;
   todayCashOut: number;
   currency?: string;
+  language?: LanguageCode;
   onPressReceivable?: () => void;
   onPressPayable?: () => void;
 }
@@ -19,10 +21,12 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
   totalPayable,
   todayCashIn,
   todayCashOut,
-  currency = '₹',
+  currency = 'Rs',
+  language = 'ur',
   onPressReceivable,
   onPressPayable,
 }) => {
+  const t = getTranslation(language);
   const netBalance = totalReceivable - totalPayable;
 
   return (
@@ -34,9 +38,9 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
             <View style={styles.iconCircle}>
               <Wallet size={15} color={COLORS.primary} />
             </View>
-            <Text style={styles.netLabel}>Net Shop Ledger Balance</Text>
+            <Text style={styles.netLabel}>{t.netLedgerBalance}</Text>
           </View>
-          <Text style={styles.netSubtext}>Overall Status</Text>
+          <Text style={styles.netSubtext}>{t.overallStatus}</Text>
         </View>
 
         <Text
@@ -50,7 +54,7 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
           {currency} {Math.abs(netBalance).toLocaleString('en-IN')}
           <Text style={styles.netSuffix}>
             {' '}
-            {netBalance >= 0 ? '(Receivable)' : '(Payable)'}
+            {netBalance >= 0 ? t.receivable : t.payable}
           </Text>
         </Text>
       </View>
@@ -65,13 +69,13 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
         >
           <View style={styles.cardHeaderRow}>
             <Text style={styles.receivableTitle} numberOfLines={1}>
-              You Will Collect
+              {t.youWillCollect}
             </Text>
             <View style={styles.redIconCircle}>
               <ArrowUpRight size={14} color={COLORS.gaveRed} />
             </View>
           </View>
-          <Text style={styles.hindiSub}>आप लेंगे (Udhaar)</Text>
+          <Text style={styles.hindiSub}>{t.youWillCollectSub}</Text>
           <Text
             style={styles.receivableAmount}
             numberOfLines={1}
@@ -89,13 +93,13 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
         >
           <View style={styles.cardHeaderRow}>
             <Text style={styles.payableTitle} numberOfLines={1}>
-              You Will Pay
+              {t.youWillPay}
             </Text>
             <View style={styles.greenIconCircle}>
               <ArrowDownLeft size={14} color={COLORS.gotGreen} />
             </View>
           </View>
-          <Text style={styles.hindiSub}>आप देंगे (Jama)</Text>
+          <Text style={styles.hindiSub}>{t.youWillPaySub}</Text>
           <Text
             style={styles.payableAmount}
             numberOfLines={1}
@@ -111,7 +115,7 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
         <View style={styles.cashCol}>
           <View style={styles.cashRowTitle}>
             <TrendingUp size={13} color={COLORS.gotGreen} />
-            <Text style={styles.cashLabel}>Today's Cash In</Text>
+            <Text style={styles.cashLabel}>{t.todayCashIn}</Text>
           </View>
           <Text style={styles.cashInVal} numberOfLines={1}>
             + {currency} {todayCashIn.toLocaleString('en-IN')}
@@ -123,7 +127,7 @@ export const DashboardCards: React.FC<DashboardCardsProps> = ({
         <View style={styles.cashCol}>
           <View style={styles.cashRowTitle}>
             <TrendingDown size={13} color={COLORS.gaveRed} />
-            <Text style={styles.cashLabel}>Today's Cash Out</Text>
+            <Text style={styles.cashLabel}>{t.todayCashOut}</Text>
           </View>
           <Text style={styles.cashOutVal} numberOfLines={1}>
             - {currency} {todayCashOut.toLocaleString('en-IN')}

@@ -43,8 +43,8 @@ export interface StoreProfile {
   name: string;
   ownerName: string;
   mobile: string;
-  currency: string; // e.g. '₹', '$', '৳'
-  language: 'en' | 'hi' | 'bn' | 'es';
+  currency: string; // e.g. 'Rs', 'PKR', '₹', '$', '৳'
+  language: 'ur' | 'en' | 'hi' | 'bn' | 'es';
   expressApiUrl?: string; // Configurable backend API endpoint for future Express connection
   isBackendConnected?: boolean;
 }
