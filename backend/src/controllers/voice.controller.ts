@@ -50,7 +50,7 @@ function toTitleCase(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-// Fallback Rule Parser
+// Fast Local Fallback Rule Parser
 function parseFallbackLocally(inputStr: string, existingPeople: { id: string; name: string }[] = [], currentDate?: string) {
   const lower = inputStr.toLowerCase();
 
@@ -158,7 +158,7 @@ function parseFallbackLocally(inputStr: string, existingPeople: { id: string; na
   };
 }
 
-// Google Gemini 3.6 Flash / 2.5 Flash Intent & Entity Parser
+// Ultra-fast Gemini 3.6 Flash / 2.5 Flash Intent Parser
 async function parseWithGemini(text: string, systemPrompt: string): Promise<any | null> {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) return null;
@@ -172,7 +172,7 @@ async function parseWithGemini(text: string, systemPrompt: string): Promise<any 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text to parse: "${text}"\n\nJSON Output:` }] }
+            { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nJSON Output:` }] }
           ],
           generationConfig: {
             responseMimeType: 'application/json',
@@ -213,22 +213,22 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
     console.log('\n🎙️ [Voice API] Received incoming request');
 
     if (req.file) {
-      console.log(`📦 [Voice API] Audio buffer received: ${req.file.originalname} (${req.file.size} bytes)`);
+      console.log(`📦 [Voice API] Audio received: ${req.file.originalname} (${req.file.size} bytes)`);
       
       if (!groqKey) {
         res.status(500).json({ error: 'GROQ_API_KEY is not configured in backend/.env' });
         return;
       }
 
-      // 1. Transcribe audio using Groq Whisper API
-      console.log('🚀 [Voice API] Calling Groq Whisper STT (whisper-large-v3)...');
+      // 1. High-Speed STT: Groq whisper-large-v3-turbo (<150ms transcription)
+      console.log('⚡ [Voice API] Calling Groq Whisper Turbo (whisper-large-v3-turbo)...');
       
       const extension = req.file.originalname.split('.').pop() || 'm4a';
       const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
       
       const formData = new FormData();
       formData.append('file', audioBlob, `recording.${extension}`);
-      formData.append('model', 'whisper-large-v3');
+      formData.append('model', 'whisper-large-v3-turbo');
       formData.append(
         'prompt',
         'BolKhata hisaab: Zain ko 2000 diye bike tube ke liye, Ali ko 400 diye mobile balance, Papa se 5000 liye, Hamza ne 2000 wapis kiye, Qasim ko 1200 diye, bike repair, rashan, udhaar, jama. زین کو دو ہزار روپے دیے، بائیک کی ٹیوب ڈلوانے کے لیے۔'
@@ -259,7 +259,7 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    // Silence detection
+    // Silence / Noise Filter
     const cleanedText = (text || '').replace(/[.\s,?!۔]/g, '').trim();
     if (!cleanedText || cleanedText.length < 2) {
       console.log('⚠️ [Voice API] Silence / No speech detected.');
@@ -267,48 +267,26 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    // 2. Clear System Prompt with Strict Transliteration & Extraction Rules
-    const systemPrompt = `You are BolKhata's expert financial command parser.
-Convert natural-language spoken text (Urdu script, Roman Urdu, Hindi, English) into structured bookkeeping JSON.
+    // 2. High-Performance Token-Optimized System Prompt (~180 tokens)
+    const systemPrompt = `You are BolKhata's rapid financial parser.
+Convert spoken text (Urdu, Roman Urdu, Hindi, English) into JSON.
 
 CONTEXT:
-- Today's Date: "${currentDate}" (Timezone: ${timezone})
-- Existing Store Customers: ${JSON.stringify(existingPeople)}
+- Date: "${currentDate}" (${timezone})
+- Store Customers: ${JSON.stringify(existingPeople)}
 
-CRITICAL EXTRACTION & TRANSLITERATION RULES:
-1. PERSON NAME:
-   - ALWAYS output "person.name" in English / Roman Latin script (e.g. "زین" -> "Zain", "علی" -> "Ali", "قاسم" -> "Qasim", "پاپا" -> "Papa", "حمزہ" -> "Hamza", "احمد" -> "Ahmad").
-   - NEVER output Arabic/Urdu script for "person.name".
-   - If the name matches someone in Existing Store Customers, use their exact English name and set "matched_person_id".
-   - If multiple people in the store match (e.g. "Ali Khan" and "Ali Electronics"), set "ambiguous": true and list candidates in "candidates".
+RULES:
+1. "person.name": English / Latin script TitleCase ONLY (e.g. "زین"->"Zain", "علی"->"Ali", "پاپا"->"Papa", "قاسم"->"Qasim"). NEVER Arabic script. Match Store Customers exactly.
+2. "direction": "gave" (diye/udhaar/paid) | "got" (liye/wasool/mile/wapis kiye).
+3. "amount": number in PKR (e.g., 2000).
+4. "reason": reason in English/Roman text (e.g., "bike tube replacement", "mobile balance", "groceries").
+5. "date": YYYY-MM-DD (kal = yesterday).
 
-2. TRANSACTION DETAILS:
-   - "direction": "gave" (if gave/udhaar/diye/paid) or "got" (if received/wasool/liye/mile/wapis kiye).
-   - "amount": numeric value in PKR (e.g., 2000).
-   - "reason": Extract the reason or item description in English or Roman Urdu (e.g. "bike tube replacement", "mobile balance", "bike repair", "chai", "groceries").
-   - "date": YYYY-MM-DD.
-
-3. NUMBER WORDS:
-   - "دو ہزار" / "do hazar" / "2000" = 2000
-   - "پانچ ہزار" / "paanch hazar" = 5000
-   - "چار سو" / "char sau" = 400
-   - "پانچ سو" / "paanch sau" = 500
-
-RETURN JSON ONLY MATCHING THIS SCHEMA:
+JSON SCHEMA ONLY:
 {
   "intent": "create_transaction" | "get_balance" | "get_history",
-  "person": {
-    "name": "string (English / Roman Latin TitleCase)",
-    "matched_person_id": "string or null"
-  },
-  "transaction": {
-    "direction": "gave" | "got",
-    "amount": number,
-    "currency": "PKR",
-    "reason": "string or null",
-    "date": "YYYY-MM-DD",
-    "payment_method": "string or null"
-  },
+  "person": { "name": "string", "matched_person_id": "string or null" },
+  "transaction": { "direction": "gave" | "got", "amount": number, "currency": "PKR", "reason": "string or null", "date": "YYYY-MM-DD", "payment_method": null },
   "ambiguous": boolean,
   "candidates": [ { "id": "string", "name": "string" } ],
   "missing_fields": [ "amount" | "person" ],
@@ -321,7 +299,7 @@ RETURN JSON ONLY MATCHING THIS SCHEMA:
       parsedData = parseFallbackLocally(text, existingPeople, currentDate);
     }
 
-    // Name Normalization: always guarantee clean English / Latin string
+    // Name Normalization
     let rawPersonName =
       parsedData.person?.name ||
       parsedData.customerName ||
@@ -390,7 +368,7 @@ RETURN JSON ONLY MATCHING THIS SCHEMA:
       originalText: text,
     };
 
-    console.log(`🧠 [Voice API] Intent="${intent}", Person="${personName}", Amount=${amount}, Direction="${direction}", Reason="${reason}"`);
+    console.log(`⚡ [Voice API] Parsed: Intent="${intent}", Person="${personName}", Amount=${amount}, Direction="${direction}", Reason="${reason}"`);
 
     res.json(normalizedResult);
   } catch (error) { 
