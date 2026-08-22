@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Search, UserPlus, Users } from 'lucide-react-native';
+import { Search, UserPlus, Users, X } from 'lucide-react-native';
 import { CustomerCard } from '../components/CustomerCard';
 import { Party } from '../types';
 import { COLORS } from '../theme/colors';
@@ -49,10 +49,10 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Search Bar & Add Button */}
+      {/* Search Bar & Primary Add Customer CTA */}
       <View style={styles.topControlBar}>
         <View style={styles.searchBox}>
-          <Search size={15} color="#94a3b8" style={{ marginRight: 8 }} />
+          <Search size={16} color="#94a3b8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
             placeholder={t.searchPlaceholder}
@@ -60,15 +60,20 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity style={styles.addBtn} onPress={onAddParty} activeOpacity={0.85}>
-          <UserPlus size={16} color="#ffffff" />
+          <UserPlus size={16} color="#ffffff" strokeWidth={2.5} />
           <Text style={styles.addBtnText}>+ {t.customer}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Filter Tabs Horizontal Scroll */}
+      {/* Filter Tabs Horizontal Strip */}
       <View style={styles.filterContainer}>
         <ScrollView
           horizontal
@@ -76,9 +81,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
           contentContainerStyle={styles.filterStrip}
         >
           {[
-            { key: 'all', label: t.all },
-            { key: 'get', label: t.toReceive },
-            { key: 'give', label: t.toPay },
+            { key: 'all', label: `${t.all} (${parties.length})` },
+            { key: 'get', label: `${t.toReceive} (${parties.filter((p) => p.currentBalance > 0).length})` },
+            { key: 'give', label: `${t.toPay} (${parties.filter((p) => p.currentBalance < 0).length})` },
             { key: 'settled', label: t.settledZero },
           ].map((item) => (
             <TouchableOpacity
@@ -88,6 +93,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                 activeFilter === item.key && styles.filterPillActive,
               ]}
               onPress={() => setActiveFilter(item.key as any)}
+              activeOpacity={0.8}
             >
               <Text
                 style={[
@@ -102,17 +108,22 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
         </ScrollView>
       </View>
 
-      {/* List */}
+      {/* Customer List */}
       <ScrollView
         style={styles.listArea}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
+        showsVerticalScrollIndicator={false}
       >
         {filteredParties.length === 0 ? (
           <View style={styles.emptyState}>
-            <Users size={32} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>{t.noPartiesYet}</Text>
+            <View style={styles.emptyIconCircle}>
+              <Users size={28} color="#94a3b8" />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'No matching customer found' : t.noPartiesYet}
+            </Text>
             <Text style={styles.emptySub}>
-              {t.addCustomerSub}
+              {searchQuery ? 'Try typing a different name or number' : t.addCustomerSub}
             </Text>
           </View>
         ) : (
@@ -136,6 +147,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    backgroundColor: '#f8fafc',
     width: '100%',
   },
   topControlBar: {
@@ -151,9 +163,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
@@ -167,19 +179,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#0f172a',
     paddingHorizontal: 14,
-    height: 42,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 14,
   },
   addBtnText: {
     fontFamily: FONTS.headingBold,
     color: '#ffffff',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   filterContainer: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   filterStrip: {
     flexDirection: 'row',
@@ -188,8 +200,8 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -202,7 +214,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
     color: '#64748b',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   filterPillTextActive: {
     color: '#ffffff',
@@ -213,14 +225,22 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 50,
+  },
+  emptyIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   emptyTitle: {
     fontFamily: FONTS.headingBold,
     fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-    marginTop: 10,
+    fontWeight: '800',
+    color: '#334155',
   },
   emptySub: {
     fontFamily: FONTS.bodyRegular,
@@ -228,5 +248,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 4,
     textAlign: 'center',
+    maxWidth: 240,
   },
 });
