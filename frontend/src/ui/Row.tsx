@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { IconComponent } from './icon';
 import { Press } from './Press';
 
 interface RowProps {
@@ -91,7 +92,7 @@ export const Row: React.FC<RowProps> = ({
 
 /** Square tinted icon container that pairs with `Row`'s `leading` slot. */
 export const IconWell: React.FC<{
-  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon: IconComponent;
   tone?: 'neutral' | 'credit' | 'debit' | 'accent' | 'warning';
   size?: number;
 }> = ({ icon: Icon, tone = 'neutral', size = 40 }) => {

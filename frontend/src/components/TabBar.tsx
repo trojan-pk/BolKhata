@@ -26,13 +26,14 @@ import {
   SPACE,
   TYPE,
 } from '../theme/tokens';
+import { IconComponent } from '../ui/icon';
 
 export type TabKey = 'home' | 'customers' | 'cashbook' | 'reports' | 'settings';
 
 const TABS: {
   key: TabKey;
   label: string;
-  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon: IconComponent;
 }[] = [
   { key: 'home', label: COPY.nav.home, icon: Home },
   { key: 'customers', label: COPY.nav.customers, icon: Users },

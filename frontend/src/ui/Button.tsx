@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { CONTROL_HEIGHT, RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { IconComponent } from './icon';
 import { Press } from './Press';
 
 export type ButtonVariant =
@@ -35,7 +36,7 @@ interface ButtonProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   /** Lucide icon component, e.g. `Plus`. */
-  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon?: IconComponent;
   iconPosition?: 'left' | 'right';
   loading?: boolean;
   disabled?: boolean;
@@ -140,7 +141,7 @@ export const Button: React.FC<ButtonProps> = ({
 
 /** Square icon-only control. Used in headers and toolbars. */
 export const IconButton: React.FC<{
-  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon: IconComponent;
   onPress?: () => void;
   accessibilityLabel: string;
   variant?: 'surface' | 'ghost' | 'ink' | 'danger' | 'credit';
@@ -229,6 +230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: RADIUS.md,
+    width: '100%',
   },
   labelMd: {
     ...TYPE.label,

@@ -3,19 +3,20 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Button, ButtonVariant } from './Button';
+import { IconComponent } from './icon';
 
 /**
  * Empty states are the app's first impression, so they carry an explanation and
  * a way forward rather than just an apology.
  */
 export const EmptyState: React.FC<{
-  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon?: IconComponent;
   title: string;
   body?: string;
   actionLabel?: string;
   onAction?: () => void;
   actionVariant?: ButtonVariant;
-  actionIcon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  actionIcon?: IconComponent;
   /** `compact` fits inside a card; `full` fills a screen. */
   size?: 'compact' | 'full';
   style?: StyleProp<ViewStyle>;

@@ -79,6 +79,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const capturingRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
+   * Mirrors `captureMode` for the press handlers. A hold released within a frame
+   * or two of the long-press firing would otherwise read the pre-update state,
+   * miss the stop, and leave recording running until the 30s timeout.
+   */
+  const captureModeRef = useRef<'hold' | 'tap' | null>(null);
+  /**
    * The 30s auto-stop timer must call the *current* stop handler, not the one
    * captured when recording began — otherwise it closes over a stale party list.
    */
@@ -128,6 +134,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const abortCapture = useCallback(
     (message?: string) => {
       capturingRef.current = false;
+      captureModeRef.current = null;
       setOrbState('idle');
       setCaptureMode(null);
       if (sessionTimerRef.current) {
@@ -146,6 +153,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       try {
         capturingRef.current = true;
+        captureModeRef.current = mode;
         setCaptureMode(mode);
         setOrbState('recording');
 
@@ -232,6 +240,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
 
     setCaptureMode(null);
+    captureModeRef.current = null;
     setOrbState('processing');
 
     try {
@@ -307,14 +316,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const handlePressOut = () => {
     // Only a hold-capture ends on release; tap-capture waits for a second tap.
-    if (capturingRef.current && captureMode === 'hold') stopCaptureAndParse();
+    if (capturingRef.current && captureModeRef.current === 'hold') {
+      stopCaptureAndParse();
+    }
   };
 
   const handlePress = () => {
     if (orbState === 'processing') return;
     if (!capturingRef.current) {
       startCapture('tap');
-    } else if (captureMode === 'tap') {
+    } else if (captureModeRef.current === 'tap') {
       stopCaptureAndParse();
     }
   };
