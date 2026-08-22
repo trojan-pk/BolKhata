@@ -8,9 +8,9 @@ import {
   Animated,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import {
-  Mic,
   ArrowUpRight,
   ArrowDownLeft,
   TrendingUp,
@@ -25,6 +25,7 @@ import { Party, Transaction } from '../types';
 import { getTranslation, LanguageCode } from '../i18n/translations';
 import { ApiService } from '../services/api';
 import { VoiceLogo } from '../components/VoiceLogo';
+import { GoogleVoiceOrb } from '../components/GoogleVoiceOrb';
 
 interface HomeScreenProps {
   parties: Party[];
@@ -56,6 +57,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onVoiceResultParsed,
 }) => {
   const t = getTranslation(language);
+  const { width: windowWidth } = useWindowDimensions();
+  const screenWidth = windowWidth > 0 ? windowWidth : 390;
+  const buttonSize = Math.min(Math.round(screenWidth * 0.70), 250);
+  const innerCircleSize = Math.round(buttonSize * 0.84);
+  const logoSize = Math.max(Math.round(buttonSize * 0.44), 68);
 
   // Rotating example prompts for voice recording
   const samplePrompts = [
@@ -82,6 +88,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
   const pressStartTimeRef = useRef<number>(0);
   const isCapturingRef = useRef<boolean>(false);
+  const maxSessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (maxSessionTimeoutRef.current) {
+        clearTimeout(maxSessionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -137,6 +152,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // --- Start Audio Recording ---
   const startAudioCapture = async () => {
     try {
+      if (maxSessionTimeoutRef.current) {
+        clearTimeout(maxSessionTimeoutRef.current);
+      }
+
+      // Max 30-Second Voice Session Limit
+      maxSessionTimeoutRef.current = setTimeout(() => {
+        if (isCapturingRef.current) {
+          stopAudioCaptureAndProcess();
+        }
+      }, 30000);
+
       isCapturingRef.current = true;
       setIsRecording(true);
 
@@ -193,6 +219,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // --- Stop Audio Recording & Send to Parser ---
   const stopAudioCaptureAndProcess = async () => {
+    if (maxSessionTimeoutRef.current) {
+      clearTimeout(maxSessionTimeoutRef.current);
+      maxSessionTimeoutRef.current = null;
+    }
     if (!isCapturingRef.current) return;
     isCapturingRef.current = false;
     setIsRecording(false);
@@ -279,9 +309,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
-  // --- Dual Gesture Handlers ---
-  const handlePressIn = () => {
-    pressStartTimeRef.current = Date.now();
+  // --- Intentional Touch & Hold Handlers ---
+  const handleLongPress = () => {
     if (!isRecording && !isProcessing) {
       setRecordMode('hold');
       startAudioCapture();
@@ -289,20 +318,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handlePressOut = () => {
-    const pressDuration = Date.now() - pressStartTimeRef.current;
-    if (isRecording) {
-      if (pressDuration >= 450) {
-        // User held down and now released -> Stop and process
-        stopAudioCaptureAndProcess();
-      } else {
-        // User tapped briefly -> Switch to tap-to-toggle mode (stays recording)
-        setRecordMode('tap');
-      }
+    if (isRecording && recordMode === 'hold') {
+      // User held and now released -> Stop and process
+      stopAudioCaptureAndProcess();
     }
   };
 
   const handleButtonTap = () => {
-    if (isRecording && recordMode === 'tap') {
+    if (isProcessing) return;
+
+    if (!isRecording) {
+      // Intentional 1-tap to start recording in toggle mode
+      setRecordMode('tap');
+      startAudioCapture();
+    } else if (recordMode === 'tap') {
       // Second tap while in tap mode -> Stop and process
       stopAudioCaptureAndProcess();
     }
@@ -355,66 +384,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           {isRecording
             ? recordMode === 'tap'
-              ? '🔴 Speak naturally • Tap button when finished'
-              : '🔴 Release button when you are done speaking'
+              ? 'Speak naturally • Tap button when finished'
+              : 'Release button when you are done speaking'
             : isProcessing
-            ? '⚡ Transcribing & parsing with AI...'
+            ? 'Transcribing & parsing with AI...'
             : samplePrompts[promptIndex]}
         </Text>
 
-        {/* GIANT CENTERPIECE MIC BUTTON WITH ANIMATED VOICE EQUALIZER */}
-        <View style={styles.micButtonContainer}>
-          {/* Animated Outer Pulse Ring 2 */}
-          {isRecording && (
-            <Animated.View
-              style={[
-                styles.pulseRingOuter,
-                { transform: [{ scale: pulseAnim2 }] },
-              ]}
-            />
-          )}
-
-          {/* Animated Inner Pulse Ring 1 */}
-          {isRecording && (
-            <Animated.View
-              style={[
-                styles.pulseRingInner,
-                { transform: [{ scale: pulseAnim1 }] },
-              ]}
-            />
-          )}
-
-          {/* Giant Interactive Mic Circle */}
-          <TouchableOpacity
-            style={[
-              styles.giantMicButton,
-              isRecording && styles.giantMicButtonRecording,
-              isProcessing && styles.giantMicButtonProcessing,
-            ]}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            onPress={handleButtonTap}
-            activeOpacity={0.9}
-            delayPressIn={40}
-          >
-            <View
-              style={[
-                styles.giantMicInnerCircle,
-                isRecording && styles.giantMicInnerRecording,
-              ]}
-            >
-              {isProcessing ? (
-                <ActivityIndicator color="#ffffff" size="large" />
-              ) : isRecording ? (
-                /* Animated 5-Bar Equalizer Waveform Logo */
-                <VoiceLogo size={42} color="#ffffff" animated={true} />
-              ) : (
-                /* Clean Mic Icon */
-                <Mic size={40} color="#ffffff" strokeWidth={2.4} />
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
+        {/* GOOGLE RECOGNITION STYLE VOICE ORB: ZERO SOLID FILL, ROTATING GRADIENT RING */}
+        <GoogleVoiceOrb
+          size={buttonSize}
+          isRecording={isRecording}
+          isProcessing={isProcessing}
+          onPress={handleButtonTap}
+          onLongPress={handleLongPress}
+          onPressOut={handlePressOut}
+        />
 
         <Text style={styles.holdInstructionHint}>
           {isRecording
@@ -599,65 +584,54 @@ const styles = StyleSheet.create({
   },
   /* Giant Mic Button & Concentric Pulse Rings */
   micButtonContainer: {
-    width: 164,
-    height: 164,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-    marginVertical: 4,
+    marginVertical: 10,
+    backgroundColor: 'transparent',
   },
   pulseRingOuter: {
     position: 'absolute',
-    width: 156,
-    height: 156,
-    borderRadius: 78,
-    backgroundColor: 'rgba(99, 102, 241, 0.18)',
+    borderRadius: 9999,
+    backgroundColor: 'rgba(99, 102, 241, 0.16)',
   },
   pulseRingInner: {
     position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(99, 102, 241, 0.28)',
+    borderRadius: 9999,
+    backgroundColor: 'rgba(99, 102, 241, 0.26)',
   },
   giantMicButton: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
+    borderRadius: 9999,
     backgroundColor: '#0f172a',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 12,
+    overflow: 'hidden',
   },
   giantMicButtonRecording: {
     backgroundColor: '#1e1b4b',
-    shadowColor: '#4338ca',
     borderColor: '#6366f1',
-    borderWidth: 2,
+    borderWidth: 3,
   },
   giantMicButtonProcessing: {
     backgroundColor: '#6366f1',
   },
   giantMicInnerCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    borderRadius: 9999,
     backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#334155',
   },
   giantMicInnerRecording: {
     backgroundColor: '#312e81',
+    borderColor: '#6366f1',
   },
   holdInstructionHint: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#94a3b8',
-    marginTop: 14,
+    marginTop: 18,
     textAlign: 'center',
     letterSpacing: 0.2,
   },

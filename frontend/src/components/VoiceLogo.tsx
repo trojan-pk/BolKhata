@@ -5,12 +5,14 @@ interface VoiceLogoProps {
   size?: number; // overall height in px (e.g. 56)
   color?: string; // bar color (default #000000)
   animated?: boolean;
+  multiColor?: boolean; // Google 4-color theme (Blue, Red, Yellow, Green)
 }
 
 export const VoiceLogo: React.FC<VoiceLogoProps> = ({
   size = 56,
   color = '#000000',
   animated = false,
+  multiColor = false,
 }) => {
   // Symmetrical voice wave animators (Center -> Mid -> Outer)
   const scaleCenter = useRef(new Animated.Value(1)).current;
@@ -83,80 +85,88 @@ export const VoiceLogo: React.FC<VoiceLogoProps> = ({
   }, [animated]);
 
   // Exact geometric proportions matching the logo image:
-  const barWidth = Math.max(3.5, size * 0.11);
-  const gap = Math.max(3.5, size * 0.09);
-  const borderRadius = 2; // Exact subtle radius from reference image
+  const effectiveSize = Math.max(Number(size) || 56, 32);
+  const barWidth = Math.max(4, Math.round(effectiveSize * 0.11));
+  const gap = Math.max(4, Math.round(effectiveSize * 0.09));
+  const borderRadius = 2.5; // Exact subtle radius from reference image
 
-  const outerHeight = size * 1.0;  // 100%
-  const midHeight = size * 0.72;   // 72%
-  const centerHeight = size * 0.38; // 38%
+  const outerHeight = Math.round(effectiveSize * 1.0);  // 100%
+  const midHeight = Math.round(effectiveSize * 0.72);   // 72%
+  const centerHeight = Math.round(effectiveSize * 0.38); // 38%
+
+  // Google Colors Palette
+  const colorOuterLeft = multiColor ? '#4285F4' : color;
+  const colorMidLeft = multiColor ? '#EA4335' : color;
+  const colorCenter = multiColor ? '#FBBC05' : color;
+  const colorMidRight = multiColor ? '#34A853' : color;
+  const colorOuterRight = multiColor ? '#4285F4' : color;
 
   return (
-    <View style={[styles.container, { height: size, gap }]}>
-      {/* 1. Outer Left Bar (Tallest) */}
+    <View style={[styles.container, { height: effectiveSize, gap }]}>
+      {/* 1. Outer Left Bar (Tallest - Google Blue) */}
       <Animated.View
         style={[
           styles.bar,
           {
             width: barWidth,
             height: outerHeight,
-            backgroundColor: color,
+            backgroundColor: colorOuterLeft,
             borderRadius,
             transform: [{ scaleY: scaleOuterLeft }],
           },
         ]}
       />
 
-      {/* 2. Mid Left Bar (Medium) */}
+      {/* 2. Mid Left Bar (Medium - Google Red) */}
       <Animated.View
         style={[
           styles.bar,
           {
             width: barWidth,
             height: midHeight,
-            backgroundColor: color,
+            backgroundColor: colorMidLeft,
             borderRadius,
             transform: [{ scaleY: scaleMidLeft }],
           },
         ]}
       />
 
-      {/* 3. Center Bar (Short / Pulse core) */}
+      {/* 3. Center Bar (Short / Pulse core - Google Yellow) */}
       <Animated.View
         style={[
           styles.bar,
           {
             width: barWidth,
             height: centerHeight,
-            backgroundColor: color,
+            backgroundColor: colorCenter,
             borderRadius,
             transform: [{ scaleY: scaleCenter }],
           },
         ]}
       />
 
-      {/* 4. Mid Right Bar (Medium) */}
+      {/* 4. Mid Right Bar (Medium - Google Green) */}
       <Animated.View
         style={[
           styles.bar,
           {
             width: barWidth,
             height: midHeight,
-            backgroundColor: color,
+            backgroundColor: colorMidRight,
             borderRadius,
             transform: [{ scaleY: scaleMidRight }],
           },
         ]}
       />
 
-      {/* 5. Outer Right Bar (Tallest) */}
+      {/* 5. Outer Right Bar (Tallest - Google Blue) */}
       <Animated.View
         style={[
           styles.bar,
           {
             width: barWidth,
             height: outerHeight,
-            backgroundColor: color,
+            backgroundColor: colorOuterRight,
             borderRadius,
             transform: [{ scaleY: scaleOuterRight }],
           },
