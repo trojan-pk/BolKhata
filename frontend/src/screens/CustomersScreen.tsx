@@ -1,253 +1,281 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
-import { Search, UserPlus, Users, X } from 'lucide-react-native';
-import { CustomerCard } from '../components/CustomerCard';
-import { Party } from '../types';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Search, SearchX, UserPlus, Users, X } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { FONTS } from '../theme/typography';
-import { getTranslation, LanguageCode } from '../i18n/translations';
+import { COPY } from '../i18n/copy';
+import { GUTTER, SPACE, TYPE } from '../theme/tokens';
+import { Party } from '../types';
+import { CustomerCard } from '../components/CustomerCard';
+import {
+  Card,
+  Chip,
+  EmptyState,
+  Enter,
+  IconButton,
+  Money,
+  ScreenHeader,
+  SkeletonRow,
+  TextField,
+  VDivider,
+} from '../ui';
 
-interface CustomersScreenProps {
+type Filter = 'all' | 'collect' | 'pay' | 'settled';
+
+/**
+ * The full customer list. Sorted by how much is outstanding rather than
+ * alphabetically — the person who owes the most is the one you came here to
+ * find. Settled accounts sink to the bottom, alphabetised.
+ */
+export const CustomersScreen: React.FC<{
   parties: Party[];
   currency?: string;
-  language?: LanguageCode;
+  loading?: boolean;
   onSelectParty: (party: Party) => void;
   onAddParty: () => void;
-}
-
-export const CustomersScreen: React.FC<CustomersScreenProps> = ({
+  initialFilter?: Filter;
+}> = ({
   parties,
   currency = 'Rs',
-  language = 'en',
+  loading = false,
   onSelectParty,
   onAddParty,
+  initialFilter = 'all',
 }) => {
-  const t = getTranslation(language);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'get' | 'give' | 'settled'>('all');
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>(initialFilter);
 
-  const filteredParties = parties.filter((party) => {
-    const matchesSearch =
-      party.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      party.mobile.includes(searchQuery);
+  const counts = useMemo(
+    () => ({
+      all: parties.length,
+      collect: parties.filter((p) => p.currentBalance > 0).length,
+      pay: parties.filter((p) => p.currentBalance < 0).length,
+      settled: parties.filter((p) => p.currentBalance === 0).length,
+    }),
+    [parties]
+  );
 
-    if (!matchesSearch) return false;
+  const totals = useMemo(
+    () =>
+      parties.reduce(
+        (acc, party) => {
+          if (party.currentBalance > 0) acc.collect += party.currentBalance;
+          if (party.currentBalance < 0) acc.pay += Math.abs(party.currentBalance);
+          return acc;
+        },
+        { collect: 0, pay: 0 }
+      ),
+    [parties]
+  );
 
-    if (activeFilter === 'get') return party.currentBalance > 0;
-    if (activeFilter === 'give') return party.currentBalance < 0;
-    if (activeFilter === 'settled') return party.currentBalance === 0;
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const digits = needle.replace(/\D/g, '');
 
-    return true;
-  });
+    return parties
+      .filter((party) => {
+        if (needle) {
+          const matchesName = party.name.toLowerCase().includes(needle);
+          const matchesPhone =
+            digits.length > 0 &&
+            (party.mobile || '').replace(/\D/g, '').includes(digits);
+          if (!matchesName && !matchesPhone) return false;
+        }
+        if (filter === 'collect') return party.currentBalance > 0;
+        if (filter === 'pay') return party.currentBalance < 0;
+        if (filter === 'settled') return party.currentBalance === 0;
+        return true;
+      })
+      .sort((a, b) => {
+        const aOpen = a.currentBalance !== 0;
+        const bOpen = b.currentBalance !== 0;
+        if (aOpen !== bOpen) return aOpen ? -1 : 1;
+        if (aOpen) return Math.abs(b.currentBalance) - Math.abs(a.currentBalance);
+        return a.name.localeCompare(b.name);
+      });
+  }, [parties, query, filter]);
+
+  const searching = query.trim().length > 0;
 
   return (
-    <View style={styles.container}>
-      {/* Search Bar & Primary Add Customer CTA */}
-      <View style={styles.topControlBar}>
-        <View style={styles.searchBox}>
-          <Search size={16} color="#94a3b8" style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t.searchPlaceholder}
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+    <View style={styles.screen}>
+      <ScreenHeader
+        title={COPY.customers.title}
+        subtitle={
+          parties.length > 0
+            ? COPY.customers.countLabel(parties.length)
+            : COPY.customers.subtitle
+        }
+        action={
+          <IconButton
+            icon={UserPlus}
+            onPress={onAddParty}
+            accessibilityLabel={COPY.customers.add}
+            variant="ink"
+            size={40}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <X size={16} color="#94a3b8" />
-            </TouchableOpacity>
-          )}
-        </View>
+        }
+      />
 
-        <TouchableOpacity style={styles.addBtn} onPress={onAddParty} activeOpacity={0.85}>
-          <UserPlus size={16} color="#ffffff" strokeWidth={2.5} />
-          <Text style={styles.addBtnText}>+ {t.customer}</Text>
-        </TouchableOpacity>
+      <View style={styles.controls}>
+        <TextField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={COPY.customers.searchPlaceholder}
+          icon={Search}
+          autoCorrect={false}
+          returnKeyType="search"
+          accessory={
+            searching ? (
+              <IconButton
+                icon={X}
+                onPress={() => setQuery('')}
+                accessibilityLabel="Clear search"
+                variant="ghost"
+                size={28}
+              />
+            ) : undefined
+          }
+        />
       </View>
 
-      {/* Filter Tabs Horizontal Strip */}
-      <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterStrip}
-        >
-          {[
-            { key: 'all', label: `${t.all} (${parties.length})` },
-            { key: 'get', label: `${t.toReceive} (${parties.filter((p) => p.currentBalance > 0).length})` },
-            { key: 'give', label: `${t.toPay} (${parties.filter((p) => p.currentBalance < 0).length})` },
-            { key: 'settled', label: t.settledZero },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.key}
-              style={[
-                styles.filterPill,
-                activeFilter === item.key && styles.filterPillActive,
-              ]}
-              onPress={() => setActiveFilter(item.key as any)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  activeFilter === item.key && styles.filterPillTextActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Customer List */}
       <ScrollView
-        style={styles.listArea}
-        contentContainerStyle={{ paddingBottom: 110 }}
-        showsVerticalScrollIndicator={false}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+        style={styles.filterRail}
       >
-        {filteredParties.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconCircle}>
-              <Users size={28} color="#94a3b8" />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No matching customer found' : t.noPartiesYet}
-            </Text>
-            <Text style={styles.emptySub}>
-              {searchQuery ? 'Try typing a different name or number' : t.addCustomerSub}
-            </Text>
-          </View>
-        ) : (
-          filteredParties.map((party) => (
-            <CustomerCard
-              key={party.id}
-              party={party}
+        <Chip
+          label={COPY.customers.filterAll}
+          count={counts.all}
+          selected={filter === 'all'}
+          onPress={() => setFilter('all')}
+        />
+        <Chip
+          label={COPY.customers.filterCollect}
+          count={counts.collect}
+          selected={filter === 'collect'}
+          onPress={() => setFilter('collect')}
+        />
+        <Chip
+          label={COPY.customers.filterPay}
+          count={counts.pay}
+          selected={filter === 'pay'}
+          onPress={() => setFilter('pay')}
+        />
+        <Chip
+          label={COPY.customers.filterSettled}
+          count={counts.settled}
+          selected={filter === 'settled'}
+          onPress={() => setFilter('settled')}
+        />
+      </ScrollView>
+
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {parties.length > 0 ? (
+          <Card padding={0} style={styles.totals}>
+            <TotalCell
+              label={COPY.ledger.toCollect}
+              value={totals.collect}
               currency={currency}
-              language={language}
-              onPress={() => onSelectParty(party)}
+              tone="credit"
             />
-          ))
+            <VDivider height={34} />
+            <TotalCell
+              label={COPY.ledger.toPay}
+              value={totals.pay}
+              currency={currency}
+              tone="debit"
+            />
+          </Card>
+        ) : null}
+
+        {loading ? (
+          <SkeletonRow count={5} />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={searching ? SearchX : Users}
+            title={searching ? COPY.customers.noMatchTitle : COPY.customers.emptyTitle}
+            body={searching ? COPY.customers.noMatchBody : COPY.customers.emptyBody}
+            actionLabel={searching ? undefined : COPY.customers.add}
+            actionIcon={UserPlus}
+            onAction={onAddParty}
+            size="full"
+          />
+        ) : (
+          <View style={styles.rows}>
+            {visible.map((party, index) => (
+              <Enter key={party.id} index={index}>
+                <CustomerCard
+                  party={party}
+                  currency={currency}
+                  onPress={() => onSelectParty(party)}
+                />
+              </Enter>
+            ))}
+          </View>
         )}
       </ScrollView>
     </View>
   );
 };
 
+const TotalCell: React.FC<{
+  label: string;
+  value: number;
+  currency: string;
+  tone: 'credit' | 'debit';
+}> = ({ label, value, currency, tone }) => (
+  <View style={styles.totalCell}>
+    <Text style={[TYPE.caption, styles.totalLabel]}>{label}</Text>
+    <Money value={value} currency={currency} size="title3" tone={tone} />
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: '#f8fafc',
-    width: '100%',
-  },
-  topControlBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-    width: '100%',
-  },
-  searchBox: {
-    flex: 1,
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  searchInput: {
-    fontFamily: FONTS.bodyRegular,
-    flex: 1,
-    color: '#0f172a',
-    fontSize: 13,
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 14,
-  },
-  addBtnText: {
-    fontFamily: FONTS.headingBold,
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  filterContainer: {
-    marginBottom: 12,
-  },
-  filterStrip: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  filterPill: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  filterPillActive: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a',
-  },
-  filterPillText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '700',
-  },
-  filterPillTextActive: {
-    color: '#ffffff',
-  },
-  listArea: {
+  screen: {
     flex: 1,
   },
-  emptyState: {
+  controls: {
+    paddingHorizontal: GUTTER,
+  },
+  filterRail: {
+    flexGrow: 0,
+    marginTop: SPACE.md,
+  },
+  filters: {
+    flexDirection: 'row',
+    gap: SPACE.sm,
+    paddingHorizontal: GUTTER,
+    paddingVertical: SPACE.xs,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: GUTTER,
+    paddingTop: SPACE.md,
+    paddingBottom: 132,
+    gap: SPACE.lg,
+  },
+  totals: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 50,
+    paddingVertical: SPACE.md,
   },
-  emptyIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
+  totalCell: {
+    flex: 1,
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 3,
   },
-  emptyTitle: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#334155',
+  totalLabel: {
+    color: COLORS.textMuted,
   },
-  emptySub: {
-    fontFamily: FONTS.bodyRegular,
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 4,
-    textAlign: 'center',
-    maxWidth: 240,
+  rows: {
+    gap: SPACE.sm,
   },
 });

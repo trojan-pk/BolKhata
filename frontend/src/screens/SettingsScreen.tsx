@@ -1,305 +1,301 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
-import { Store, Globe, Server } from 'lucide-react-native';
-import { StoreProfile } from '../types';
+  Globe,
+  Info,
+  Server,
+  Store,
+  Trash2,
+} from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { getTranslation, LanguageCode } from '../i18n/translations';
+import { COPY } from '../i18n/copy';
+import { GUTTER, SPACE, TYPE } from '../theme/tokens';
+import { StoreProfile } from '../types';
+import { LanguageCode } from '../i18n/translations';
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  Divider,
+  GroupLabel,
+  IconWell,
+  Row,
+  ScreenHeader,
+  TextField,
+  useFeedback,
+} from '../ui';
 
-interface SettingsScreenProps {
+const CURRENCIES = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
+
+const VOICE_LANGUAGES: { key: LanguageCode; label: string }[] = [
+  { key: 'roman_ur', label: 'Roman Urdu' },
+  { key: 'ur', label: 'اردو' },
+  { key: 'en', label: 'English' },
+  { key: 'hi', label: 'हिंदी' },
+  { key: 'bn', label: 'বাংলা' },
+  { key: 'es', label: 'Español' },
+];
+
+const APP_VERSION = '1.0.0';
+
+/**
+ * Grouped settings. Edits are held locally and committed with an explicit Save
+ * that only appears once something has actually changed — no silent writes, no
+ * button that does nothing.
+ */
+export const SettingsScreen: React.FC<{
   storeProfile: StoreProfile;
   onUpdateStore: (updated: StoreProfile) => void;
   onOpenApiConfig: () => void;
-}
+  onEraseAll: () => void;
+}> = ({ storeProfile, onUpdateStore, onOpenApiConfig, onEraseAll }) => {
+  const { toast, confirm } = useFeedback();
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  storeProfile,
-  onUpdateStore,
-  onOpenApiConfig,
-}) => {
   const [name, setName] = useState(storeProfile.name);
   const [ownerName, setOwnerName] = useState(storeProfile.ownerName);
   const [mobile, setMobile] = useState(storeProfile.mobile);
   const [currency, setCurrency] = useState(storeProfile.currency);
   const [language, setLanguage] = useState<LanguageCode>(storeProfile.language);
 
-  const t = getTranslation(language);
+  // Keep the form in step when the profile changes elsewhere (e.g. after erase).
+  useEffect(() => {
+    setName(storeProfile.name);
+    setOwnerName(storeProfile.ownerName);
+    setMobile(storeProfile.mobile);
+    setCurrency(storeProfile.currency);
+    setLanguage(storeProfile.language);
+  }, [storeProfile]);
 
-  const currencies = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
-  const languages: { key: LanguageCode; label: string }[] = [
-    { key: 'roman_ur', label: 'Roman Urdu (رومن اردو)' },
-    { key: 'ur', label: 'اردو (Urdu)' },
-    { key: 'en', label: 'English' },
-    { key: 'hi', label: 'हिंदी (Hindi)' },
-    { key: 'bn', label: 'বাংলা (Bengali)' },
-    { key: 'es', label: 'Español' },
-  ];
+  const dirty = useMemo(
+    () =>
+      name !== storeProfile.name ||
+      ownerName !== storeProfile.ownerName ||
+      mobile !== storeProfile.mobile ||
+      currency !== storeProfile.currency ||
+      language !== storeProfile.language,
+    [name, ownerName, mobile, currency, language, storeProfile]
+  );
 
-  const handleSave = () => {
+  const save = () => {
     onUpdateStore({
       ...storeProfile,
-      name,
-      ownerName,
-      mobile,
+      name: name.trim() || 'My Store',
+      ownerName: ownerName.trim(),
+      mobile: mobile.trim(),
       currency,
       language,
     });
-    alert(t.settingsSavedSuccess);
+    toast(COPY.settings.savedToast);
+  };
+
+  const eraseAll = async () => {
+    const ok = await confirm({
+      title: COPY.settings.clearConfirmTitle,
+      body: COPY.settings.clearConfirmBody,
+      confirmLabel: COPY.settings.clearConfirmCta,
+      destructive: true,
+    });
+    if (ok) onEraseAll();
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 100 }}
-    >
-      <Text style={styles.pageTitle}>{t.shopSettings}</Text>
+    <View style={styles.screen}>
+      <ScreenHeader
+        title={COPY.settings.title}
+        subtitle={COPY.settings.subtitle}
+        action={
+          dirty ? (
+            <Button label={COPY.common.save} variant="primary" size="sm" onPress={save} />
+          ) : undefined
+        }
+      />
 
-      {/* Express API Connector Banner */}
-      <TouchableOpacity
-        style={styles.apiBanner}
-        onPress={onOpenApiConfig}
-        activeOpacity={0.85}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Server size={20} color={COLORS.primary} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.apiTitle}>{t.apiConnection}</Text>
-          <Text style={styles.apiSub} numberOfLines={1}>
-            Status:{' '}
-            {storeProfile.isBackendConnected
-              ? t.apiConnected
-              : t.apiOffline}
-          </Text>
-        </View>
-        <Text style={styles.configureText}>{t.configure}</Text>
-      </TouchableOpacity>
-
-      {/* Store Profile Section */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Store size={18} color={COLORS.primary} />
-          <Text style={styles.sectionTitle}>{t.storeDetails}</Text>
-        </View>
-
-        <Text style={styles.label}>{t.shopName}</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Bismillah General Store"
-        />
-
-        <Text style={styles.label}>{t.ownerName}</Text>
-        <TextInput
-          style={styles.input}
-          value={ownerName}
-          onChangeText={setOwnerName}
-          placeholder="e.g. Muhammad Salman"
-        />
-
-        <Text style={styles.label}>{t.contactNumber}</Text>
-        <TextInput
-          style={styles.input}
-          value={mobile}
-          onChangeText={setMobile}
-          placeholder="e.g. +92 300 1234567"
-          keyboardType="phone-pad"
-        />
-      </View>
-
-      {/* Regional & Language Settings */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Globe size={18} color={COLORS.primary} />
-          <Text style={styles.sectionTitle}>{t.currencyAndRegional}</Text>
+        {/* ----------------------------------------------------------- shop -- */}
+        <View>
+          <GroupLabel text={COPY.settings.shopSection} />
+          <Card padding={SPACE.lg} style={styles.formCard}>
+            <TextField
+              label={COPY.settings.shopName}
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Bismillah General Store"
+              icon={Store}
+            />
+            <TextField
+              label={COPY.settings.ownerName}
+              value={ownerName}
+              onChangeText={setOwnerName}
+              placeholder="e.g. Muhammad Salman"
+            />
+            <TextField
+              label={COPY.settings.phone}
+              value={mobile}
+              onChangeText={setMobile}
+              placeholder="e.g. 0300 1234567"
+              keyboardType="phone-pad"
+            />
+          </Card>
         </View>
 
-        {/* Currency Picker */}
-        <Text style={styles.label}>{t.shopCurrency}</Text>
-        <View style={styles.chipsRow}>
-          {currencies.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[
-                styles.chip,
-                currency === c && styles.chipActive,
-              ]}
-              onPress={() => setCurrency(c)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  currency === c && styles.chipTextActive,
-                ]}
-              >
-                {c}
+        {/* ---------------------------------------------------- preferences -- */}
+        <View>
+          <GroupLabel text={COPY.settings.prefsSection} />
+          <Card padding={SPACE.lg} style={styles.formCard}>
+            <View>
+              <Text style={[TYPE.label, styles.fieldLabel]}>
+                {COPY.settings.currency}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <View style={styles.chipGrid}>
+                {CURRENCIES.map((code) => (
+                  <Chip
+                    key={code}
+                    label={code}
+                    size="sm"
+                    selected={currency === code}
+                    onPress={() => setCurrency(code)}
+                  />
+                ))}
+              </View>
+            </View>
 
-        {/* Language Picker */}
-        <Text style={[styles.label, { marginTop: 12 }]}>{t.appLanguage}</Text>
-        <View style={styles.chipsRow}>
-          {languages.map((l) => (
-            <TouchableOpacity
-              key={l.key}
-              style={[
-                styles.chip,
-                language === l.key && styles.chipActive,
-              ]}
-              onPress={() => setLanguage(l.key)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  language === l.key && styles.chipTextActive,
-                ]}
-              >
-                {l.label}
+            <Divider />
+
+            <View>
+              <View style={styles.labelRow}>
+                <Globe size={15} color={COLORS.textSecondary} strokeWidth={2} />
+                <Text style={[TYPE.label, styles.fieldLabel]}>
+                  {COPY.settings.voiceLanguage}
+                </Text>
+              </View>
+              <Text style={[TYPE.caption, styles.fieldHint]}>
+                {COPY.settings.voiceLanguageHint}
               </Text>
-            </TouchableOpacity>
-          ))}
+              <View style={styles.chipGrid}>
+                {VOICE_LANGUAGES.map((item) => (
+                  <Chip
+                    key={item.key}
+                    label={item.label}
+                    size="sm"
+                    selected={language === item.key}
+                    onPress={() => setLanguage(item.key)}
+                  />
+                ))}
+              </View>
+            </View>
+          </Card>
         </View>
-      </View>
 
-      <TouchableOpacity
-        style={styles.saveBtn}
-        onPress={handleSave}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.saveBtnText}>{t.saveSettings}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* ----------------------------------------------------------- data -- */}
+        <View>
+          <GroupLabel text={COPY.settings.dataSection} />
+          <Card padding={0}>
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={onOpenApiConfig}
+              leading={<IconWell icon={Server} tone="accent" />}
+              title={COPY.settings.connection}
+              subtitle={
+                storeProfile.isBackendConnected
+                  ? COPY.settings.connectionOn
+                  : COPY.settings.connectionOff
+              }
+              trailing={
+                <Badge
+                  label={storeProfile.isBackendConnected ? 'On' : 'Off'}
+                  tone={storeProfile.isBackendConnected ? 'credit' : 'neutral'}
+                />
+              }
+              chevron
+            />
+            <Divider inset={SPACE.lg} />
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={eraseAll}
+              leading={<IconWell icon={Trash2} tone="debit" />}
+              title={COPY.settings.clearData}
+              subtitle={COPY.settings.clearDataHint}
+            />
+          </Card>
+        </View>
+
+        {/* ---------------------------------------------------------- about -- */}
+        <View>
+          <GroupLabel text={COPY.settings.aboutSection} />
+          <Card padding={0}>
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              leading={<IconWell icon={Info} tone="neutral" />}
+              title={COPY.brand}
+              subtitle="Voice-first ledger for shopkeepers"
+              trailing={
+                <Text style={[TYPE.caption, { color: COLORS.textMuted }]}>
+                  {COPY.settings.version} {APP_VERSION}
+                </Text>
+              }
+            />
+          </Card>
+        </View>
+
+        {dirty ? (
+          <Button
+            label={COPY.common.save}
+            variant="primary"
+            size="lg"
+            onPress={save}
+            fullWidth
+          />
+        ) : null}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    width: '100%',
   },
-  pageTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 12,
+  scroll: {
+    flex: 1,
   },
-  apiBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#ffffff',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 2,
-    elevation: 1,
+  content: {
+    paddingHorizontal: GUTTER,
+    paddingBottom: 132,
+    gap: SPACE.xxl,
   },
-  apiTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
+  formCard: {
+    gap: SPACE.lg,
   },
-  apiSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  configureText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  sectionCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  label: {
-    fontSize: 11,
+  fieldLabel: {
+    color: COLORS.textSecondary,
     fontWeight: '600',
-    color: '#475569',
-    marginBottom: 4,
   },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#0f172a',
-    marginBottom: 10,
-  },
-  chipsRow: {
+  labelRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 6,
   },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  fieldHint: {
+    color: COLORS.textFaint,
+    marginTop: 3,
   },
-  chipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACE.sm,
+    marginTop: SPACE.sm,
   },
-  chipText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  saveBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
+  listRow: {
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md + 2,
   },
 });

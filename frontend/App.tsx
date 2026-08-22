@@ -1,902 +1,689 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  StatusBar,
-  ScrollView,
-  Animated,
-  Easing,
-  Platform,
-} from 'react-native';
-import {
-  Home,
-  Users,
-  Wallet,
-  PieChart,
-  Settings as SettingsIcon,
-  Mic,
-} from 'lucide-react-native';
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
-// Services, Theme & Typography
-import { StorageService } from './src/services/storage';
+import { StorageService, INITIAL_STORE_PROFILE } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
-import { FONTS, injectWebGoogleFonts } from './src/theme/typography';
-import { getBottomInset } from './src/utils/safeArea';
+import { injectWebGoogleFonts } from './src/theme/typography';
+import { MAX_CONTENT_WIDTH, MOTION } from './src/theme/tokens';
+import { COPY } from './src/i18n/copy';
 import {
-  Party,
-  Transaction,
   CashbookEntry,
-  StoreProfile,
-  TransactionType,
-  PaymentMode,
+  Party,
   PartyType,
+  PaymentMode,
+  StoreProfile,
+  Transaction,
+  TransactionType,
 } from './src/types';
 
-// Components
+import { FeedbackProvider, useFeedback } from './src/ui';
 import { SplashScreen } from './src/components/SplashScreen';
-import { Header } from './src/components/Header';
-import { DashboardCards } from './src/components/DashboardCards';
-import { CustomerCard } from './src/components/CustomerCard';
-import { TransactionModal } from './src/components/TransactionModal';
-import { EditTransactionModal } from './src/components/EditTransactionModal';
+import { AppBar } from './src/components/AppBar';
+import { TabBar, TabKey } from './src/components/TabBar';
 import { AddCustomerModal } from './src/components/AddCustomerModal';
-import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
 import { ApiConfigModal } from './src/components/ApiConfigModal';
-import { CustomerDetailModal } from './src/components/CustomerDetailModal';
+import { CustomerLedgerPanel } from './src/components/CustomerLedgerPanel';
+import { EditTransactionModal } from './src/components/EditTransactionModal';
+import { TransactionModal } from './src/components/TransactionModal';
+import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
 
-// Screens
 import { HomeScreen } from './src/screens/HomeScreen';
 import { CustomersScreen } from './src/screens/CustomersScreen';
 import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { getTranslation } from './src/i18n/translations';
+import { todayISO } from './src/utils/format';
+
+/* -------------------------------------------------------------- ledger math -- */
+
+/**
+ * A party's balance is always the sum of its entries — including the opening
+ * balance, which is stored as a real transaction rather than a loose number.
+ * That's what lets edits and deletions recompute correctly instead of silently
+ * dropping whatever the account started with.
+ */
+function balanceFor(transactions: Transaction[], partyId: string): number {
+  return transactions
+    .filter((t) => t.partyId === partyId)
+    .reduce((sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount), 0);
+}
+
+function withRecalculatedBalance(
+  parties: Party[],
+  transactions: Transaction[],
+  partyId: string,
+  date = todayISO()
+): Party[] {
+  const balance = balanceFor(transactions, partyId);
+  return parties.map((p) =>
+    p.id === partyId ? { ...p, currentBalance: balance, lastUpdated: date } : p
+  );
+}
+
+const uid = (prefix: string) =>
+  `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
+/* --------------------------------------------------------------------- root -- */
 
 export default function App() {
-  const bottomInset = getBottomInset();
+  useEffect(() => {
+    injectWebGoogleFonts();
+  }, []);
 
-  const [showSplashOverlay, setShowSplashOverlay] = useState(true);
-  const splashOpacity = useRef(new Animated.Value(1)).current;
-  const dashboardFade = useRef(new Animated.Value(0)).current;
-  const dashboardTranslateY = useRef(new Animated.Value(10)).current;
+  return (
+    <SafeAreaProvider>
+      <FeedbackProvider>
+        <BolKhata />
+      </FeedbackProvider>
+    </SafeAreaProvider>
+  );
+}
 
-  const [storeProfile, setStoreProfile] = useState<StoreProfile>({
-    name: 'Bismillah General Store',
-    ownerName: 'Muhammad Salman',
-    mobile: '+92 300 1234567',
-    currency: 'Rs',
-    language: 'en',
-    expressApiUrl: 'http://localhost:3000',
-    isBackendConnected: true,
-  });
+function BolKhata() {
+  const insets = useSafeAreaInsets();
+  const { toast } = useFeedback();
 
-  const t = getTranslation(storeProfile.language);
-
+  /* ------------------------------------------------------------------ data -- */
+  const [storeProfile, setStoreProfile] = useState<StoreProfile>(
+    INITIAL_STORE_PROFILE
+  );
   const [parties, setParties] = useState<Party[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cashbook, setCashbook] = useState<CashbookEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Navigation & Modals
-  const [activeTab, setActiveTab] = useState<'home' | 'customers' | 'cashbook' | 'reports' | 'settings'>('home');
+  /* --------------------------------------------------------------- routing -- */
+  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [customerFilter, setCustomerFilter] =
+    useState<'all' | 'collect' | 'pay' | 'settled'>('all');
+
+  /* ---------------------------------------------------------------- modals -- */
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
-
-  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
-  const [voiceInitialResult, setVoiceInitialResult] = useState<any | null>(null);
-  const [addCustomerModalVisible, setAddCustomerModalVisible] = useState(false);
-  const [apiConfigModalVisible, setApiConfigModalVisible] = useState(false);
-  const [selectedEditTxn, setSelectedEditTxn] = useState<Transaction | null>(null);
-
-  // Animated Pill Navigation Dock Indicator
-  const tabAnimIndex = useRef(new Animated.Value(0)).current;
-
-  const [txnModalState, setTxnModalState] = useState<{
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceResult, setVoiceResult] = useState<unknown>(null);
+  const [addPartyOpen, setAddPartyOpen] = useState(false);
+  const [apiConfigOpen, setApiConfigOpen] = useState(false);
+  const [composer, setComposer] = useState<{
     visible: boolean;
     type: TransactionType;
     partyId?: string;
     partyName?: string;
-  }>({
-    visible: false,
-    type: 'gave',
-  });
+  }>({ visible: false, type: 'gave' });
 
-  // Load initial data & Web Google Fonts
+  /* ---------------------------------------------------------------- splash -- */
+  const [splashVisible, setSplashVisible] = useState(true);
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const appOpacity = useRef(new Animated.Value(0)).current;
+  const appShift = useRef(new Animated.Value(10)).current;
+
   useEffect(() => {
-    injectWebGoogleFonts();
-
-    async function loadData() {
-      const profile = await StorageService.getStoreProfile();
-      const loadedParties = await StorageService.getParties();
-      const loadedTxns = await StorageService.getTransactions();
-      const loadedCashbook = await StorageService.getCashbook();
-
+    (async () => {
+      const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
+        StorageService.getStoreProfile(),
+        StorageService.getParties(),
+        StorageService.getTransactions(),
+        StorageService.getCashbook(),
+      ]);
       setStoreProfile(profile);
       setParties(loadedParties);
       setTransactions(loadedTxns);
-      setCashbook(loadedCashbook);
-    }
-    loadData();
+      setCashbook(loadedCash);
+      setLoading(false);
+    })();
   }, []);
 
-  // Update Animated Pill Dock position on tab change
-  const animateTabTo = (index: number) => {
-    Animated.spring(tabAnimIndex, {
-      toValue: index,
-      friction: 8,
-      tension: 65,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const handleTabChange = (tab: 'home' | 'customers' | 'cashbook' | 'reports' | 'settings', index: number) => {
-    setActiveTab(tab);
-    animateTabTo(index);
-  };
-
-  // Smooth Cross-Fade Transition from Splash to Dashboard
-  const handleSplashFinish = () => {
+  const finishSplash = useCallback(() => {
     Animated.parallel([
       Animated.timing(splashOpacity, {
         toValue: 0,
-        duration: 450,
+        duration: MOTION.slow,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(dashboardFade, {
+      Animated.timing(appOpacity, {
         toValue: 1,
-        duration: 450,
+        duration: MOTION.slow,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(dashboardTranslateY, {
+      Animated.timing(appShift, {
         toValue: 0,
-        duration: 450,
+        duration: MOTION.slow,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setShowSplashOverlay(false);
-    });
-  };
+    ]).start(() => setSplashVisible(false));
+  }, [splashOpacity, appOpacity, appShift]);
 
-  // Save changes helper
-  const updatePartiesAndTxns = async (newParties: Party[], newTxns: Transaction[]) => {
-    setParties(newParties);
-    setTransactions(newTxns);
-    await StorageService.saveParties(newParties);
-    await StorageService.saveTransactions(newTxns);
-  };
+  /* ------------------------------------------------------------ persistence -- */
 
-  // Add new customer / supplier
-  const handleAddPartySubmit = async (data: {
-    name: string;
-    mobile: string;
-    address: string;
-    type: PartyType;
-    openingBalance: number;
-  }) => {
-    const newParty: Party = {
-      id: 'p_' + Date.now(),
-      name: data.name,
-      mobile: data.mobile,
-      address: data.address,
-      type: data.type,
-      currentBalance: data.openingBalance,
-      lastUpdated: new Date().toISOString().split('T')[0],
-      avatarColor: data.type === 'customer' ? COLORS.primary : '#7c3aed',
-    };
+  const commit = useCallback(
+    async (nextParties: Party[], nextTxns: Transaction[]) => {
+      setParties(nextParties);
+      setTransactions(nextTxns);
+      await Promise.all([
+        StorageService.saveParties(nextParties),
+        StorageService.saveTransactions(nextTxns),
+      ]);
+    },
+    []
+  );
 
-    const updated = [newParty, ...parties];
-    await updatePartiesAndTxns(updated, transactions);
-  };
+  const commitCashbook = useCallback(async (next: CashbookEntry[]) => {
+    setCashbook(next);
+    await StorageService.saveCashbook(next);
+  }, []);
 
-  // Delete Customer and associated ledger transactions
-  const handleDeleteParty = async (partyId: string) => {
-    const updatedParties = parties.filter((p) => p.id !== partyId);
-    const updatedTxns = transactions.filter((t) => t.partyId !== partyId);
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
-    if (selectedParty && selectedParty.id === partyId) {
-      setSelectedParty(null);
-    }
-  };
+  const saveProfile = useCallback(async (next: StoreProfile) => {
+    setStoreProfile(next);
+    await StorageService.saveStoreProfile(next);
+  }, []);
 
-  // Record Gave / Got transaction
-  const handleAddTransactionSubmit = async (data: {
-    amount: number;
-    note: string;
-    paymentMode: PaymentMode;
-  }) => {
-    if (!txnModalState.partyId) return;
+  /* -------------------------------------------------------------- mutations -- */
 
-    const targetParty = parties.find((p) => p.id === txnModalState.partyId);
-    if (!targetParty) return;
+  const addParty = useCallback(
+    async (data: {
+      name: string;
+      mobile: string;
+      address: string;
+      type: PartyType;
+      openingBalance: number;
+    }) => {
+      const party: Party = {
+        id: uid('p'),
+        name: data.name,
+        mobile: data.mobile,
+        address: data.address,
+        type: data.type,
+        currentBalance: 0,
+        lastUpdated: todayISO(),
+      };
 
-    const isGave = txnModalState.type === 'gave';
+      let nextTxns = transactions;
 
-    const newTxn: Transaction = {
-      id: 't_' + Date.now(),
-      partyId: targetParty.id,
-      partyName: targetParty.name,
-      type: txnModalState.type,
-      amount: data.amount,
-      date: new Date().toISOString().split('T')[0],
-      note: data.note,
-      paymentMode: data.paymentMode,
-      createdAt: Date.now(),
-    };
+      // An opening balance is a real entry, so it survives later recalculation
+      // and shows up in the statement where it can be audited.
+      if (data.openingBalance !== 0) {
+        const opening: Transaction = {
+          id: uid('t'),
+          partyId: party.id,
+          partyName: party.name,
+          type: data.openingBalance > 0 ? 'gave' : 'got',
+          amount: Math.abs(data.openingBalance),
+          date: todayISO(),
+          note: 'Opening balance',
+          paymentMode: 'cash',
+          source: 'manual',
+          createdAt: Date.now(),
+        };
+        nextTxns = [opening, ...transactions];
+        party.currentBalance = data.openingBalance;
+      }
 
-    const balanceChange = isGave ? data.amount : -data.amount;
-    const updatedBalance = targetParty.currentBalance + balanceChange;
+      await commit([party, ...parties], nextTxns);
+      toast(COPY.party.createdToast(party.name));
+    },
+    [parties, transactions, commit, toast]
+  );
 
-    const updatedParties = parties.map((p) =>
-      p.id === targetParty.id
-        ? {
-            ...p,
-            currentBalance: updatedBalance,
-            lastUpdated: new Date().toISOString().split('T')[0],
-          }
-        : p
-    );
+  const deleteParty = useCallback(
+    async (partyId: string) => {
+      await commit(
+        parties.filter((p) => p.id !== partyId),
+        transactions.filter((t) => t.partyId !== partyId)
+      );
+      if (selectedParty?.id === partyId) setSelectedParty(null);
+    },
+    [parties, transactions, commit, selectedParty]
+  );
 
-    const updatedTxns = [newTxn, ...transactions];
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
+  const addTransaction = useCallback(
+    async (data: { amount: number; note: string; paymentMode: PaymentMode }) => {
+      const party = parties.find((p) => p.id === composer.partyId);
+      if (!party) return;
 
-    if (selectedParty && selectedParty.id === targetParty.id) {
-      setSelectedParty({
-        ...targetParty,
-        currentBalance: updatedBalance,
-        lastUpdated: new Date().toISOString().split('T')[0],
-      });
-    }
-  };
+      const txn: Transaction = {
+        id: uid('t'),
+        partyId: party.id,
+        partyName: party.name,
+        type: composer.type,
+        amount: data.amount,
+        date: todayISO(),
+        note: data.note,
+        paymentMode: data.paymentMode,
+        source: 'manual',
+        createdAt: Date.now(),
+      };
 
-  // Settle Up Customer Balance
-  const handleSettleUpParty = async () => {
-    if (!selectedParty) return;
+      const nextTxns = [txn, ...transactions];
+      const nextParties = withRecalculatedBalance(parties, nextTxns, party.id);
+      await commit(nextParties, nextTxns);
 
-    const currentBal = selectedParty.currentBalance;
-    if (currentBal === 0) return;
+      if (selectedParty?.id === party.id) {
+        setSelectedParty(nextParties.find((p) => p.id === party.id) || null);
+      }
+      toast(COPY.txn.savedToast);
+    },
+    [parties, transactions, composer, commit, selectedParty, toast]
+  );
 
-    const settlementType: TransactionType = currentBal > 0 ? 'got' : 'gave';
-    const amount = Math.abs(currentBal);
+  const settleParty = useCallback(async () => {
+    if (!selectedParty || selectedParty.currentBalance === 0) return;
 
-    const settlementTxn: Transaction = {
-      id: 't_' + Date.now(),
+    const settlement: Transaction = {
+      id: uid('t'),
       partyId: selectedParty.id,
       partyName: selectedParty.name,
-      type: settlementType,
-      amount: amount,
-      date: new Date().toISOString().split('T')[0],
-      note: t.allSettled || 'Full balance settled',
+      type: selectedParty.currentBalance > 0 ? 'got' : 'gave',
+      amount: Math.abs(selectedParty.currentBalance),
+      date: todayISO(),
+      note: 'Balance settled',
       paymentMode: 'cash',
+      source: 'manual',
       createdAt: Date.now(),
     };
 
-    const updatedParties = parties.map((p) =>
-      p.id === selectedParty.id
-        ? {
-            ...p,
-            currentBalance: 0,
-            lastUpdated: new Date().toISOString().split('T')[0],
-          }
-        : p
-    );
+    const nextTxns = [settlement, ...transactions];
+    const nextParties = withRecalculatedBalance(parties, nextTxns, selectedParty.id);
+    await commit(nextParties, nextTxns);
+    setSelectedParty(nextParties.find((p) => p.id === selectedParty.id) || null);
+  }, [selectedParty, parties, transactions, commit]);
 
-    const updatedTxns = [settlementTxn, ...transactions];
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
+  /**
+   * Applies a voice-parsed entry, creating the customer if the name is new.
+   *
+   * The previous implementation mutated the `parties` state array in place with
+   * `unshift`, so a newly spoken customer often failed to appear until the next
+   * unrelated render. Everything here is derived immutably instead.
+   */
+  const applyVoiceEntry = useCallback(
+    async (result: {
+      partyName: string;
+      amount: number;
+      type: TransactionType;
+      note: string;
+      date?: string;
+    }) => {
+      const needle = result.partyName.trim().toLowerCase();
+      const existing = parties.find((p) => {
+        const name = p.name.toLowerCase();
+        return name.includes(needle) || needle.includes(name);
+      });
 
-    setSelectedParty({
-      ...selectedParty,
-      currentBalance: 0,
-      lastUpdated: new Date().toISOString().split('T')[0],
-    });
-  };
+      const party: Party =
+        existing ??
+        {
+          id: uid('p'),
+          name: result.partyName.trim(),
+          mobile: '',
+          address: '',
+          type: 'customer',
+          currentBalance: 0,
+          lastUpdated: result.date || todayISO(),
+        };
 
-  // Voice assistant parsed entry callback
-  const handleVoiceParseResult = async (result: {
-    partyName: string;
-    amount: number;
-    type: TransactionType;
-    note: string;
-    date?: string;
-  }) => {
-    let matchedParty = parties.find(
-      (p) => p.name.toLowerCase().includes(result.partyName.toLowerCase()) ||
-             result.partyName.toLowerCase().includes(p.name.toLowerCase())
-    );
-
-    if (!matchedParty) {
-      matchedParty = {
-        id: 'p_' + Date.now(),
-        name: result.partyName,
-        mobile: '',
-        address: '',
-        type: 'customer',
-        currentBalance: 0,
-        lastUpdated: result.date || new Date().toISOString().split('T')[0],
-        avatarColor: COLORS.primary,
+      const txn: Transaction = {
+        id: uid('t'),
+        partyId: party.id,
+        partyName: party.name,
+        type: result.type,
+        amount: result.amount,
+        date: result.date || todayISO(),
+        note:
+          result.note ||
+          (result.type === 'gave' ? COPY.ledger.creditGiven : COPY.ledger.paymentReceived),
+        paymentMode: 'cash',
+        source: 'voice',
+        createdAt: Date.now(),
       };
-      parties.unshift(matchedParty);
+
+      const nextTxns = [txn, ...transactions];
+      const baseParties = existing ? parties : [party, ...parties];
+      const nextParties = withRecalculatedBalance(
+        baseParties,
+        nextTxns,
+        party.id,
+        result.date || todayISO()
+      );
+
+      await commit(nextParties, nextTxns);
+      toast(
+        existing
+          ? COPY.txn.savedToast
+          : `${party.name} added · ${COPY.txn.savedToast.toLowerCase()}`
+      );
+    },
+    [parties, transactions, commit, toast]
+  );
+
+  const saveEditedTransaction = useCallback(
+    async (updated: Transaction) => {
+      const nextTxns = transactions.map((t) => (t.id === updated.id ? updated : t));
+      const nextParties = withRecalculatedBalance(parties, nextTxns, updated.partyId);
+      await commit(nextParties, nextTxns);
+
+      if (selectedParty?.id === updated.partyId) {
+        setSelectedParty(nextParties.find((p) => p.id === updated.partyId) || null);
+      }
+    },
+    [transactions, parties, commit, selectedParty]
+  );
+
+  const deleteTransaction = useCallback(
+    async (txnId: string) => {
+      const target = transactions.find((t) => t.id === txnId);
+      if (!target) return;
+
+      const nextTxns = transactions.filter((t) => t.id !== txnId);
+      const nextParties = withRecalculatedBalance(parties, nextTxns, target.partyId);
+      await commit(nextParties, nextTxns);
+
+      if (selectedParty?.id === target.partyId) {
+        setSelectedParty(nextParties.find((p) => p.id === target.partyId) || null);
+      }
+    },
+    [transactions, parties, commit, selectedParty]
+  );
+
+  const addCashEntry = useCallback(
+    async (entry: {
+      type: 'in' | 'out';
+      amount: number;
+      category: string;
+      note: string;
+    }) => {
+      const record: CashbookEntry = {
+        id: uid('c'),
+        ...entry,
+        date: todayISO(),
+        createdAt: Date.now(),
+      };
+      await commitCashbook([record, ...cashbook]);
+    },
+    [cashbook, commitCashbook]
+  );
+
+  const deleteCashEntry = useCallback(
+    async (id: string) => {
+      await commitCashbook(cashbook.filter((c) => c.id !== id));
+    },
+    [cashbook, commitCashbook]
+  );
+
+  const eraseAll = useCallback(async () => {
+    await StorageService.clearAll();
+    setParties([]);
+    setTransactions([]);
+    setCashbook([]);
+    setStoreProfile(INITIAL_STORE_PROFILE);
+    setSelectedParty(null);
+    setEditingTxn(null);
+    toast('All data erased');
+  }, [toast]);
+
+  /* ----------------------------------------------------------------- totals -- */
+
+  const { toCollect, toPay } = useMemo(
+    () =>
+      parties.reduce(
+        (acc, party) => {
+          if (party.currentBalance > 0) acc.toCollect += party.currentBalance;
+          if (party.currentBalance < 0) acc.toPay += Math.abs(party.currentBalance);
+          return acc;
+        },
+        { toCollect: 0, toPay: 0 }
+      ),
+    [parties]
+  );
+
+  /* ------------------------------------------------------------------ views -- */
+
+  const goToCustomers = (filter: 'all' | 'collect' | 'pay' | 'settled') => {
+    setCustomerFilter(filter);
+    setActiveTab('customers');
+  };
+
+  const screen = () => {
+    switch (activeTab) {
+      case 'home':
+        return (
+          <HomeScreen
+            parties={parties}
+            transactions={transactions}
+            toCollect={toCollect}
+            toPay={toPay}
+            currency={storeProfile.currency}
+            loading={loading}
+            onOpenVoiceReview={() => setVoiceOpen(true)}
+            onViewAllCustomers={() => goToCustomers('all')}
+            onSelectTransaction={setEditingTxn}
+            onVoiceResultParsed={(result) => {
+              setVoiceResult(result);
+              setVoiceOpen(true);
+            }}
+          />
+        );
+      case 'customers':
+        return (
+          <CustomersScreen
+            key={customerFilter}
+            parties={parties}
+            currency={storeProfile.currency}
+            loading={loading}
+            initialFilter={customerFilter}
+            onSelectParty={setSelectedParty}
+            onAddParty={() => setAddPartyOpen(true)}
+          />
+        );
+      case 'cashbook':
+        return (
+          <CashbookScreen
+            entries={cashbook}
+            currency={storeProfile.currency}
+            onAddCashEntry={addCashEntry}
+            onDeleteCashEntry={deleteCashEntry}
+          />
+        );
+      case 'reports':
+        return (
+          <ReportsScreen
+            parties={parties}
+            currency={storeProfile.currency}
+            storeName={storeProfile.name}
+            onSelectParty={setSelectedParty}
+          />
+        );
+      case 'settings':
+        return (
+          <SettingsScreen
+            storeProfile={storeProfile}
+            onUpdateStore={saveProfile}
+            onOpenApiConfig={() => setApiConfigOpen(true)}
+            onEraseAll={eraseAll}
+          />
+        );
+      default:
+        return null;
     }
-
-    const isGave = result.type === 'gave';
-    const newTxn: Transaction = {
-      id: 't_' + Date.now(),
-      partyId: matchedParty.id,
-      partyName: matchedParty.name,
-      type: result.type,
-      amount: result.amount,
-      date: result.date || new Date().toISOString().split('T')[0],
-      note: result.note || (isGave ? 'Credit given (voice entry)' : 'Payment received (voice entry)'),
-      paymentMode: 'cash',
-      source: 'voice',
-      createdAt: Date.now(),
-    };
-
-    const updatedTxns = [newTxn, ...transactions];
-
-    // Compute balance dynamically from all transactions
-    const partyTxns = updatedTxns.filter((t) => t.partyId === matchedParty!.id);
-    const updatedBalance = partyTxns.reduce(
-      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
-      0
-    );
-
-    const updatedParties = parties.map((p) =>
-      p.id === matchedParty!.id
-        ? {
-            ...p,
-            currentBalance: updatedBalance,
-            lastUpdated: result.date || new Date().toISOString().split('T')[0],
-          }
-        : p
-    );
-
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
   };
-
-  // Save edited transaction and recalculate party balance
-  const handleSaveEditedTransaction = async (updatedTxn: Transaction) => {
-    const updatedTxns = transactions.map((t) =>
-      t.id === updatedTxn.id ? updatedTxn : t
-    );
-
-    const partyTxns = updatedTxns.filter((t) => t.partyId === updatedTxn.partyId);
-    const newBal = partyTxns.reduce(
-      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
-      0
-    );
-
-    const updatedParties = parties.map((p) =>
-      p.id === updatedTxn.partyId
-        ? {
-            ...p,
-            currentBalance: newBal,
-            lastUpdated: new Date().toISOString().split('T')[0],
-          }
-        : p
-    );
-
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
-
-    if (selectedParty && selectedParty.id === updatedTxn.partyId) {
-      setSelectedParty({
-        ...selectedParty,
-        currentBalance: newBal,
-        lastUpdated: new Date().toISOString().split('T')[0],
-      });
-    }
-  };
-
-  // Delete transaction and recalculate party balance
-  const handleDeleteTransaction = async (txnId: string) => {
-    const txnToDelete = transactions.find((t) => t.id === txnId);
-    if (!txnToDelete) return;
-
-    const updatedTxns = transactions.filter((t) => t.id !== txnId);
-
-    const partyTxns = updatedTxns.filter((t) => t.partyId === txnToDelete.partyId);
-    const newBal = partyTxns.reduce(
-      (sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount),
-      0
-    );
-
-    const updatedParties = parties.map((p) =>
-      p.id === txnToDelete.partyId
-        ? {
-            ...p,
-            currentBalance: newBal,
-            lastUpdated: new Date().toISOString().split('T')[0],
-          }
-        : p
-    );
-
-    await updatePartiesAndTxns(updatedParties, updatedTxns);
-
-    if (selectedParty && selectedParty.id === txnToDelete.partyId) {
-      setSelectedParty({
-        ...selectedParty,
-        currentBalance: newBal,
-        lastUpdated: new Date().toISOString().split('T')[0],
-      });
-    }
-  };
-
-  // Add Cashbook Entry
-  const handleAddCashbookEntry = async (entry: {
-    type: 'in' | 'out';
-    amount: number;
-    category: string;
-    note: string;
-  }) => {
-    const newEntry: CashbookEntry = {
-      id: 'c_' + Date.now(),
-      type: entry.type,
-      amount: entry.amount,
-      category: entry.category,
-      note: entry.note,
-      date: new Date().toISOString().split('T')[0],
-      createdAt: Date.now(),
-    };
-
-    const updated = [newEntry, ...cashbook];
-    setCashbook(updated);
-    await StorageService.saveCashbook(updated);
-  };
-
-  // Totals
-  const totalReceivable = parties
-    .filter((p) => p.currentBalance > 0)
-    .reduce((sum, p) => sum + p.currentBalance, 0);
-
-  const totalPayable = parties
-    .filter((p) => p.currentBalance < 0)
-    .reduce((sum, p) => sum + Math.abs(p.currentBalance), 0);
-
-  const todayCashIn = cashbook
-    .filter((c) => c.type === 'in')
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  const todayCashOut = cashbook
-    .filter((c) => c.type === 'out')
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  // Left position interpolation for sliding active pill indicator (5 items -> 0%, 20%, 40%, 60%, 80%)
-  const slidingPillLeft = tabAnimIndex.interpolate({
-    inputRange: [0, 1, 2, 3, 4],
-    outputRange: ['1%', '21%', '41%', '61%', '81%'],
-  });
 
   return (
-    <View style={styles.safeContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <View style={styles.root}>
+      <StatusBar style="dark" />
 
-      {/* Main Responsive Dashboard Container */}
       <Animated.View
         style={[
-          styles.appResponsiveWrapper,
+          styles.app,
           {
-            opacity: dashboardFade,
-            transform: [{ translateY: dashboardTranslateY }],
+            paddingTop: insets.top,
+            opacity: appOpacity,
+            transform: [{ translateY: appShift }],
           },
         ]}
       >
-        {/* Top App Header */}
-        <Header
-          storeProfile={storeProfile}
-          onOpenVoice={() => setVoiceModalVisible(true)}
-          onOpenApiConfig={() => setApiConfigModalVisible(true)}
-        />
+        <View style={styles.shell}>
+          <AppBar
+            storeProfile={storeProfile}
+            onOpenSettings={() => setActiveTab('settings')}
+          />
 
-        {/* Tab Screen Views */}
-        <View style={styles.mainContentArea}>
-          {activeTab === 'home' && (
-            <HomeScreen
-              parties={parties}
-              transactions={transactions}
-              totalReceivable={totalReceivable}
-              totalPayable={totalPayable}
-              currency={storeProfile.currency}
-              language={storeProfile.language}
-              onOpenVoice={() => setVoiceModalVisible(true)}
-              onViewAllCustomers={() => handleTabChange('customers', 1)}
-              onViewAllTransactions={() => handleTabChange('reports', 3)}
-              onSelectParty={(party) => setSelectedParty(party)}
-              onSelectTransaction={(txn) => {
-                setSelectedEditTxn(txn);
-              }}
-              onVoiceResultParsed={(res) => {
-                setVoiceInitialResult(res);
-                setVoiceModalVisible(true);
-              }}
-            />
-          )}
-
-          {activeTab === 'customers' && (
-            <CustomersScreen
-              parties={parties}
-              currency={storeProfile.currency}
-              language={storeProfile.language}
-              onSelectParty={(party) => setSelectedParty(party)}
-              onAddParty={() => setAddCustomerModalVisible(true)}
-            />
-          )}
-
-          {activeTab === 'cashbook' && (
-            <CashbookScreen
-              entries={cashbook}
-              currency={storeProfile.currency}
-              language={storeProfile.language}
-              onAddCashEntry={handleAddCashbookEntry}
-            />
-          )}
-
-          {activeTab === 'reports' && (
-            <ReportsScreen
-              parties={parties}
-              currency={storeProfile.currency}
-              language={storeProfile.language}
-              onSelectParty={(party) => setSelectedParty(party)}
-            />
-          )}
-
-          {activeTab === 'settings' && (
-            <SettingsScreen
-              storeProfile={storeProfile}
-              onUpdateStore={async (updated) => {
-                setStoreProfile(updated);
-                await StorageService.saveStoreProfile(updated);
-              }}
-              onOpenApiConfig={() => setApiConfigModalVisible(true)}
-            />
-          )}
+          {/* Keyed so each tab fades in rather than snapping into place. */}
+          <ScreenTransition key={activeTab} tabKey={activeTab}>
+            {screen()}
+          </ScreenTransition>
         </View>
 
-        {/* DARK THEMED FLOATING ANIMATED PILL NAVIGATION DOCK */}
-        <View style={[styles.pillDockWrapper, { bottom: bottomInset }]}>
-          <View style={styles.floatingPillDock}>
-            {/* Sliding Active Pill Background Highlight (Dark Charcoal) */}
-            <Animated.View
-              style={[
-                styles.slidingPillIndicator,
-                { left: slidingPillLeft },
-              ]}
-            />
-
-            {/* Tab 1: Home */}
-            <TouchableOpacity
-              style={styles.pillTabItem}
-              onPress={() => handleTabChange('home', 0)}
-              activeOpacity={0.8}
-            >
-              <Home
-                size={18}
-                color={activeTab === 'home' ? '#ffffff' : '#94a3b8'}
-              />
-              <Text
-                style={[
-                  styles.pillTabLabel,
-                  activeTab === 'home' && styles.pillTabLabelActive,
-                ]}
-              >
-                {t.home}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Tab 2: Customers */}
-            <TouchableOpacity
-              style={styles.pillTabItem}
-              onPress={() => handleTabChange('customers', 1)}
-              activeOpacity={0.8}
-            >
-              <Users
-                size={18}
-                color={activeTab === 'customers' ? '#ffffff' : '#94a3b8'}
-              />
-              <Text
-                style={[
-                  styles.pillTabLabel,
-                  activeTab === 'customers' && styles.pillTabLabelActive,
-                ]}
-              >
-                {t.customers}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Tab 3: Cashbook */}
-            <TouchableOpacity
-              style={styles.pillTabItem}
-              onPress={() => handleTabChange('cashbook', 2)}
-              activeOpacity={0.8}
-            >
-              <Wallet
-                size={18}
-                color={activeTab === 'cashbook' ? '#ffffff' : '#94a3b8'}
-              />
-              <Text
-                style={[
-                  styles.pillTabLabel,
-                  activeTab === 'cashbook' && styles.pillTabLabelActive,
-                ]}
-              >
-                {t.cashbook}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Tab 4: Reports */}
-            <TouchableOpacity
-              style={styles.pillTabItem}
-              onPress={() => handleTabChange('reports', 3)}
-              activeOpacity={0.8}
-            >
-              <PieChart
-                size={18}
-                color={activeTab === 'reports' ? '#ffffff' : '#94a3b8'}
-              />
-              <Text
-                style={[
-                  styles.pillTabLabel,
-                  activeTab === 'reports' && styles.pillTabLabelActive,
-                ]}
-              >
-                {t.reports}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Tab 5: Settings */}
-            <TouchableOpacity
-              style={styles.pillTabItem}
-              onPress={() => handleTabChange('settings', 4)}
-              activeOpacity={0.8}
-            >
-              <SettingsIcon
-                size={18}
-                color={activeTab === 'settings' ? '#ffffff' : '#94a3b8'}
-              />
-              <Text
-                style={[
-                  styles.pillTabLabel,
-                  activeTab === 'settings' && styles.pillTabLabelActive,
-                ]}
-              >
-                {t.settings}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TabBar active={activeTab} onChange={setActiveTab} />
       </Animated.View>
 
-      {/* Cross-Fading Splash Overlay */}
-      {showSplashOverlay && (
+      {/* -------------------------------------------------- splash overlay -- */}
+      {splashVisible ? (
         <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            styles.splashOverlayContainer,
-            { opacity: splashOpacity },
-          ]}
-          pointerEvents={showSplashOverlay ? 'auto' : 'none'}
+          style={[StyleSheet.absoluteFill, styles.splash, { opacity: splashOpacity }]}
+          pointerEvents="auto"
         >
           <SplashScreen
-            onFinish={handleSplashFinish}
+            onFinish={finishSplash}
             storeName={storeProfile.name}
             ownerName={storeProfile.ownerName}
           />
         </Animated.View>
-      )}
+      ) : null}
 
-      {/* Interactive Modals */}
-      <CustomerDetailModal
+      {/* --------------------------------------------------------- modals -- */}
+      <CustomerLedgerPanel
         visible={!!selectedParty}
         party={selectedParty}
         transactions={transactions}
         currency={storeProfile.currency}
-        language={storeProfile.language}
         storeName={storeProfile.name}
         onClose={() => setSelectedParty(null)}
-        onAddGave={() => {
-          if (selectedParty) {
-            setTxnModalState({
-              visible: true,
-              type: 'gave',
-              partyId: selectedParty.id,
-              partyName: selectedParty.name,
-            });
-          }
-        }}
-        onAddGot={() => {
-          if (selectedParty) {
-            setTxnModalState({
-              visible: true,
-              type: 'got',
-              partyId: selectedParty.id,
-              partyName: selectedParty.name,
-            });
-          }
-        }}
-        onSettleUp={handleSettleUpParty}
-        onEditTransaction={(txn) => setSelectedEditTxn(txn)}
-        onDeleteTransaction={handleDeleteTransaction}
-        onDeleteParty={handleDeleteParty}
-      />
-
-      {/* 1-Tap Transaction Editor Modal */}
-      <EditTransactionModal
-        visible={!!selectedEditTxn}
-        transaction={selectedEditTxn}
-        currency={storeProfile.currency}
-        language={storeProfile.language}
-        onClose={() => setSelectedEditTxn(null)}
-        onSave={handleSaveEditedTransaction}
-        onDelete={handleDeleteTransaction}
+        onAddGave={() =>
+          selectedParty &&
+          setComposer({
+            visible: true,
+            type: 'gave',
+            partyId: selectedParty.id,
+            partyName: selectedParty.name,
+          })
+        }
+        onAddGot={() =>
+          selectedParty &&
+          setComposer({
+            visible: true,
+            type: 'got',
+            partyId: selectedParty.id,
+            partyName: selectedParty.name,
+          })
+        }
+        onSettleUp={settleParty}
+        onEditTransaction={setEditingTxn}
+        onDeleteParty={deleteParty}
       />
 
       <TransactionModal
-        visible={txnModalState.visible}
-        type={txnModalState.type}
-        partyName={txnModalState.partyName || ''}
+        visible={composer.visible}
+        type={composer.type}
+        partyName={composer.partyName || ''}
         currency={storeProfile.currency}
-        language={storeProfile.language}
-        onClose={() => setTxnModalState({ ...txnModalState, visible: false })}
-        onSubmit={handleAddTransactionSubmit}
+        onClose={() => setComposer((prev) => ({ ...prev, visible: false }))}
+        onSubmit={addTransaction}
+      />
+
+      <EditTransactionModal
+        visible={!!editingTxn}
+        transaction={editingTxn}
+        currency={storeProfile.currency}
+        onClose={() => setEditingTxn(null)}
+        onSave={saveEditedTransaction}
+        onDelete={deleteTransaction}
       />
 
       <AddCustomerModal
-        visible={addCustomerModalVisible}
-        language={storeProfile.language}
-        onClose={() => setAddCustomerModalVisible(false)}
-        onSubmit={handleAddPartySubmit}
+        visible={addPartyOpen}
+        currency={storeProfile.currency}
+        onClose={() => setAddPartyOpen(false)}
+        onSubmit={addParty}
       />
 
-      {/* Voice Assistant Powered by Groq Whisper STT & Gemini */}
       <VoiceAssistantModal
-        visible={voiceModalVisible}
+        visible={voiceOpen}
         currency={storeProfile.currency}
         language={storeProfile.language}
         parties={parties}
-        initialResult={voiceInitialResult}
+        initialResult={voiceResult}
         onClose={() => {
-          setVoiceModalVisible(false);
-          setVoiceInitialResult(null);
+          setVoiceOpen(false);
+          setVoiceResult(null);
         }}
-        onParseVoice={handleVoiceParseResult}
+        onParseVoice={applyVoiceEntry}
       />
 
       <ApiConfigModal
-        visible={apiConfigModalVisible}
+        visible={apiConfigOpen}
         storeProfile={storeProfile}
-        onClose={() => setApiConfigModalVisible(false)}
-        onSaveConfig={async (url, isConnected) => {
-          const updated = {
+        onClose={() => setApiConfigOpen(false)}
+        onSaveConfig={(url, connected) =>
+          saveProfile({
             ...storeProfile,
             expressApiUrl: url,
-            isBackendConnected: isConnected,
-          };
-          setStoreProfile(updated);
-          await StorageService.saveStoreProfile(updated);
-        }}
+            isBackendConnected: connected,
+          })
+        }
       />
     </View>
   );
 }
 
+/** Cross-fades whichever screen is mounted when the tab changes. */
+const ScreenTransition: React.FC<{
+  tabKey: string;
+  children: React.ReactNode;
+}> = ({ tabKey, children }) => {
+  const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    fade.setValue(0);
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: MOTION.base,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [tabKey, fade]);
+
+  return (
+    <Animated.View style={[styles.screen, { opacity: fade }]}>
+      {children}
+    </Animated.View>
+  );
+};
+
 const styles = StyleSheet.create({
-  safeContainer: {
+  root: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+    backgroundColor: COLORS.paper,
   },
-  appResponsiveWrapper: {
+  app: {
+    flex: 1,
+  },
+  shell: {
     flex: 1,
     width: '100%',
-    maxWidth: 600,
+    maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: 'center',
-    backgroundColor: '#f8fafc',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#e2e8f0',
   },
-  splashOverlayContainer: {
+  screen: {
+    flex: 1,
+  },
+  splash: {
     zIndex: 999,
     backgroundColor: '#ffffff',
-  },
-  mainContentArea: {
-    flex: 1,
-  },
-  homeSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  homeSectionTitle: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  viewAllText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-
-  // Floating Dark Pill Dock Wrapper
-  pillDockWrapper: {
-    position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  floatingPillDock: {
-    width: '100%',
-    maxWidth: 520,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#0f172a',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 10,
-    paddingHorizontal: 4,
-  },
-  slidingPillIndicator: {
-    position: 'absolute',
-    width: '18%',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#334155',
-    top: 4,
-  },
-  pillTabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    zIndex: 2,
-  },
-  pillTabLabel: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  pillTabLabelActive: {
-    fontFamily: FONTS.bodyBold,
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-
-  // Central White Contrast Voice Mic Button inside Dark Pill Dock
-  centerMicPillButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#ffffff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  centerMicPillLabel: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 9,
-    color: '#ffffff',
-    marginTop: 2,
-    fontWeight: '700',
   },
 });

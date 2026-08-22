@@ -1,236 +1,66 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Phone, ChevronRight } from 'lucide-react-native';
+import { StyleSheet, Text } from 'react-native';
 import { COLORS } from '../theme/colors';
-import { FONTS } from '../theme/typography';
+import { COPY } from '../i18n/copy';
+import { TYPE } from '../theme/tokens';
 import { Party } from '../types';
-import { getTranslation, LanguageCode } from '../i18n/translations';
+import { Avatar, Money, Row } from '../ui';
+import { formatPhone, formatRelativeDate } from '../utils/format';
 
-interface CustomerCardProps {
+/**
+ * A customer as a list row.
+ *
+ * The balance label follows the convention shopkeepers already use: green for
+ * what you will get, red for what you will give. (The previous build had these
+ * inverted against the home screen — one convention now, everywhere.)
+ */
+export const CustomerCard: React.FC<{
   party: Party;
   currency?: string;
-  language?: LanguageCode;
   onPress: () => void;
-}
+}> = ({ party, currency = 'Rs', onPress }) => {
+  const balance = party.currentBalance;
+  const settled = balance === 0;
+  const toCollect = balance > 0;
 
-export const CustomerCard: React.FC<CustomerCardProps> = ({
-  party,
-  currency = 'Rs',
-  language = 'en',
-  onPress,
-}) => {
-  const t = getTranslation(language);
-  const isReceivable = party.currentBalance > 0;
-  const isPayable = party.currentBalance < 0;
-  const isSettled = party.currentBalance === 0;
+  const label = settled
+    ? COPY.common.settled
+    : toCollect
+    ? COPY.ledger.toCollect
+    : COPY.ledger.toPay;
 
-  const initials = party.name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .substring(0, 2)
-    .toUpperCase();
+  const subtitle = [
+    party.mobile ? formatPhone(party.mobile) : null,
+    formatRelativeDate(party.lastUpdated),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <TouchableOpacity
-      style={styles.cardContainer}
-      activeOpacity={0.75}
+    <Row
       onPress={onPress}
-    >
-      {/* Avatar */}
-      <View
-        style={[
-          styles.avatar,
-          { backgroundColor: party.avatarColor || '#0f172a' },
-        ]}
-      >
-        <Text style={styles.avatarText}>{initials || 'C'}</Text>
-      </View>
-
-      {/* Details */}
-      <View style={styles.infoCol}>
-        <View style={styles.nameRow}>
-          <Text style={styles.partyName} numberOfLines={1}>
-            {party.name}
-          </Text>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeBadgeText}>
-              {party.type === 'customer' ? t.customer : t.supplier}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.phoneRow}>
-          {party.mobile ? (
-            <>
-              <Phone size={11} color="#64748b" />
-              <Text style={styles.phoneText} numberOfLines={1}>
-                {party.mobile}
-              </Text>
-              <Text style={styles.dotSeparator}>•</Text>
-            </>
-          ) : null}
-          <Text style={styles.dateText}>{party.lastUpdated || 'Today'}</Text>
-        </View>
-      </View>
-
-      {/* Balance Tag */}
-      <View style={styles.balanceCol}>
-        {isReceivable && (
-          <View style={styles.badgeContainer}>
-            <Text style={styles.balanceStatusRed}>{t.youWillCollect}</Text>
-            <Text style={styles.balanceAmountRed} numberOfLines={1}>
-              {currency} {party.currentBalance.toLocaleString('en-IN')}
-            </Text>
-          </View>
-        )}
-
-        {isPayable && (
-          <View style={styles.badgeContainer}>
-            <Text style={styles.balanceStatusGreen}>{t.youWillPay}</Text>
-            <Text style={styles.balanceAmountGreen} numberOfLines={1}>
-              {currency} {Math.abs(party.currentBalance).toLocaleString('en-IN')}
-            </Text>
-          </View>
-        )}
-
-        {isSettled && (
-          <View style={styles.badgeContainer}>
-            <Text style={styles.settledStatus}>{t.allSettled}</Text>
-            <Text style={styles.settledAmount}>{currency} 0</Text>
-          </View>
-        )}
-      </View>
-
-      <ChevronRight size={16} color="#cbd5e1" style={{ marginLeft: 6 }} />
-    </TouchableOpacity>
+      chevron
+      accessibilityLabel={`${party.name}, ${label} ${currency} ${Math.abs(balance)}`}
+      leading={<Avatar name={party.name} size={42} />}
+      title={party.name}
+      subtitle={subtitle}
+      trailing={
+        <>
+          <Money
+            value={balance}
+            currency={currency}
+            size="body"
+            tone={settled ? 'muted' : toCollect ? 'credit' : 'debit'}
+          />
+          <Text style={[TYPE.caption, styles.label]}>{label}</Text>
+        </>
+      }
+    />
   );
 };
 
 const styles = StyleSheet.create({
-  cardContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
-    width: '100%',
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontFamily: FONTS.headingBold,
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  infoCol: {
-    flex: 1,
-    flexShrink: 1,
-    paddingRight: 6,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  partyName: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f172a',
-    flex: 1,
-  },
-  typeBadge: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  typeBadgeText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 9,
-    color: '#475569',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  phoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 3,
-  },
-  phoneText: {
-    fontFamily: FONTS.bodyRegular,
-    fontSize: 11,
-    color: '#64748b',
-  },
-  dotSeparator: {
-    fontSize: 11,
-    color: '#cbd5e1',
-  },
-  dateText: {
-    fontFamily: FONTS.bodyRegular,
-    fontSize: 11,
-    color: '#94a3b8',
-  },
-  balanceCol: {
-    alignItems: 'flex-end',
-  },
-  badgeContainer: {
-    alignItems: 'flex-end',
-  },
-  balanceStatusRed: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 10,
-    color: COLORS.gaveRed,
-    fontWeight: '700',
-  },
-  balanceAmountRed: {
-    fontFamily: FONTS.headingExtraBold,
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.gaveRed,
-  },
-  balanceStatusGreen: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 10,
-    color: COLORS.gotGreen,
-    fontWeight: '700',
-  },
-  balanceAmountGreen: {
-    fontFamily: FONTS.headingExtraBold,
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.gotGreen,
-  },
-  settledStatus: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  settledAmount: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#94a3b8',
+  label: {
+    color: COLORS.textFaint,
   },
 });

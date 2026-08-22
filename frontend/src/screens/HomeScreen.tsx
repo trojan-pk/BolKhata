@@ -1,200 +1,180 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   Animated,
   Platform,
-  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
   useWindowDimensions,
 } from 'react-native';
-import {
-  ArrowUpRight,
-  ArrowDownLeft,
-  TrendingUp,
-  TrendingDown,
-  ShoppingBag,
-  Coffee,
-  Sparkles,
-} from 'lucide-react-native';
+import { Sparkles } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { COLORS } from '../theme/colors';
+import { COPY } from '../i18n/copy';
+import { GUTTER, MOTION, SPACE, TYPE } from '../theme/tokens';
 import { Party, Transaction } from '../types';
-import { getTranslation, LanguageCode } from '../i18n/translations';
 import { ApiService } from '../services/api';
-import { VoiceLogo } from '../components/VoiceLogo';
-import { GoogleVoiceOrb } from '../components/GoogleVoiceOrb';
+import { BalanceCard } from '../components/BalanceCard';
+import { EntryRow } from '../components/EntryRow';
+import { OrbState, VoiceOrb } from '../components/VoiceOrb';
+import {
+  Badge,
+  EmptyState,
+  Enter,
+  SectionHeader,
+  SkeletonRow,
+  useFeedback,
+} from '../ui';
+import { todayISO } from '../utils/format';
+
+const MAX_SESSION_MS = 30000;
 
 interface HomeScreenProps {
   parties: Party[];
   transactions: Transaction[];
-  totalReceivable: number;
-  totalPayable: number;
+  toCollect: number;
+  toPay: number;
   currency: string;
-  language: LanguageCode;
-  onOpenVoice: () => void;
+  loading?: boolean;
+  onOpenVoiceReview: () => void;
   onViewAllCustomers: () => void;
-  onViewAllTransactions?: () => void;
-  onSelectParty: (party: Party) => void;
-  onSelectTransaction?: (txn: Transaction) => void;
-  onVoiceResultParsed?: (result: any) => void;
+  onSelectTransaction: (txn: Transaction) => void;
+  onVoiceResultParsed: (result: unknown) => void;
 }
 
+/**
+ * Home is a voice canvas first and a dashboard second: the orb sits where the
+ * thumb naturally lands, the net position anchors the screen beneath it, and
+ * recent entries confirm that what you said was actually recorded.
+ */
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   parties,
   transactions,
-  totalReceivable,
-  totalPayable,
+  toCollect,
+  toPay,
   currency,
-  language,
-  onOpenVoice,
+  loading = false,
+  onOpenVoiceReview,
   onViewAllCustomers,
-  onViewAllTransactions,
-  onSelectParty,
   onSelectTransaction,
   onVoiceResultParsed,
 }) => {
-  const t = getTranslation(language);
-  const { width: windowWidth } = useWindowDimensions();
-  const screenWidth = windowWidth > 0 ? windowWidth : 390;
-  const buttonSize = Math.min(Math.round(screenWidth * 0.70), 250);
-  const innerCircleSize = Math.round(buttonSize * 0.84);
-  const logoSize = Math.max(Math.round(buttonSize * 0.44), 68);
+  const { width } = useWindowDimensions();
+  const { toast } = useFeedback();
 
-  // Rotating example prompts for voice recording
-  const samplePrompts = [
-    '“Zain ko 2000 diye bike tube ke liye”',
-    '“Ali ko 400 diye mobile balance ke”',
-    '“Papa se 5000 liye”',
-    '“Hamza ne 2000 wapis kiye”',
-    '“Ali ka hisaab batao”',
-  ];
+  const orbSize = Math.min(Math.round((width || 390) * 0.56), 216);
 
+  const [orbState, setOrbState] = useState<OrbState>('idle');
+  const [captureMode, setCaptureMode] = useState<'hold' | 'tap' | null>(null);
   const [promptIndex, setPromptIndex] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [recordMode, setRecordMode] = useState<'idle' | 'hold' | 'tap'>('idle');
+  const [feedExpanded, setFeedExpanded] = useState(false);
+  const promptFade = useRef(new Animated.Value(1)).current;
 
-  // Animated pulse rings
-  const pulseAnim1 = useRef(new Animated.Value(1)).current;
-  const pulseAnim2 = useRef(new Animated.Value(1)).current;
-
-  // Recording references
-  const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const webAudioChunksRef = useRef<Blob[]>([]);
+  /* ------------------------------------------------------- capture refs -- */
+  const webRecorderRef = useRef<MediaRecorder | null>(null);
+  const webChunksRef = useRef<Blob[]>([]);
   const webStreamRef = useRef<MediaStream | null>(null);
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
-  const pressStartTimeRef = useRef<number>(0);
-  const isCapturingRef = useRef<boolean>(false);
-  const maxSessionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const capturingRef = useRef(false);
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The 30s auto-stop timer must call the *current* stop handler, not the one
+   * captured when recording began — otherwise it closes over a stale party list.
+   */
+  const stopRef = useRef<() => void>(() => {});
 
+  /* --------------------------------------------------- rotating examples -- */
   useEffect(() => {
-    return () => {
-      if (maxSessionTimeoutRef.current) {
-        clearTimeout(maxSessionTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
+    if (orbState !== 'idle') return;
     const interval = setInterval(() => {
-      if (!isRecording && !isProcessing) {
-        setPromptIndex((prev) => (prev + 1) % samplePrompts.length);
-      }
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [isRecording, isProcessing]);
-
-  // Pulse animation loop when recording
-  useEffect(() => {
-    let animation: Animated.CompositeAnimation | null = null;
-    if (isRecording) {
-      animation = Animated.loop(
-        Animated.parallel([
-          Animated.sequence([
-            Animated.timing(pulseAnim1, {
-              toValue: 1.28,
-              duration: 550,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim1, {
-              toValue: 1.0,
-              duration: 550,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.timing(pulseAnim2, {
-              toValue: 1.5,
-              duration: 550,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim2, {
-              toValue: 1.0,
-              duration: 550,
-              useNativeDriver: true,
-            }),
-          ]),
-        ])
+      Animated.sequence([
+        Animated.timing(promptFade, {
+          toValue: 0,
+          duration: MOTION.fast,
+          useNativeDriver: true,
+        }),
+        Animated.timing(promptFade, {
+          toValue: 1,
+          duration: MOTION.base,
+          delay: 60,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      setTimeout(
+        () => setPromptIndex((prev) => (prev + 1) % COPY.home.examples.length),
+        MOTION.fast
       );
-      animation.start();
-    } else {
-      pulseAnim1.setValue(1);
-      pulseAnim2.setValue(1);
+    }, 4200);
+    return () => clearInterval(interval);
+  }, [orbState, promptFade]);
+
+  useEffect(
+    () => () => {
+      if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
+    },
+    []
+  );
+
+  /* ------------------------------------------------------------- capture -- */
+
+  const releaseWebStream = () => {
+    if (webStreamRef.current) {
+      webStreamRef.current.getTracks().forEach((track) => track.stop());
+      webStreamRef.current = null;
     }
-    return () => {
-      if (animation) animation.stop();
-    };
-  }, [isRecording]);
+  };
 
-  // --- Start Audio Recording ---
-  const startAudioCapture = async () => {
-    try {
-      if (maxSessionTimeoutRef.current) {
-        clearTimeout(maxSessionTimeoutRef.current);
+  const abortCapture = useCallback(
+    (message?: string) => {
+      capturingRef.current = false;
+      setOrbState('idle');
+      setCaptureMode(null);
+      if (sessionTimerRef.current) {
+        clearTimeout(sessionTimerRef.current);
+        sessionTimerRef.current = null;
       }
+      releaseWebStream();
+      if (message) toast(message, 'error');
+    },
+    [toast]
+  );
 
-      // Max 30-Second Voice Session Limit
-      maxSessionTimeoutRef.current = setTimeout(() => {
-        if (isCapturingRef.current) {
-          stopAudioCaptureAndProcess();
-        }
-      }, 30000);
+  const startCapture = useCallback(
+    async (mode: 'hold' | 'tap') => {
+      if (capturingRef.current) return;
 
-      isCapturingRef.current = true;
-      setIsRecording(true);
+      try {
+        capturingRef.current = true;
+        setCaptureMode(mode);
+        setOrbState('recording');
 
-      if (Platform.OS === 'web') {
-        let stream: MediaStream | null = null;
-        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-        if (!stream) {
-          isCapturingRef.current = false;
-          setIsRecording(false);
-          setRecordMode('idle');
-          onOpenVoice();
+        sessionTimerRef.current = setTimeout(() => {
+          if (capturingRef.current) stopRef.current();
+        }, MAX_SESSION_MS);
+
+        if (Platform.OS === 'web') {
+          const media =
+            typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+          if (!media?.getUserMedia) {
+            abortCapture(COPY.voice.micUnavailable);
+            return;
+          }
+          const stream = await media.getUserMedia({ audio: true });
+          webStreamRef.current = stream;
+          webChunksRef.current = [];
+          const recorder = new MediaRecorder(stream);
+          webRecorderRef.current = recorder;
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) webChunksRef.current.push(event.data);
+          };
+          recorder.start();
           return;
         }
 
-        webStreamRef.current = stream;
-        webAudioChunksRef.current = [];
-        const mediaRecorder = new MediaRecorder(stream);
-        webMediaRecorderRef.current = mediaRecorder;
-
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) webAudioChunksRef.current.push(e.data);
-        };
-        mediaRecorder.start();
-      } else {
         const permission = await Audio.requestPermissionsAsync();
         if (!permission.granted) {
-          isCapturingRef.current = false;
-          setIsRecording(false);
-          setRecordMode('idle');
-          onOpenVoice();
+          abortCapture(COPY.voice.micDenied);
           return;
         }
 
@@ -204,344 +184,251 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         });
 
         const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await recording.prepareToRecordAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
         await recording.startAsync();
         nativeRecordingRef.current = recording;
+      } catch (error) {
+        abortCapture(COPY.voice.micDenied);
       }
-    } catch (err) {
-      console.warn('Error starting audio recording:', err);
-      isCapturingRef.current = false;
-      setIsRecording(false);
-      setRecordMode('idle');
-      onOpenVoice();
-    }
-  };
+    },
+    [abortCapture]
+  );
 
-  // --- Stop Audio Recording & Send to Parser ---
-  const stopAudioCaptureAndProcess = async () => {
-    if (maxSessionTimeoutRef.current) {
-      clearTimeout(maxSessionTimeoutRef.current);
-      maxSessionTimeoutRef.current = null;
+  const sendForParsing = useCallback(
+    async (body: FormData) => {
+      body.append(
+        'people',
+        JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name })))
+      );
+      body.append('current_date', todayISO());
+
+      try {
+        const result = await ApiService.processVoice(body);
+        if (result) {
+          onVoiceResultParsed(result);
+        } else {
+          toast(COPY.voice.failed, 'error');
+          onOpenVoiceReview();
+        }
+      } catch (error) {
+        toast(COPY.voice.failed, 'error');
+        onOpenVoiceReview();
+      } finally {
+        setOrbState('idle');
+      }
+    },
+    [parties, onVoiceResultParsed, onOpenVoiceReview, toast]
+  );
+
+  const stopCaptureAndParse = useCallback(async () => {
+    if (!capturingRef.current) return;
+    capturingRef.current = false;
+
+    if (sessionTimerRef.current) {
+      clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
     }
-    if (!isCapturingRef.current) return;
-    isCapturingRef.current = false;
-    setIsRecording(false);
-    setRecordMode('idle');
-    setIsProcessing(true);
+
+    setCaptureMode(null);
+    setOrbState('processing');
 
     try {
       if (Platform.OS === 'web') {
-        if (!webMediaRecorderRef.current) {
-          setIsProcessing(false);
+        const recorder = webRecorderRef.current;
+        if (!recorder) {
+          setOrbState('idle');
           return;
         }
-        const mediaRecorder = webMediaRecorderRef.current;
 
-        mediaRecorder.onstop = async () => {
-          if (webStreamRef.current) {
-            webStreamRef.current.getTracks().forEach((t) => t.stop());
-            webStreamRef.current = null;
-          }
-          
-          if (webAudioChunksRef.current.length === 0) {
-            setIsProcessing(false);
+        recorder.onstop = async () => {
+          releaseWebStream();
+
+          if (webChunksRef.current.length === 0) {
+            setOrbState('idle');
+            toast(COPY.voice.tooShort, 'error');
             return;
           }
 
-          const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
-          if (audioBlob.size < 500) {
-            // Blob too small / silent
-            setIsProcessing(false);
+          const blob = new Blob(webChunksRef.current, { type: 'audio/webm' });
+          if (blob.size < 500) {
+            setOrbState('idle');
+            toast(COPY.voice.tooShort, 'error');
             return;
           }
 
-          const formData = new FormData();
-          formData.append('audio', audioBlob, 'mic_speech.webm');
-          formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
-          formData.append('current_date', new Date().toISOString().split('T')[0]);
-
-          try {
-            const response: any = await ApiService.processVoice(formData);
-            if (response && onVoiceResultParsed) {
-              onVoiceResultParsed(response);
-            } else {
-              onOpenVoice();
-            }
-          } catch (e) {
-            onOpenVoice();
-          } finally {
-            setIsProcessing(false);
-          }
+          const body = new FormData();
+          body.append('audio', blob, 'entry.webm');
+          await sendForParsing(body);
         };
-        mediaRecorder.stop();
-      } else {
-        if (!nativeRecordingRef.current) {
-          setIsProcessing(false);
-          return;
-        }
-        const recording = nativeRecordingRef.current;
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-
-        if (uri) {
-          const formData = new FormData();
-          formData.append('audio', {
-            uri,
-            name: 'mic_speech.m4a',
-            type: 'audio/m4a',
-          } as any);
-          formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
-          formData.append('current_date', new Date().toISOString().split('T')[0]);
-
-          const response: any = await ApiService.processVoice(formData);
-          if (response && onVoiceResultParsed) {
-            onVoiceResultParsed(response);
-          } else {
-            onOpenVoice();
-          }
-        }
-        setIsProcessing(false);
-        nativeRecordingRef.current = null;
+        recorder.stop();
+        return;
       }
-    } catch (e) {
-      setIsProcessing(false);
-      onOpenVoice();
-    }
-  };
 
-  // --- Intentional Touch & Hold Handlers ---
-  const handleLongPress = () => {
-    if (!isRecording && !isProcessing) {
-      setRecordMode('hold');
-      startAudioCapture();
+      const recording = nativeRecordingRef.current;
+      if (!recording) {
+        setOrbState('idle');
+        return;
+      }
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      nativeRecordingRef.current = null;
+
+      if (!uri) {
+        setOrbState('idle');
+        toast(COPY.voice.tooShort, 'error');
+        return;
+      }
+
+      const body = new FormData();
+      body.append('audio', {
+        uri,
+        name: 'entry.m4a',
+        type: 'audio/m4a',
+      } as any);
+      await sendForParsing(body);
+    } catch (error) {
+      setOrbState('idle');
+      toast(COPY.voice.failed, 'error');
     }
+  }, [sendForParsing, toast]);
+
+  useEffect(() => {
+    stopRef.current = stopCaptureAndParse;
+  }, [stopCaptureAndParse]);
+
+  /* -------------------------------------------------- press interactions -- */
+
+  const handleLongPress = () => {
+    if (orbState === 'idle') startCapture('hold');
   };
 
   const handlePressOut = () => {
-    if (isRecording && recordMode === 'hold') {
-      // User held and now released -> Stop and process
-      stopAudioCaptureAndProcess();
+    // Only a hold-capture ends on release; tap-capture waits for a second tap.
+    if (capturingRef.current && captureMode === 'hold') stopCaptureAndParse();
+  };
+
+  const handlePress = () => {
+    if (orbState === 'processing') return;
+    if (!capturingRef.current) {
+      startCapture('tap');
+    } else if (captureMode === 'tap') {
+      stopCaptureAndParse();
     }
   };
 
-  const handleButtonTap = () => {
-    if (isProcessing) return;
+  /* ----------------------------------------------------------------- copy -- */
 
-    if (!isRecording) {
-      // Intentional 1-tap to start recording in toggle mode
-      setRecordMode('tap');
-      startAudioCapture();
-    } else if (recordMode === 'tap') {
-      // Second tap while in tap mode -> Stop and process
-      stopAudioCaptureAndProcess();
-    }
-  };
+  const stageTitle =
+    orbState === 'processing'
+      ? COPY.home.voiceThinking
+      : orbState === 'recording'
+      ? captureMode === 'tap'
+        ? COPY.home.voiceRecording
+        : COPY.home.voiceListening
+      : COPY.home.voiceIdle;
 
-  const recentTransactions = transactions.slice(0, 6);
+  const stageLine =
+    orbState === 'processing'
+      ? COPY.home.hintThinking
+      : orbState === 'recording'
+      ? captureMode === 'tap'
+        ? COPY.home.hintTap
+        : COPY.home.hintHold
+      : `“${COPY.home.examples[promptIndex]}”`;
 
-  const getTransactionIcon = (txn: Transaction) => {
-    const note = (txn.note || '').toLowerCase();
-    if (note.includes('coffee') || note.includes('chai') || note.includes('tea')) {
-      return <Coffee size={18} color="#0d9488" />;
-    }
-    if (note.includes('bike') || note.includes('petrol') || note.includes('repair')) {
-      return <ShoppingBag size={18} color="#0d9488" />;
-    }
-    if (txn.type === 'gave') {
-      return <ArrowUpRight size={18} color="#e11d48" />;
-    }
-    return <ArrowDownLeft size={18} color="#059669" />;
-  };
-
-  const getIconBackground = (txn: Transaction) => {
-    if (txn.type === 'gave') return '#ffe4e6'; // soft rose
-    return '#ccfbf1'; // soft teal
-  };
+  const FEED_PREVIEW = 5;
+  const recent = feedExpanded
+    ? transactions.slice(0, 50)
+    : transactions.slice(0, FEED_PREVIEW);
+  const canExpand = transactions.length > FEED_PREVIEW;
 
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      style={styles.screen}
+      contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
-      {/* HERO SECTION: Seamless Clean Background */}
-      <View style={styles.heroWrapper}>
-        <Text style={styles.heroTitle}>
-          {isRecording
-            ? recordMode === 'tap'
-              ? 'Recording (Tap to Stop)'
-              : 'Listening...'
-            : isProcessing
-            ? 'Processing Voice...'
-            : 'Tap or Hold to Record'}
-        </Text>
+      {/* ------------------------------------------------------ voice stage -- */}
+      <View style={styles.stage}>
+        <Text style={[TYPE.title1, styles.stageTitle]}>{stageTitle}</Text>
 
-        <Text
+        <Animated.Text
           style={[
-            styles.heroSubtitle,
-            isRecording && { color: '#e11d48', fontWeight: '800' },
+            TYPE.bodySm,
+            styles.stageLine,
+            orbState === 'idle' && { opacity: promptFade },
           ]}
+          numberOfLines={2}
         >
-          {isRecording
-            ? recordMode === 'tap'
-              ? 'Speak naturally • Tap button when finished'
-              : 'Release button when you are done speaking'
-            : isProcessing
-            ? 'Transcribing & parsing with AI...'
-            : samplePrompts[promptIndex]}
-        </Text>
+          {stageLine}
+        </Animated.Text>
 
-        {/* GOOGLE RECOGNITION STYLE VOICE ORB: ZERO SOLID FILL, ROTATING GRADIENT RING */}
-        <GoogleVoiceOrb
-          size={buttonSize}
-          isRecording={isRecording}
-          isProcessing={isProcessing}
-          onPress={handleButtonTap}
+        <VoiceOrb
+          size={orbSize}
+          state={orbState}
+          maxDurationMs={MAX_SESSION_MS}
+          onPress={handlePress}
           onLongPress={handleLongPress}
           onPressOut={handlePressOut}
         />
 
-        <Text style={styles.holdInstructionHint}>
-          {isRecording
-            ? recordMode === 'tap'
-              ? 'Tap center button to finish & save'
-              : 'Speaking... Release button to finish'
-            : 'Hold to speak • or Tap once to start/pause'}
-        </Text>
-      </View>
-
-      {/* COMPACT KPI METRIC CHIPS (Receivable & Payable Summary) */}
-      <View style={styles.kpiRow}>
-        <TouchableOpacity
-          style={styles.kpiCard}
-          onPress={onViewAllCustomers}
-          activeOpacity={0.8}
-        >
-          <View style={styles.kpiHeaderRow}>
-            <View style={[styles.kpiIconDot, { backgroundColor: COLORS.gotGreenBg }]}>
-              <TrendingUp size={14} color={COLORS.gotGreen} />
-            </View>
-            <Text style={styles.kpiLabel}>{t.youWillCollect}</Text>
-          </View>
-          <Text style={[styles.kpiValue, { color: COLORS.gotGreen }]}>
-            {currency} {totalReceivable.toLocaleString('en-IN')}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.kpiCard}
-          onPress={onViewAllCustomers}
-          activeOpacity={0.8}
-        >
-          <View style={styles.kpiHeaderRow}>
-            <View style={[styles.kpiIconDot, { backgroundColor: COLORS.gaveRedBg }]}>
-              <TrendingDown size={14} color={COLORS.gaveRed} />
-            </View>
-            <Text style={styles.kpiLabel}>{t.youWillPay}</Text>
-          </View>
-          <Text style={[styles.kpiValue, { color: COLORS.gaveRed }]}>
-            {currency} {totalPayable.toLocaleString('en-IN')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* FLOATING RECENT ENTRIES CARD */}
-      <View style={styles.recentEntriesCard}>
-        <View style={styles.recentEntriesHeader}>
-          <Text style={styles.recentEntriesTitle}>Recent Entry</Text>
-          <TouchableOpacity
-            onPress={onViewAllTransactions || onViewAllCustomers}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.viewAllLink}>{t.viewAll}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentTransactions.length === 0 ? (
-          <View style={styles.emptyStateContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Sparkles size={24} color="#94a3b8" />
-            </View>
-            <Text style={styles.emptyStateTitle}>No entries recorded yet</Text>
-            <Text style={styles.emptyStateSub}>
-              Tap or hold the giant mic above to record your first ledger entry!
+        {orbState === 'idle' ? (
+          <View style={styles.stageFooter}>
+            <Badge label="Urdu or English" tone="accent" />
+            <Text style={[TYPE.caption, styles.stageHint]}>
+              {COPY.home.hintIdle}
             </Text>
           </View>
         ) : (
-          <View style={styles.entriesList}>
-            {recentTransactions.map((txn, index) => {
-              const matchedParty = parties.find((p) => p.id === txn.partyId);
-              const isGave = txn.type === 'gave';
+          <View style={styles.stageFooter} />
+        )}
+      </View>
 
-              return (
-                <TouchableOpacity
-                  key={txn.id || index}
-                  style={styles.entryRowCard}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (onSelectTransaction) {
-                      onSelectTransaction(txn);
-                    } else if (matchedParty) {
-                      onSelectParty(matchedParty);
-                    }
-                  }}
-                >
-                  {/* Left Icon Badge */}
-                  <View
-                    style={[
-                      styles.entryIconBadge,
-                      { backgroundColor: getIconBackground(txn) },
-                    ]}
-                  >
-                    {getTransactionIcon(txn)}
-                  </View>
+      {/* ---------------------------------------------------- net position -- */}
+      <View style={styles.block}>
+        <BalanceCard
+          toCollect={toCollect}
+          toPay={toPay}
+          accounts={parties.length}
+          currency={currency}
+          onPressCollect={onViewAllCustomers}
+          onPressPay={onViewAllCustomers}
+        />
+      </View>
 
-                  {/* Middle Info */}
-                  <View style={styles.entryDetails}>
-                    <Text style={styles.entryPartyName} numberOfLines={1}>
-                      {txn.partyName || matchedParty?.name || 'Customer'}
-                    </Text>
+      {/* -------------------------------------------------- recent activity -- */}
+      <View style={styles.block}>
+        <SectionHeader
+          title={COPY.home.recentActivity}
+          actionLabel={
+            canExpand ? (feedExpanded ? 'Show less' : COPY.common.viewAll) : undefined
+          }
+          onAction={() => setFeedExpanded((prev) => !prev)}
+        />
 
-                    <View style={styles.entryTagRow}>
-                      {/* Dark Tag Badge */}
-                      <View
-                        style={[
-                          styles.darkTag,
-                          isGave ? styles.gaveTag : styles.gotTag,
-                        ]}
-                      >
-                        <Text style={styles.darkTagText}>
-                          {isGave ? 'UDHAAR' : 'WASOOL'}
-                        </Text>
-                      </View>
-
-                      {/* Reason / Note Text */}
-                      {txn.note ? (
-                        <Text style={styles.entryReasonText} numberOfLines={1}>
-                          {txn.note}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-
-                  {/* Right Amount & Timestamp */}
-                  <View style={styles.entryRightCol}>
-                    <Text
-                      style={[
-                        styles.entryAmount,
-                        isGave ? styles.amountGave : styles.amountGot,
-                      ]}
-                    >
-                      {isGave ? '-' : '+'}
-                      {currency} {txn.amount.toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={styles.entryDateText}>
-                      {txn.date || 'Today'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+        {loading ? (
+          <SkeletonRow count={3} />
+        ) : recent.length === 0 ? (
+          <EmptyState
+            icon={Sparkles}
+            title={COPY.home.emptyTitle}
+            body={COPY.home.emptyBody}
+          />
+        ) : (
+          <View style={styles.list}>
+            {recent.map((txn, index) => (
+              <Enter key={txn.id} index={index}>
+                <EntryRow
+                  transaction={txn}
+                  currency={currency}
+                  onPress={() => onSelectTransaction(txn)}
+                />
+              </Enter>
+            ))}
           </View>
         )}
       </View>
@@ -550,268 +437,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  /* Hero Top Section */
-  heroWrapper: {
-    paddingTop: 28,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
-    minHeight: 20,
-  },
-  /* Giant Mic Button & Concentric Pulse Rings */
-  micButtonContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    marginVertical: 10,
-    backgroundColor: 'transparent',
-  },
-  pulseRingOuter: {
-    position: 'absolute',
-    borderRadius: 9999,
-    backgroundColor: 'rgba(99, 102, 241, 0.16)',
-  },
-  pulseRingInner: {
-    position: 'absolute',
-    borderRadius: 9999,
-    backgroundColor: 'rgba(99, 102, 241, 0.26)',
-  },
-  giantMicButton: {
-    borderRadius: 9999,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  giantMicButtonRecording: {
-    backgroundColor: '#1e1b4b',
-    borderColor: '#6366f1',
-    borderWidth: 3,
-  },
-  giantMicButtonProcessing: {
-    backgroundColor: '#6366f1',
-  },
-  giantMicInnerCircle: {
-    borderRadius: 9999,
-    backgroundColor: '#1e293b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#334155',
-  },
-  giantMicInnerRecording: {
-    backgroundColor: '#312e81',
-    borderColor: '#6366f1',
-  },
-  holdInstructionHint: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-    marginTop: 18,
-    textAlign: 'center',
-    letterSpacing: 0.2,
-  },
-  /* KPI Summary Chips */
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    marginTop: 18,
-    marginBottom: 16,
-  },
-  kpiCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  kpiHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  kpiIconDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kpiLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  kpiValue: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  /* Floating Recent Entries Card */
-  recentEntriesCard: {
-    marginHorizontal: 16,
-    backgroundColor: '#ffffff',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  recentEntriesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  recentEntriesTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -0.3,
-  },
-  viewAllLink: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0d9488',
-  },
-  entriesList: {
-    gap: 10,
-  },
-  entryRowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  entryIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  entryDetails: {
-    flex: 1,
-    marginRight: 8,
-  },
-  entryPartyName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  entryTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  darkTag: {
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  gaveTag: {
-    backgroundColor: '#1e293b',
-  },
-  gotTag: {
-    backgroundColor: '#0f172a',
-  },
-  darkTagText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  entryReasonText: {
-    fontSize: 11,
-    color: '#64748b',
+  screen: {
     flex: 1,
   },
-  entryRightCol: {
-    alignItems: 'flex-end',
+  content: {
+    paddingBottom: 132,
   },
-  entryAmount: {
-    fontSize: 14,
-    fontWeight: '900',
-    marginBottom: 2,
-  },
-  amountGave: {
-    color: '#0f172a',
-  },
-  amountGot: {
-    color: '#059669',
-  },
-  entryDateText: {
-    fontSize: 10,
-    color: '#94a3b8',
-    fontWeight: '500',
-  },
-  /* Empty state */
-  emptyStateContainer: {
-    paddingVertical: 28,
+  stage: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: SPACE.sm,
+    paddingHorizontal: SPACE.xxl,
   },
-  emptyIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  emptyStateTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 4,
-  },
-  emptyStateSub: {
-    fontSize: 11,
-    color: '#94a3b8',
+  stageTitle: {
     textAlign: 'center',
-    maxWidth: 240,
+  },
+  stageLine: {
+    ...TYPE.bodySm,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACE.xs + 2,
+    minHeight: 38,
+  },
+  stageFooter: {
+    alignItems: 'center',
+    gap: SPACE.sm,
+    minHeight: 52,
+    marginTop: SPACE.xs,
+  },
+  stageHint: {
+    color: COLORS.textFaint,
+    textAlign: 'center',
+  },
+  block: {
+    paddingHorizontal: GUTTER,
+    marginTop: SPACE.xxl,
+  },
+  list: {
+    gap: SPACE.sm,
   },
 });
