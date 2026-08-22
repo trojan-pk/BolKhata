@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Linking,
+  Alert,
 } from 'react-native';
 import {
   X,
@@ -19,6 +20,7 @@ import {
   Tag,
   ArrowUpRight,
   ArrowDownLeft,
+  Trash2,
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Party, Transaction } from '../types';
@@ -36,6 +38,8 @@ interface CustomerDetailModalProps {
   onAddGot: () => void;
   onSettleUp: () => void;
   onEditTransaction?: (txn: Transaction) => void;
+  onDeleteTransaction?: (txnId: string) => void;
+  onDeleteParty?: (partyId: string) => void;
 }
 
 export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
@@ -50,6 +54,8 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   onAddGot,
   onSettleUp,
   onEditTransaction,
+  onDeleteTransaction,
+  onDeleteParty,
 }) => {
   if (!party) return null;
 
@@ -76,6 +82,58 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
     Linking.openURL(`tel:${party.mobile}`);
   };
 
+  const handleDeleteRecord = (txnId: string) => {
+    if (!onDeleteTransaction) return;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm('Are you sure you want to delete this ledger record?')) {
+        onDeleteTransaction(txnId);
+      }
+    } else {
+      Alert.alert(
+        'Delete Record',
+        'Are you sure you want to delete this ledger entry?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => onDeleteTransaction(txnId),
+          },
+        ]
+      );
+    }
+  };
+
+  const handleDeleteCustomerPrompt = () => {
+    if (!onDeleteParty || !party) return;
+
+    const confirmMsg = `Are you sure you want to delete ${party.name} and all associated ledger transactions? This cannot be undone.`;
+
+    if (typeof window !== 'undefined' && window.confirm) {
+      if (window.confirm(confirmMsg)) {
+        onDeleteParty(party.id);
+        onClose();
+      }
+    } else {
+      Alert.alert(
+        'Delete Customer',
+        confirmMsg,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Customer',
+            style: 'destructive',
+            onPress: () => {
+              onDeleteParty(party.id);
+              onClose();
+            },
+          },
+        ]
+      );
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={styles.container}>
@@ -92,7 +150,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             <Text style={styles.headerPhone}>{party.mobile || 'No phone'}</Text>
           </View>
 
-          {/* Call & WhatsApp Quick Buttons */}
+          {/* Call, WhatsApp & Delete Customer Quick Buttons */}
           <View style={styles.headerActions}>
             {party.mobile ? (
               <>
@@ -108,6 +166,17 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 </TouchableOpacity>
               </>
             ) : null}
+
+            {onDeleteParty && (
+              <TouchableOpacity
+                style={styles.deletePartyCircle}
+                onPress={handleDeleteCustomerPrompt}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={15} color="#ef4444" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -231,23 +300,39 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   </View>
 
                   <View style={styles.txnRight}>
-                    <Text
-                      style={[
-                        styles.txnAmount,
-                        { color: isGave ? '#0f172a' : COLORS.gotGreen },
-                      ]}
-                    >
-                      {isGave ? '-' : '+'} {currency}{' '}
-                      {txn.amount.toLocaleString('en-IN')}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.txnTag,
-                        { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
-                      ]}
-                    >
-                      {isGave ? t.youGave : t.youGot}
-                    </Text>
+                    <View style={styles.txnAmountCol}>
+                      <Text
+                        style={[
+                          styles.txnAmount,
+                          { color: isGave ? '#0f172a' : COLORS.gotGreen },
+                        ]}
+                      >
+                        {isGave ? '-' : '+'} {currency}{' '}
+                        {txn.amount.toLocaleString('en-IN')}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.txnTag,
+                          { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                        ]}
+                      >
+                        {isGave ? t.youGave : t.youGot}
+                      </Text>
+                    </View>
+
+                    {onDeleteTransaction && (
+                      <TouchableOpacity
+                        style={styles.txnDeleteBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRecord(txn.id);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                      >
+                        <Trash2 size={15} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -336,6 +421,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#16a34a',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  deletePartyCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   balanceBanner: {
     flexDirection: 'row',
@@ -507,7 +602,22 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   txnRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  txnAmountCol: {
     alignItems: 'flex-end',
+  },
+  txnDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   txnAmount: {
     fontSize: 14,
