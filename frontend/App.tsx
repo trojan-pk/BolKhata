@@ -23,6 +23,7 @@ import {
 import { StorageService } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
 import { FONTS, injectWebGoogleFonts } from './src/theme/typography';
+import { getBottomInset } from './src/utils/safeArea';
 import {
   Party,
   Transaction,
@@ -54,6 +55,8 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { getTranslation } from './src/i18n/translations';
 
 export default function App() {
+  const bottomInset = getBottomInset();
+
   const [showSplashOverlay, setShowSplashOverlay] = useState(true);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const dashboardFade = useRef(new Animated.Value(0)).current;
@@ -186,6 +189,16 @@ export default function App() {
 
     const updated = [newParty, ...parties];
     await updatePartiesAndTxns(updated, transactions);
+  };
+
+  // Delete Customer and associated ledger transactions
+  const handleDeleteParty = async (partyId: string) => {
+    const updatedParties = parties.filter((p) => p.id !== partyId);
+    const updatedTxns = transactions.filter((t) => t.partyId !== partyId);
+    await updatePartiesAndTxns(updatedParties, updatedTxns);
+    if (selectedParty && selectedParty.id === partyId) {
+      setSelectedParty(null);
+    }
   };
 
   // Record Gave / Got transaction
@@ -524,6 +537,7 @@ export default function App() {
               parties={parties}
               currency={storeProfile.currency}
               language={storeProfile.language}
+              onSelectParty={(party) => setSelectedParty(party)}
             />
           )}
 
@@ -540,7 +554,7 @@ export default function App() {
         </View>
 
         {/* DARK THEMED FLOATING ANIMATED PILL NAVIGATION DOCK */}
-        <View style={styles.pillDockWrapper}>
+        <View style={[styles.pillDockWrapper, { bottom: bottomInset }]}>
           <View style={styles.floatingPillDock}>
             {/* Sliding Active Pill Background Highlight (Dark Charcoal) */}
             <Animated.View
@@ -702,6 +716,8 @@ export default function App() {
         }}
         onSettleUp={handleSettleUpParty}
         onEditTransaction={(txn) => setSelectedEditTxn(txn)}
+        onDeleteTransaction={handleDeleteTransaction}
+        onDeleteParty={handleDeleteParty}
       />
 
       {/* 1-Tap Transaction Editor Modal */}

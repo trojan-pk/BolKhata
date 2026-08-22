@@ -15,12 +15,14 @@ interface ReportsScreenProps {
   parties: Party[];
   currency?: string;
   language?: LanguageCode;
+  onSelectParty?: (party: Party) => void;
 }
 
 export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   parties,
   currency = 'Rs',
   language = 'en',
+  onSelectParty,
 }) => {
   const t = getTranslation(language);
   const debtors = parties.filter((p) => p.currentBalance > 0);
@@ -91,12 +93,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         debtors
           .sort((a, b) => b.currentBalance - a.currentBalance)
           .map((party) => (
-            <View key={party.id} style={styles.debtorCard}>
+            <TouchableOpacity
+              key={party.id}
+              style={styles.debtorCard}
+              onPress={() => onSelectParty && onSelectParty(party)}
+              activeOpacity={0.7}
+            >
               <View style={styles.debtorInfo}>
                 <Text style={styles.debtorName} numberOfLines={1}>
                   {party.name}
                 </Text>
-                <Text style={styles.debtorPhone}>{party.mobile}</Text>
+                <Text style={styles.debtorPhone}>{party.mobile || 'Customer'}</Text>
               </View>
 
               <View style={styles.debtorValBox}>
@@ -105,7 +112,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   {currency} {party.currentBalance.toLocaleString('en-IN')}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
       )}
     </ScrollView>
