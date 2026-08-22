@@ -17,6 +17,7 @@ import {
   TABULAR,
   TYPE,
 } from '../theme/tokens';
+import { IconComponent } from './icon';
 
 /** Field label, with an unobtrusive "Optional" marker when relevant. */
 export const Label: React.FC<{ text: string; optional?: boolean; hint?: string }> = ({
@@ -40,7 +41,7 @@ interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   optional?: boolean;
   hint?: string;
   error?: string | null;
-  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon?: IconComponent;
   /** Trailing element — a clear button, a unit, a picker trigger. */
   accessory?: React.ReactNode;
   multiline?: boolean;

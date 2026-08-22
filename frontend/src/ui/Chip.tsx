@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { IconComponent } from './icon';
 import { Press } from './Press';
 
 /**
@@ -14,7 +15,7 @@ export const Chip: React.FC<{
   onPress?: () => void;
   /** Trailing count, e.g. the number of customers matching a filter. */
   count?: number;
-  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  icon?: IconComponent;
   size?: 'sm' | 'md';
   style?: StyleProp<ViewStyle>;
 }> = ({ label, selected = false, onPress, count, icon: Icon, size = 'md', style }) => {

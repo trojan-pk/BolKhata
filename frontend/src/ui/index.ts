@@ -3,6 +3,7 @@
  * `View`/`Text` styling of their own — that's what keeps the app coherent.
  */
 export { Press, Enter } from './Press';
+export type { IconComponent, IconProps } from './icon';
 export { Button, IconButton, LinkButton } from './Button';
 export type { ButtonVariant, ButtonSize } from './Button';
 export { Card, Divider, VDivider, Gap } from './Card';

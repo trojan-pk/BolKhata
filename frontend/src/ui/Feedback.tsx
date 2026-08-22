@@ -29,6 +29,7 @@ import {
   TYPE,
 } from '../theme/tokens';
 import { Button } from './Button';
+import { IconComponent } from './icon';
 import { Sheet } from './Sheet';
 
 /* ------------------------------------------------------------------ types -- */
@@ -66,10 +67,7 @@ export const useFeedback = () => useContext(FeedbackContext);
 
 /* ------------------------------------------------------------------ toast -- */
 
-const TOAST_TONES: Record<
-  ToastTone,
-  { icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; tint: string }
-> = {
+const TOAST_TONES: Record<ToastTone, { icon: IconComponent; tint: string }> = {
   success: { icon: Check, tint: '#5FE3A1' },
   error: { icon: AlertTriangle, tint: '#FF9C8F' },
   info: { icon: Info, tint: '#A9B4FF' },
@@ -253,10 +251,14 @@ const styles = StyleSheet.create({
   },
   confirmActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: SPACE.md,
+    width: '100%',
+    marginTop: SPACE.sm,
   },
   confirmBody: {
     color: COLORS.textSecondary,
+    lineHeight: 20,
   },
   confirmBtn: {
     flex: 1,

@@ -57,7 +57,7 @@ export const CashbookScreen: React.FC<{
   const [composerOpen, setComposerOpen] = useState(false);
   const [direction, setDirection] = useState<EntryDirection>('in');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(COPY.cashbook.categories.in[0]);
+  const [category, setCategory] = useState<string>(COPY.cashbook.categories.in[0]);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 

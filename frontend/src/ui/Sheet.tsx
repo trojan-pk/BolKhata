@@ -13,6 +13,7 @@ import {
   Text,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,8 +40,13 @@ interface SheetProps {
   children?: React.ReactNode;
   /** `bottom` slides up from the edge; `center` scales in. */
   variant?: 'bottom' | 'center';
-  /** Cap on the scrollable region. */
-  maxHeight?: number | string;
+  /**
+   * Fraction of the window the scroll area may occupy. Resolved to pixels
+   * against the real window height — a percentage would resolve against the
+   * panel's content-sized parent, which Yoga treats as no constraint at all,
+   * letting a long sheet run off the top of the screen.
+   */
+  maxHeightRatio?: number;
   scrollable?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   showClose?: boolean;
@@ -60,15 +66,18 @@ export const Sheet: React.FC<SheetProps> = ({
   footer,
   children,
   variant = 'bottom',
-  maxHeight = '86%',
+  maxHeightRatio = 0.62,
   scrollable = true,
   contentStyle,
   showClose = true,
 }) => {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [panelHeight, setPanelHeight] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
+
+  const scrollMaxHeight = Math.round(windowHeight * maxHeightRatio);
 
   useEffect(() => {
     if (visible) {
@@ -122,7 +131,7 @@ export const Sheet: React.FC<SheetProps> = ({
       <View style={styles.titleRow}>
         <View style={styles.titleText}>
           {title ? (
-            <Text style={TYPE.title2} numberOfLines={1}>
+            <Text style={TYPE.title2} numberOfLines={2}>
               {title}
             </Text>
           ) : null}
@@ -141,7 +150,7 @@ export const Sheet: React.FC<SheetProps> = ({
 
   const body = scrollable ? (
     <ScrollView
-      style={{ maxHeight: maxHeight as any }}
+      style={{ maxHeight: scrollMaxHeight }}
       contentContainerStyle={[styles.scrollContent, contentStyle]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -221,7 +230,7 @@ const styles = StyleSheet.create({
   rootCenter: {
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACE.xl,
+    paddingHorizontal: SPACE.lg,
   },
   scrim: {
     flex: 1,
@@ -234,6 +243,7 @@ const styles = StyleSheet.create({
   kavCenter: {
     width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   panel: {
     backgroundColor: COLORS.surface,
@@ -248,8 +258,10 @@ const styles = StyleSheet.create({
   },
   panelCenter: {
     borderRadius: RADIUS.xl,
-    paddingTop: SPACE.lg,
-    maxWidth: 420,
+    paddingTop: SPACE.xl,
+    paddingBottom: SPACE.xl,
+    width: '92%',
+    maxWidth: 400,
   },
   grabber: {
     width: 40,
@@ -266,7 +278,7 @@ const styles = StyleSheet.create({
     gap: SPACE.md,
     paddingHorizontal: SPACE.xl,
     paddingTop: SPACE.xs,
-    paddingBottom: SPACE.lg,
+    paddingBottom: SPACE.md,
   },
   titleText: {
     flex: 1,
