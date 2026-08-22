@@ -17,6 +17,8 @@ import {
   CheckCheck,
   Calendar,
   Tag,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Party, Transaction } from '../types';
@@ -77,9 +79,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Top App Header */}
         <View style={styles.headerBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.7}>
             <X size={18} color="#0f172a" />
           </TouchableOpacity>
 
@@ -87,21 +89,25 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             <Text style={styles.headerName} numberOfLines={1}>
               {party.name}
             </Text>
-            <Text style={styles.headerPhone}>{party.mobile}</Text>
+            <Text style={styles.headerPhone}>{party.mobile || 'No phone'}</Text>
           </View>
 
           {/* Call & WhatsApp Quick Buttons */}
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.actionCircle} onPress={handlePhoneCall}>
-              <Phone size={15} color="#ffffff" />
-            </TouchableOpacity>
+            {party.mobile ? (
+              <>
+                <TouchableOpacity style={styles.actionCircle} onPress={handlePhoneCall}>
+                  <Phone size={14} color="#ffffff" />
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.whatsappCircle}
-              onPress={handleSendWhatsAppReminder}
-            >
-              <MessageCircle size={15} color="#ffffff" />
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.whatsappCircle}
+                  onPress={handleSendWhatsAppReminder}
+                >
+                  <MessageCircle size={14} color="#ffffff" />
+                </TouchableOpacity>
+              </>
+            ) : null}
           </View>
         </View>
 
@@ -142,7 +148,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           </View>
 
           {party.currentBalance !== 0 && (
-            <TouchableOpacity style={styles.settleBtn} onPress={onSettleUp}>
+            <TouchableOpacity style={styles.settleBtn} onPress={onSettleUp} activeOpacity={0.8}>
               <CheckCheck size={14} color="#0f172a" />
               <Text style={styles.settleBtnText}>{t.allSettled}</Text>
             </TouchableOpacity>
@@ -150,7 +156,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         </View>
 
         {/* WhatsApp Reminder Strip */}
-        {isReceivable && (
+        {isReceivable && party.mobile ? (
           <TouchableOpacity
             style={styles.reminderStrip}
             onPress={handleSendWhatsAppReminder}
@@ -159,22 +165,28 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             <MessageCircle size={15} color="#166534" />
             <Text style={styles.reminderText}>{t.sendWhatsAppReminder}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
         {/* Transactions History Header */}
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>{t.transactionHistory}</Text>
-          <Text style={styles.txnBadge}>{partyTxns.length} Entries</Text>
+          <View style={styles.entryBadge}>
+            <Text style={styles.entryBadgeText}>{partyTxns.length} Entries</Text>
+          </View>
         </View>
 
         {/* Transactions List */}
         <ScrollView
           style={styles.txnList}
           contentContainerStyle={{ paddingBottom: 110 }}
+          showsVerticalScrollIndicator={false}
         >
           {partyTxns.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>{t.noTransactionsYet}</Text>
+              <Text style={styles.emptySubText}>
+                Tap "You Gave" or "You Got" below to record the first transaction.
+              </Text>
             </View>
           ) : (
             partyTxns.map((txn) => {
@@ -194,9 +206,9 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       ]}
                     >
                       {isGave ? (
-                        <CircleMinus size={15} color={COLORS.gaveRed} />
+                        <ArrowUpRight size={16} color={COLORS.gaveRed} />
                       ) : (
-                        <CirclePlus size={15} color={COLORS.gotGreen} />
+                        <ArrowDownLeft size={16} color={COLORS.gotGreen} />
                       )}
                     </View>
 
@@ -206,7 +218,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       </Text>
                       <View style={styles.txnMetaRow}>
                         <Calendar size={11} color="#94a3b8" />
-                        <Text style={styles.txnDate}>{txn.date}</Text>
+                        <Text style={styles.txnDate}>{txn.date || 'Today'}</Text>
                         {txn.paymentMode && (
                           <>
                             <Text style={styles.dot}>•</Text>
@@ -214,8 +226,6 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                             <Text style={styles.txnMode}>{txn.paymentMode.toUpperCase()}</Text>
                           </>
                         )}
-                        <Text style={styles.dot}>•</Text>
-                        <Text style={{ fontSize: 10, color: COLORS.primary, fontWeight: '600' }}>Tap to Edit</Text>
                       </View>
                     </View>
                   </View>
@@ -224,7 +234,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     <Text
                       style={[
                         styles.txnAmount,
-                        { color: isGave ? COLORS.gaveRed : COLORS.gotGreen },
+                        { color: isGave ? '#0f172a' : COLORS.gotGreen },
                       ]}
                     >
                       {isGave ? '-' : '+'} {currency}{' '}
@@ -245,24 +255,24 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           )}
         </ScrollView>
 
-        {/* Bottom Entry Actions Bar */}
-        <View style={styles.bottomBar}>
+        {/* BOTTOM FIXED 1-TAP GAVE & GOT ACTION BAR */}
+        <View style={styles.bottomActionBar}>
           <TouchableOpacity
-            style={[styles.bottomActionBtn, styles.gaveBtn]}
+            style={[styles.actionBtn, styles.gaveBtn]}
             onPress={onAddGave}
             activeOpacity={0.85}
           >
-            <CircleMinus size={18} color="#ffffff" />
-            <Text style={styles.bottomActionText}>{t.youGaveBtn} ({currency})</Text>
+            <CircleMinus size={18} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.actionBtnText}>{t.youGaveBtn}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.bottomActionBtn, styles.gotBtn]}
+            style={[styles.actionBtn, styles.gotBtn]}
             onPress={onAddGot}
             activeOpacity={0.85}
           >
-            <CirclePlus size={18} color="#ffffff" />
-            <Text style={styles.bottomActionText}>{t.youGotBtn} ({currency})</Text>
+            <CirclePlus size={18} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.actionBtnText}>{t.youGotBtn}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -278,12 +288,11 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
   },
   backBtn: {
     width: 36,
@@ -296,7 +305,6 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
-    flexShrink: 1,
   },
   headerName: {
     fontSize: 16,
@@ -304,113 +312,121 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   headerPhone: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     marginTop: 1,
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   actionCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0284c7',
     justifyContent: 'center',
     alignItems: 'center',
   },
   whatsappCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.whatsapp,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#16a34a',
     justifyContent: 'center',
     alignItems: 'center',
   },
   balanceBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    margin: 16,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
     borderRadius: 16,
     borderWidth: 1,
   },
   receivableBanner: {
-    backgroundColor: COLORS.gaveRedBg,
-    borderColor: COLORS.gaveRedBorder,
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
   },
   payableBanner: {
-    backgroundColor: COLORS.gotGreenBg,
-    borderColor: COLORS.gotGreenBorder,
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
   },
   settledBanner: {
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
   },
   balanceLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
     color: '#475569',
-    fontWeight: '600',
+    marginBottom: 2,
   },
   balanceValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 2,
+    fontSize: 20,
+    fontWeight: '900',
   },
   settleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
   },
   settleBtnText: {
-    color: '#0f172a',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    color: '#0f172a',
   },
   reminderStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#f0fdf4',
+    gap: 6,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#bbf7d0',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
   },
   reminderText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#166534',
   },
   listHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 16,
     marginBottom: 8,
   },
   listTitle: {
     fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  entryBadge: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  entryBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
     color: '#475569',
-  },
-  txnBadge: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
   },
   txnList: {
     flex: 1,
@@ -419,108 +435,110 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 60,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#475569',
-    marginTop: 8,
+  },
+  emptySubText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center',
   },
   txnCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
     borderRadius: 14,
-    padding: 14,
+    padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: '#f1f5f9',
   },
   txnLeft: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    flex: 1,
+    marginRight: 8,
   },
   txnIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
   },
   gaveIconCircle: {
-    backgroundColor: COLORS.gaveRedBg,
+    backgroundColor: '#ffe4e6',
   },
   gotIconCircle: {
-    backgroundColor: COLORS.gotGreenBg,
+    backgroundColor: '#dcfce7',
   },
   txnInfo: {
     flex: 1,
   },
   txnNote: {
     fontSize: 13,
+    fontWeight: '800',
     color: '#0f172a',
-    fontWeight: '700',
+    marginBottom: 2,
   },
   txnMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
   },
   txnDate: {
-    fontSize: 11,
-    color: '#64748b',
-  },
-  dot: {
     fontSize: 10,
     color: '#94a3b8',
   },
+  dot: {
+    fontSize: 10,
+    color: '#cbd5e1',
+  },
   txnMode: {
     fontSize: 9,
-    color: '#64748b',
     fontWeight: '700',
+    color: '#64748b',
   },
   txnRight: {
     alignItems: 'flex-end',
   },
   txnAmount: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
   },
   txnTag: {
     fontSize: 10,
-    fontWeight: '700',
-    marginTop: 2,
+    fontWeight: '800',
+    marginTop: 1,
   },
-  bottomBar: {
+  bottomActionBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
     gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     backgroundColor: '#ffffff',
-    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: '#f1f5f9',
   },
-  bottomActionBtn: {
+  actionBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     height: 48,
     borderRadius: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
   },
   gaveBtn: {
     backgroundColor: COLORS.gaveRed,
@@ -528,9 +546,9 @@ const styles = StyleSheet.create({
   gotBtn: {
     backgroundColor: COLORS.gotGreen,
   },
-  bottomActionText: {
+  actionBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
 });

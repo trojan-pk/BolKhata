@@ -304,15 +304,16 @@ const processVoice = async (req, res, next) => {
                 res.status(500).json({ error: 'GROQ_API_KEY is not configured in backend/.env' });
                 return;
             }
-            // 1. High-Speed STT: Groq whisper-large-v3-turbo
+            // 1. High-Speed STT: Groq whisper-large-v3-turbo with Roman Urdu Conditioning
             const sttStart = performance.now();
-            console.log('⚡ [Voice API] Calling Groq Whisper Turbo (whisper-large-v3-turbo)...');
+            console.log('⚡ [Voice API] Calling Groq Whisper Turbo (Roman Urdu Conditioning)...');
             const extension = req.file.originalname.split('.').pop() || 'm4a';
             const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
             const formData = new FormData();
             formData.append('file', audioBlob, `recording.${extension}`);
             formData.append('model', 'whisper-large-v3-turbo');
-            formData.append('prompt', 'BolKhata: Zain ko 2000 diye, Hasnain se 120000 liye, Ali ko 400 diye, Papa se 50000 liye, bike repair, rashan, udhaar, jama. حسنین سے ایک لاکھ بیس ہزار روپے لیے، زین کو دو ہزار دیے');
+            // Pure Roman Urdu prompt conditioning forces Whisper to output in English/Roman Latin script
+            formData.append('prompt', 'Transcribe in pure Roman Urdu script with English alphabet only: Zain ko 2000 diye bike tube ke liye, Hasnain se 120000 liye, Ali ko 400 diye mobile balance, Papa se 50000 liye, Hamza ne 2000 wapis kiye, Qasim ko 1200 diye, bike repair, rashan, udhaar, jama, wasool, rupaye, diye, liye, lene, dene, hisaab, balance.');
             const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: {
@@ -345,24 +346,24 @@ const processVoice = async (req, res, next) => {
             res.status(400).json({ error: 'No speech detected. Please speak clearly into your mic.' });
             return;
         }
-        // 2. High-Performance Token-Optimized System Prompt
+        // 2. High-Performance Token-Optimized System Prompt (100% Roman Urdu & English Extraction)
         const systemPrompt = `You are BolKhata's rapid financial parser.
-Convert spoken text (Urdu script, Roman Urdu, Hindi, English) into JSON.
+Convert Roman Urdu / Urdu spoken text into structured JSON.
 
 CONTEXT:
 - Date: "${currentDate}" (${timezone})
 - Store Customers: ${JSON.stringify(existingPeople)}
 
 CRITICAL RULES:
-1. "person.name": English / Latin script TitleCase ONLY (e.g. "حسنین"->"Hasnain", "زین"->"Zain", "علی"->"Ali", "پاپا"->"Papa", "حمزہ"->"Hamza", "بلال"->"Bilal"). NEVER Arabic/Urdu script. Match Store Customers if name matches.
+1. "person.name": English / Latin script TitleCase ONLY (e.g. "Hasnain", "Zain", "Ali", "Papa", "Hamza", "Bilal", "Qasim"). NEVER Arabic/Urdu script. Match Store Customers if name matches.
 2. "direction": "gave" (diye/udhaar/paid) | "got" (liye/wasool/mile/wapis kiye/jama).
 3. "amount": Full numeric PKR value:
-   - "ایک لاکھ بیس ہزار" / "1 lakh 20 hazar" = 120000
-   - "ایک لاکھ" / "1 lakh" = 100000
-   - "پچاس ہزار" / "50 hazar" = 50000
-   - "تیس ہزار" / "30 hazar" = 30000
-   - "دس ہزار" / "10 hazar" = 10000
-   - "دو ہزار" = 2000
+   - "ek lakh bees hazar" / "1 lakh 20 hazar" = 120000
+   - "ek lakh" / "1 lakh" = 100000
+   - "pachaas hazar" / "50 hazar" = 50000
+   - "tees hazar" / "30 hazar" = 30000
+   - "das hazar" / "10 hazar" = 10000
+   - "do hazar" / "2000" = 2000
 4. "reason": reason in English/Roman text or null.
 5. "date": YYYY-MM-DD (kal = yesterday).
 
@@ -371,7 +372,7 @@ JSON SCHEMA ONLY:
   "intent": "create_transaction" | "get_balance" | "get_history",
   "person": { "name": "Hasnain", "matched_person_id": null },
   "transaction": { "direction": "got", "amount": 120000, "currency": "PKR", "reason": null, "date": "${currentDate}", "payment_method": null },
-  "ambiguous": false,
+  "ambiguous": boolean,
   "candidates": [],
   "missing_fields": [],
   "confidence": 0.98

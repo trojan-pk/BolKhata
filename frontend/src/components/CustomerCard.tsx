@@ -34,17 +34,17 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
   return (
     <TouchableOpacity
       style={styles.cardContainer}
-      activeOpacity={0.7}
+      activeOpacity={0.75}
       onPress={onPress}
     >
       {/* Avatar */}
       <View
         style={[
           styles.avatar,
-          { backgroundColor: party.avatarColor || COLORS.primary },
+          { backgroundColor: party.avatarColor || '#0f172a' },
         ]}
       >
-        <Text style={styles.avatarText}>{initials}</Text>
+        <Text style={styles.avatarText}>{initials || 'C'}</Text>
       </View>
 
       {/* Details */}
@@ -61,10 +61,16 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
         </View>
 
         <View style={styles.phoneRow}>
-          <Phone size={11} color="#64748b" />
-          <Text style={styles.phoneText} numberOfLines={1}>{party.mobile}</Text>
-          <Text style={styles.dotSeparator}>•</Text>
-          <Text style={styles.dateText}>{party.lastUpdated}</Text>
+          {party.mobile ? (
+            <>
+              <Phone size={11} color="#64748b" />
+              <Text style={styles.phoneText} numberOfLines={1}>
+                {party.mobile}
+              </Text>
+              <Text style={styles.dotSeparator}>•</Text>
+            </>
+          ) : null}
+          <Text style={styles.dateText}>{party.lastUpdated || 'Today'}</Text>
         </View>
       </View>
 
@@ -96,7 +102,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
         )}
       </View>
 
-      <ChevronRight size={16} color="#94a3b8" style={{ marginLeft: 6 }} />
+      <ChevronRight size={16} color="#cbd5e1" style={{ marginLeft: 6 }} />
     </TouchableOpacity>
   );
 };
@@ -106,22 +112,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#f1f5f9',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.02,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 1,
     width: '100%',
   },
   avatar: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -129,8 +136,8 @@ const styles = StyleSheet.create({
   avatarText: {
     fontFamily: FONTS.headingBold,
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   infoCol: {
     flex: 1,
@@ -145,21 +152,23 @@ const styles = StyleSheet.create({
   partyName: {
     fontFamily: FONTS.headingBold,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0f172a',
     flex: 1,
   },
   typeBadge: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   typeBadgeText: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 9,
     color: '#475569',
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
   },
   phoneRow: {
@@ -197,7 +206,7 @@ const styles = StyleSheet.create({
   balanceAmountRed: {
     fontFamily: FONTS.headingExtraBold,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.gaveRed,
   },
   balanceStatusGreen: {
@@ -209,7 +218,7 @@ const styles = StyleSheet.create({
   balanceAmountGreen: {
     fontFamily: FONTS.headingExtraBold,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.gotGreen,
   },
   settledStatus: {

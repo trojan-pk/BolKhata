@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
@@ -13,21 +13,35 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Enable CORS for all origins, methods, and headers
+// Security & CORS Middleware
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Basic health check
-app.get('/', (req: Request, res: Response) => {
-  res.json({ status: 'ok', message: 'BolKhata API is running' });
+// Health Check Endpoint
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    app: 'BolKhata API',
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Routes
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    message: 'BolKhata Voice Ledger API is running',
+    version: '2.0.0',
+  });
+});
+
+// App Routes
 app.use('/auth', authRoutes);
 app.use('/customers', customerRoutes);
 app.use('/transactions', transactionRoutes);
@@ -37,6 +51,18 @@ app.use('/dashboard', dashboardRoutes);
 // Global Error Handler
 app.use(errorHandler);
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on http://0.0.0.0:${PORT} (all interfaces)`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 [BolKhata Backend] Running on http://0.0.0.0:${PORT} (Ready for Mobile & Web)`);
 });
+
+// Graceful Shutdown
+const handleGracefulShutdown = (signal: string) => {
+  console.log(`\n🛑 [BolKhata Backend] ${signal} signal received. Closing HTTP server gracefully...`);
+  server.close(() => {
+    console.log('✅ [BolKhata Backend] HTTP server closed cleanly.');
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));

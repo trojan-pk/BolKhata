@@ -13,6 +13,7 @@ import {
 import {
   Home,
   Users,
+  Wallet,
   PieChart,
   Settings as SettingsIcon,
   Mic,
@@ -585,19 +586,24 @@ export default function App() {
               </Text>
             </TouchableOpacity>
 
-            {/* Tab 3: Central Voice Mic Action */}
+            {/* Tab 3: Cashbook */}
             <TouchableOpacity
               style={styles.pillTabItem}
-              onPress={() => {
-                animateTabTo(2);
-                setVoiceModalVisible(true);
-              }}
-              activeOpacity={0.85}
+              onPress={() => handleTabChange('cashbook', 2)}
+              activeOpacity={0.8}
             >
-              <View style={styles.centerMicPillButton}>
-                <Mic size={18} color="#000000" strokeWidth={2.5} />
-              </View>
-              <Text style={styles.centerMicPillLabel}>{t.voice}</Text>
+              <Wallet
+                size={18}
+                color={activeTab === 'cashbook' ? '#ffffff' : '#94a3b8'}
+              />
+              <Text
+                style={[
+                  styles.pillTabLabel,
+                  activeTab === 'cashbook' && styles.pillTabLabelActive,
+                ]}
+              >
+                {t.cashbook}
+              </Text>
             </TouchableOpacity>
 
             {/* Tab 4: Reports */}
