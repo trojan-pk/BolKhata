@@ -264,7 +264,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.typePillText, txnType === 'gave' && styles.typePillTextActive]}>
-                      🔴 You Gave (Udhaar)
+                      You Gave (Udhaar)
                     </Text>
                   </TouchableOpacity>
 
@@ -277,7 +277,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.typePillText, txnType === 'got' && styles.typePillTextActive]}>
-                      🟢 You Got (Wasool)
+                      You Got (Wasool)
                     </Text>
                   </TouchableOpacity>
                 </View>
