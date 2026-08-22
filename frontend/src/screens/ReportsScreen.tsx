@@ -1,261 +1,411 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
-import { Download } from 'lucide-react-native';
-import { Party } from '../types';
+import React, { useMemo } from 'react';
+import { Platform, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { CheckCircle2, Share2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
-import { getTranslation, LanguageCode } from '../i18n/translations';
+import { COPY } from '../i18n/copy';
+import { GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { Party } from '../types';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Enter,
+  Money,
+  Row,
+  ScreenHeader,
+  SectionHeader,
+  useFeedback,
+} from '../ui';
+import { daysAgo, formatDate, formatMoney, formatRelativeDate } from '../utils/format';
 
-interface ReportsScreenProps {
+const STALE_DAYS = 30;
+
+/**
+ * Where the money is sitting. Three questions, in the order a shopkeeper asks
+ * them: how is the outstanding split, who owes the most, and what has gone
+ * quiet long enough to worry about.
+ */
+export const ReportsScreen: React.FC<{
   parties: Party[];
   currency?: string;
-  language?: LanguageCode;
+  storeName?: string;
   onSelectParty?: (party: Party) => void;
-}
+}> = ({ parties, currency = 'Rs', storeName = 'BolKhata', onSelectParty }) => {
+  const { toast } = useFeedback();
 
-export const ReportsScreen: React.FC<ReportsScreenProps> = ({
-  parties,
-  currency = 'Rs',
-  language = 'en',
-  onSelectParty,
-}) => {
-  const t = getTranslation(language);
-  const debtors = parties.filter((p) => p.currentBalance > 0);
-  const creditors = parties.filter((p) => p.currentBalance < 0);
+  const { debtors, creditors, toCollect, toPay, stale } = useMemo(() => {
+    const debtorList = parties
+      .filter((p) => p.currentBalance > 0)
+      .sort((a, b) => b.currentBalance - a.currentBalance);
+    const creditorList = parties
+      .filter((p) => p.currentBalance < 0)
+      .sort((a, b) => a.currentBalance - b.currentBalance);
 
-  const totalUdhaar = debtors.reduce((sum, p) => sum + p.currentBalance, 0);
-  const totalJama = creditors.reduce((sum, p) => sum + Math.abs(p.currentBalance), 0);
+    return {
+      debtors: debtorList,
+      creditors: creditorList,
+      toCollect: debtorList.reduce((sum, p) => sum + p.currentBalance, 0),
+      toPay: creditorList.reduce((sum, p) => sum + Math.abs(p.currentBalance), 0),
+      stale: debtorList.filter((p) => (daysAgo(p.lastUpdated) ?? 0) >= STALE_DAYS),
+    };
+  }, [parties]);
 
-  const handleExportPDF = () => {
-    alert(t.downloadPdf);
+  const outstanding = toCollect + toPay;
+  const collectShare = outstanding > 0 ? toCollect / outstanding : 0;
+
+  /* ------------------------------------------------------------- exporting -- */
+
+  const buildStatement = () => {
+    const lines: string[] = [];
+    lines.push(`${storeName} — Ledger statement`);
+    lines.push(`Generated ${formatDate(new Date().toISOString())}`);
+    lines.push('');
+    lines.push(
+      `${COPY.ledger.toCollect.toUpperCase()} (${debtors.length}) — ${formatMoney(
+        toCollect,
+        currency
+      )}`
+    );
+    debtors.forEach((p) =>
+      lines.push(`  ${p.name} — ${formatMoney(p.currentBalance, currency)}`)
+    );
+    lines.push('');
+    lines.push(
+      `${COPY.ledger.toPay.toUpperCase()} (${creditors.length}) — ${formatMoney(
+        toPay,
+        currency
+      )}`
+    );
+    creditors.forEach((p) =>
+      lines.push(`  ${p.name} — ${formatMoney(p.currentBalance, currency)}`)
+    );
+    lines.push('');
+    lines.push(`${COPY.ledger.netPosition.toUpperCase()} — ${formatMoney(toCollect - toPay, currency)}`);
+    return lines.join('\n');
   };
 
+  const exportStatement = async () => {
+    const statement = buildStatement();
+
+    if (Platform.OS === 'web') {
+      const nav = typeof navigator !== 'undefined' ? (navigator as any) : undefined;
+      try {
+        if (nav?.share) {
+          await nav.share({ title: `${storeName} statement`, text: statement });
+          return;
+        }
+        if (nav?.clipboard?.writeText) {
+          await nav.clipboard.writeText(statement);
+          toast(COPY.reports.copiedToast);
+          return;
+        }
+      } catch {
+        // A dismissed share sheet is not an error worth reporting.
+        return;
+      }
+      toast('Sharing is not available in this browser', 'error');
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: statement,
+        title: `${storeName} statement`,
+      });
+    } catch {
+      toast('Could not open the share sheet', 'error');
+    }
+  };
+
+  /* ------------------------------------------------------------------ view -- */
+
+  if (parties.length === 0 || outstanding === 0) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title={COPY.reports.title} subtitle={COPY.reports.subtitle} />
+        <EmptyState
+          icon={CheckCircle2}
+          title={COPY.reports.emptyTitle}
+          body={COPY.reports.emptyBody}
+          size="full"
+        />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 100 }}
-    >
-      {/* Action Header */}
-      <View style={styles.actionHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>{t.reportsTitle}</Text>
-          <Text style={styles.pageSub}>{t.reportsSubtitle}</Text>
-        </View>
+    <View style={styles.screen}>
+      <ScreenHeader
+        title={COPY.reports.title}
+        subtitle={COPY.reports.subtitle}
+        action={
+          <Button
+            label={COPY.reports.export}
+            icon={Share2}
+            variant="secondary"
+            size="sm"
+            onPress={exportStatement}
+          />
+        }
+      />
 
-        <TouchableOpacity
-          style={styles.exportBtn}
-          onPress={handleExportPDF}
-          activeOpacity={0.85}
-        >
-          <Download size={15} color="#ffffff" />
-          <Text style={styles.exportBtnText}>{t.downloadPdf}</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ---------------------------------------------------- split card -- */}
+        <Card padding={SPACE.lg}>
+          <Text style={[TYPE.overline, styles.eyebrow]}>{COPY.reports.split}</Text>
 
-      {/* Summary Metrics */}
-      <View style={styles.metricsGrid}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{t.totalMarketUdhaar}</Text>
-          <Text style={styles.metricValRed} numberOfLines={1}>
-            {debtors.length} Parties
-          </Text>
-          <Text style={styles.metricSub} numberOfLines={1}>
-            {currency} {totalUdhaar.toLocaleString('en-IN')}
-          </Text>
-        </View>
+          <View style={styles.bar}>
+            <View
+              style={[
+                styles.barSegment,
+                {
+                  flex: Math.max(collectShare, 0.02),
+                  backgroundColor: COLORS.credit,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.barSegment,
+                {
+                  flex: Math.max(1 - collectShare, 0.02),
+                  backgroundColor: COLORS.debit,
+                },
+              ]}
+            />
+          </View>
 
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{t.totalSupplierPayable}</Text>
-          <Text style={styles.metricValGreen} numberOfLines={1}>
-            {creditors.length} Parties
-          </Text>
-          <Text style={styles.metricSub} numberOfLines={1}>
-            {currency} {totalJama.toLocaleString('en-IN')}
-          </Text>
-        </View>
-      </View>
+          <View style={styles.legend}>
+            <LegendRow
+              tint={COLORS.credit}
+              label={COPY.ledger.toCollect}
+              meta={COPY.reports.partiesLabel(debtors.length)}
+              value={toCollect}
+              currency={currency}
+              tone="credit"
+              share={collectShare}
+            />
+            <LegendRow
+              tint={COLORS.debit}
+              label={COPY.ledger.toPay}
+              meta={COPY.reports.partiesLabel(creditors.length)}
+              value={toPay}
+              currency={currency}
+              tone="debit"
+              share={1 - collectShare}
+            />
+          </View>
+        </Card>
 
-      {/* Top Pending Debtors List */}
-      <Text style={styles.sectionHeader}>
-        {t.topCustomersUdhaar}
-      </Text>
+        {/* -------------------------------------------------------- stale -- */}
+        {stale.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title={COPY.reports.overdue}
+              meta={`${stale.length}`}
+            />
+            <View style={styles.rows}>
+              {stale.slice(0, 5).map((party, index) => (
+                <Enter key={party.id} index={index}>
+                  <Row
+                    onPress={onSelectParty ? () => onSelectParty(party) : undefined}
+                    chevron={!!onSelectParty}
+                    leading={<Avatar name={party.name} size={40} />}
+                    title={party.name}
+                    subtitle={`Last entry ${formatRelativeDate(party.lastUpdated)}`}
+                    trailing={
+                      <>
+                        <Money
+                          value={party.currentBalance}
+                          currency={currency}
+                          size="body"
+                          tone="credit"
+                        />
+                        <Badge label="Stale" tone="warning" />
+                      </>
+                    }
+                  />
+                </Enter>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
-      {debtors.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>{t.allSettled}</Text>
-        </View>
-      ) : (
-        debtors
-          .sort((a, b) => b.currentBalance - a.currentBalance)
-          .map((party) => (
-            <TouchableOpacity
-              key={party.id}
-              style={styles.debtorCard}
-              onPress={() => onSelectParty && onSelectParty(party)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.debtorInfo}>
-                <Text style={styles.debtorName} numberOfLines={1}>
-                  {party.name}
-                </Text>
-                <Text style={styles.debtorPhone}>{party.mobile || 'Customer'}</Text>
-              </View>
+        {/* ------------------------------------------------------ debtors -- */}
+        {debtors.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title={COPY.reports.topDebtors}
+              meta={COPY.reports.partiesLabel(debtors.length)}
+            />
+            <View style={styles.rows}>
+              {debtors.slice(0, 8).map((party, index) => (
+                <Enter key={party.id} index={index}>
+                  <ProportionRow
+                    party={party}
+                    currency={currency}
+                    max={debtors[0].currentBalance}
+                    tone="credit"
+                    onPress={onSelectParty ? () => onSelectParty(party) : undefined}
+                  />
+                </Enter>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
-              <View style={styles.debtorValBox}>
-                <Text style={styles.debtorStatus}>{t.youWillCollect}</Text>
-                <Text style={styles.debtorAmount} numberOfLines={1}>
-                  {currency} {party.currentBalance.toLocaleString('en-IN')}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
-      )}
-    </ScrollView>
+        {/* ---------------------------------------------------- creditors -- */}
+        {creditors.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title={COPY.reports.topCreditors}
+              meta={COPY.reports.partiesLabel(creditors.length)}
+            />
+            <View style={styles.rows}>
+              {creditors.slice(0, 8).map((party, index) => (
+                <Enter key={party.id} index={index}>
+                  <ProportionRow
+                    party={party}
+                    currency={currency}
+                    max={Math.abs(creditors[0].currentBalance)}
+                    tone="debit"
+                    onPress={onSelectParty ? () => onSelectParty(party) : undefined}
+                  />
+                </Enter>
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 };
 
+/** Name, amount, and a hairline bar showing size relative to the largest. */
+const ProportionRow: React.FC<{
+  party: Party;
+  currency: string;
+  max: number;
+  tone: 'credit' | 'debit';
+  onPress?: () => void;
+}> = ({ party, currency, max, tone, onPress }) => {
+  const value = Math.abs(party.currentBalance);
+  const share = max > 0 ? Math.max(value / max, 0.04) : 0;
+  const tint = tone === 'credit' ? COLORS.credit : COLORS.debit;
+
+  return (
+    <Row
+      onPress={onPress}
+      leading={<Avatar name={party.name} size={40} />}
+      title={party.name}
+      meta={
+        <View style={styles.miniTrack}>
+          <View
+            style={[styles.miniFill, { flex: share, backgroundColor: tint }]}
+          />
+          <View style={{ flex: 1 - share }} />
+        </View>
+      }
+      trailing={
+        <Money value={value} currency={currency} size="body" tone={tone} />
+      }
+    />
+  );
+};
+
+const LegendRow: React.FC<{
+  tint: string;
+  label: string;
+  meta: string;
+  value: number;
+  currency: string;
+  tone: 'credit' | 'debit';
+  share: number;
+}> = ({ tint, label, meta, value, currency, tone, share }) => (
+  <View style={styles.legendRow}>
+    <View style={[styles.legendDot, { backgroundColor: tint }]} />
+    <View style={styles.legendText}>
+      <Text style={[TYPE.label, styles.legendLabel]}>{label}</Text>
+      <Text style={[TYPE.caption, styles.legendMeta]}>
+        {meta} · {Math.round(share * 100)}%
+      </Text>
+    </View>
+    <Money value={value} currency={currency} size="body" tone={tone} />
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    width: '100%',
   },
-  actionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  pageTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  pageSub: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 10,
-  },
-  exportBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  metricCard: {
+  scroll: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 3,
-    elevation: 1,
   },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
+  content: {
+    paddingHorizontal: GUTTER,
+    paddingBottom: 132,
   },
-  metricValRed: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.gaveRed,
-    marginTop: 4,
+  eyebrow: {
+    color: COLORS.textMuted,
   },
-  metricValGreen: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.gotGreen,
-    marginTop: 4,
-  },
-  metricSub: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 8,
-  },
-  emptyCard: {
-    backgroundColor: '#ffffff',
-    padding: 20,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  emptyText: {
-    color: '#64748b',
-    fontSize: 13,
-  },
-  debtorCard: {
+  bar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    height: 10,
+    borderRadius: RADIUS.pill,
+    overflow: 'hidden',
+    marginTop: SPACE.md,
+    gap: 3,
+  },
+  barSegment: {
+    height: '100%',
+    borderRadius: RADIUS.pill,
+  },
+  legend: {
+    marginTop: SPACE.lg,
+    gap: SPACE.md,
+  },
+  legendRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 2,
-    elevation: 1,
+    gap: SPACE.md,
   },
-  debtorInfo: {
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
     flex: 1,
-    paddingRight: 8,
+    gap: 1,
   },
-  debtorName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
+  legendLabel: {
+    color: COLORS.textPrimary,
   },
-  debtorPhone: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
+  legendMeta: {
+    color: COLORS.textMuted,
   },
-  debtorValBox: {
-    alignItems: 'flex-end',
+  section: {
+    marginTop: SPACE.xxl,
   },
-  debtorStatus: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.gaveRed,
+  rows: {
+    gap: SPACE.sm,
   },
-  debtorAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.gaveRed,
+  miniTrack: {
+    flexDirection: 'row',
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: COLORS.surfaceSunken,
+    marginTop: 7,
+    overflow: 'hidden',
+  },
+  miniFill: {
+    height: '100%',
+    borderRadius: 2,
   },
 });

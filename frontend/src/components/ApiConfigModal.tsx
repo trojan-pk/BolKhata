@@ -1,293 +1,207 @@
-import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Switch,
-} from 'react-native';
-import { Server, X, Check, Globe, RefreshCw, Layers } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Switch, Text, View } from 'react-native';
+import { Globe, Server, Wifi } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
+import { COPY } from '../i18n/copy';
+import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { StoreProfile } from '../types';
+import { getApiBaseUrl } from '../services/api';
+import { Badge, Button, Sheet, TextField, useFeedback } from '../ui';
 
-interface ApiConfigModalProps {
+type ProbeResult = { ok: boolean; detail: string } | null;
+
+const PROBE_TIMEOUT_MS = 4000;
+
+/**
+ * Points the app at a server. The test button performs a real request with a
+ * timeout — the previous build faked success after one second, which is worse
+ * than no test at all.
+ */
+export const ApiConfigModal: React.FC<{
   visible: boolean;
   storeProfile: StoreProfile;
   onClose: () => void;
   onSaveConfig: (expressUrl: string, isBackendConnected: boolean) => void;
-}
+}> = ({ visible, storeProfile, onClose, onSaveConfig }) => {
+  const { toast } = useFeedback();
 
-export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
-  visible,
-  storeProfile,
-  onClose,
-  onSaveConfig,
-}) => {
-  const [expressUrl, setExpressUrl] = useState(
-    storeProfile.expressApiUrl || 'http://localhost:5000/api'
-  );
-  const [isConnected, setIsConnected] = useState(
-    storeProfile.isBackendConnected || false
-  );
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const [url, setUrl] = useState(storeProfile.expressApiUrl || getApiBaseUrl());
+  const [enabled, setEnabled] = useState(!!storeProfile.isBackendConnected);
+  const [probing, setProbing] = useState(false);
+  const [probe, setProbe] = useState<ProbeResult>(null);
 
-  const handleTestConnection = () => {
-    setTesting(true);
-    setTestResult(null);
+  useEffect(() => {
+    if (visible) {
+      setUrl(storeProfile.expressApiUrl || getApiBaseUrl());
+      setEnabled(!!storeProfile.isBackendConnected);
+      setProbe(null);
+      setProbing(false);
+    }
+  }, [visible, storeProfile]);
 
-    setTimeout(() => {
-      setTesting(false);
-      setTestResult(
-        `Backend API endpoint (${expressUrl}) registered successfully!`
-      );
-    }, 1000);
+  const testConnection = async () => {
+    const target = url.trim().replace(/\/+$/, '');
+    if (!target) {
+      setProbe({ ok: false, detail: 'Enter a server address first' });
+      return;
+    }
+
+    setProbing(true);
+    setProbe(null);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(target, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      // Any HTTP status means something is listening — that's what we're testing.
+      setProbe({
+        ok: true,
+        detail: `${COPY.api.reachable} (HTTP ${response.status})`,
+      });
+    } catch {
+      setProbe({ ok: false, detail: COPY.api.unreachable });
+    } finally {
+      clearTimeout(timer);
+      setProbing(false);
+    }
   };
 
-  const handleSave = () => {
-    onSaveConfig(expressUrl.trim(), isConnected);
+  const save = () => {
+    onSaveConfig(url.trim().replace(/\/+$/, ''), enabled);
     onClose();
+    toast(COPY.api.savedToast);
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.modalCard}>
-          {/* Header */}
-          <View style={styles.headerRow}>
-            <View style={styles.titleRow}>
-              <Server size={20} color={COLORS.primary} />
-              <Text style={styles.modalTitle}>Express API Connection</Text>
-            </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <X size={18} color="#64748b" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.body}>
-            <View style={styles.infoBanner}>
-              <Layers size={16} color={COLORS.primary} />
-              <Text style={styles.infoText}>
-                Currently running in{' '}
-                <Text style={{ color: COLORS.gotGreen, fontWeight: '700' }}>
-                  Offline Mobile UI Mode
-                </Text>
-                . You can attach your Node.js Express server URL anytime!
-              </Text>
-            </View>
-
-            {/* Toggle Backend Connection */}
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <Text style={styles.toggleTitle}>Enable Express REST API Sync</Text>
-                <Text style={styles.toggleSub}>
-                  Sync shop ledgers with Node.js Express backend
-                </Text>
-              </View>
-              <Switch
-                value={isConnected}
-                onValueChange={setIsConnected}
-                trackColor={{ false: '#e2e8f0', true: COLORS.primary }}
-                thumbColor={isConnected ? '#ffffff' : '#94a3b8'}
-              />
-            </View>
-
-            {/* Express API Endpoint Input */}
-            <Text style={styles.fieldLabel}>Express Server Base URL</Text>
-            <View style={styles.inputRow}>
-              <Globe size={16} color="#94a3b8" style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.flexInput}
-                placeholder="http://localhost:5000/api"
-                placeholderTextColor="#94a3b8"
-                value={expressUrl}
-                onChangeText={setExpressUrl}
-              />
-            </View>
-
-            {/* Test Connection Button */}
-            <TouchableOpacity
-              style={styles.testBtn}
-              onPress={handleTestConnection}
-              activeOpacity={0.8}
-            >
-              {testing ? (
-                <RefreshCw size={14} color="#0f172a" />
-              ) : (
-                <Server size={14} color="#0f172a" />
-              )}
-              <Text style={styles.testBtnText}>
-                {testing ? 'Testing Endpoint...' : 'Ping Express Server Endpoint'}
-              </Text>
-            </TouchableOpacity>
-
-            {testResult && (
-              <View style={styles.testResultBox}>
-                <Check size={14} color={COLORS.gotGreen} />
-                <Text style={styles.testResultText}>{testResult}</Text>
-              </View>
-            )}
-
-            {/* Save Button */}
-            <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={handleSave}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.saveBtnText}>Save Settings</Text>
-            </TouchableOpacity>
-          </View>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={COPY.api.title}
+      subtitle={COPY.api.subtitle}
+      footer={
+        <Button
+          label={COPY.common.save}
+          variant="primary"
+          size="lg"
+          onPress={save}
+          fullWidth
+        />
+      }
+    >
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleText}>
+          <Text style={TYPE.label}>{COPY.api.toggleLabel}</Text>
+          <Text style={[TYPE.caption, styles.toggleHint]}>{COPY.api.toggleHint}</Text>
         </View>
+        <Switch
+          value={enabled}
+          onValueChange={setEnabled}
+          trackColor={{ false: COLORS.hairlineStrong, true: COLORS.accent }}
+          thumbColor={COLORS.surface}
+          accessibilityLabel={COPY.api.toggleLabel}
+        />
       </View>
-    </Modal>
+
+      <TextField
+        label={COPY.api.urlLabel}
+        value={url}
+        onChangeText={(next) => {
+          setUrl(next);
+          setProbe(null);
+        }}
+        placeholder={COPY.api.urlPlaceholder}
+        icon={Globe}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+
+      <Button
+        label={probing ? COPY.api.testing : COPY.api.test}
+        icon={probing ? undefined : Wifi}
+        variant="secondary"
+        onPress={testConnection}
+        loading={probing}
+        fullWidth
+      />
+
+      {probe ? (
+        <View
+          style={[
+            styles.result,
+            probe.ok ? styles.resultOk : styles.resultFail,
+          ]}
+        >
+          <Server
+            size={15}
+            color={probe.ok ? COLORS.creditStrong : COLORS.debitStrong}
+            strokeWidth={2.2}
+          />
+          <Text
+            style={[
+              TYPE.caption,
+              styles.resultText,
+              { color: probe.ok ? COLORS.creditStrong : COLORS.debitStrong },
+            ]}
+          >
+            {probe.detail}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.statusRow}>
+        <Badge
+          label={enabled ? COPY.settings.connectionOn : COPY.settings.connectionOff}
+          tone={enabled ? 'credit' : 'neutral'}
+          dot
+        />
+      </View>
+    </Sheet>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  body: {
-    padding: 16,
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primaryLight,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#334155',
-    lineHeight: 16,
-  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    gap: SPACE.md,
+    backgroundColor: COLORS.surfaceMuted,
+    borderRadius: RADIUS.md,
+    padding: SPACE.lg - 2,
   },
-  toggleTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  toggleSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 46,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 10,
-  },
-  flexInput: {
+  toggleText: {
     flex: 1,
-    color: '#0f172a',
-    fontSize: 13,
+    gap: 2,
   },
-  testBtn: {
+  toggleHint: {
+    color: COLORS.textMuted,
+  },
+  result: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#f1f5f9',
-    height: 38,
-    borderRadius: 10,
+    gap: SPACE.sm,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    marginBottom: 10,
+    padding: SPACE.md,
   },
-  testBtnText: {
-    color: '#0f172a',
-    fontSize: 12,
+  resultOk: {
+    backgroundColor: COLORS.creditSoft,
+    borderColor: COLORS.creditBorder,
+  },
+  resultFail: {
+    backgroundColor: COLORS.debitSoft,
+    borderColor: COLORS.debitBorder,
+  },
+  resultText: {
+    flex: 1,
     fontWeight: '600',
   },
-  testResultBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.gotGreenBorder,
-    marginBottom: 12,
-  },
-  testResultText: {
-    fontSize: 11,
-    color: '#166534',
-    fontWeight: '600',
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primary,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
+  statusRow: {
+    alignItems: 'flex-start',
   },
 });
