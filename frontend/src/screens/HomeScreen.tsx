@@ -18,13 +18,13 @@ import {
   ShoppingBag,
   Coffee,
   Sparkles,
-  Radio,
 } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { COLORS } from '../theme/colors';
 import { Party, Transaction } from '../types';
 import { getTranslation, LanguageCode } from '../i18n/translations';
 import { ApiService } from '../services/api';
+import { VoiceLogo } from '../components/VoiceLogo';
 
 interface HomeScreenProps {
   parties: Party[];
@@ -38,13 +38,7 @@ interface HomeScreenProps {
   onViewAllTransactions?: () => void;
   onSelectParty: (party: Party) => void;
   onSelectTransaction?: (txn: Transaction) => void;
-  onVoiceResultParsed?: (result: {
-    partyName: string;
-    amount: number;
-    type: 'gave' | 'got';
-    note: string;
-    date?: string;
-  }) => void;
+  onVoiceResultParsed?: (result: any) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -73,8 +67,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   ];
 
   const [promptIndex, setPromptIndex] = useState(0);
-  const [isHoldingToRecord, setIsHoldingToRecord] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [recordMode, setRecordMode] = useState<'idle' | 'hold' | 'tap'>('idle');
 
   // Animated pulse rings
   const pulseAnim1 = useRef(new Animated.Value(1)).current;
@@ -85,44 +80,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const webAudioChunksRef = useRef<Blob[]>([]);
   const webStreamRef = useRef<MediaStream | null>(null);
   const nativeRecordingRef = useRef<Audio.Recording | null>(null);
-  const recordingStartTimeRef = useRef<number>(0);
+  const pressStartTimeRef = useRef<number>(0);
+  const isCapturingRef = useRef<boolean>(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isHoldingToRecord) {
+      if (!isRecording && !isProcessing) {
         setPromptIndex((prev) => (prev + 1) % samplePrompts.length);
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [isHoldingToRecord]);
+  }, [isRecording, isProcessing]);
 
-  // Pulse animation loop when holding
+  // Pulse animation loop when recording
   useEffect(() => {
     let animation: Animated.CompositeAnimation | null = null;
-    if (isHoldingToRecord) {
+    if (isRecording) {
       animation = Animated.loop(
         Animated.parallel([
           Animated.sequence([
             Animated.timing(pulseAnim1, {
-              toValue: 1.25,
-              duration: 600,
+              toValue: 1.28,
+              duration: 550,
               useNativeDriver: true,
             }),
             Animated.timing(pulseAnim1, {
-              toValue: 1,
-              duration: 600,
+              toValue: 1.0,
+              duration: 550,
               useNativeDriver: true,
             }),
           ]),
           Animated.sequence([
             Animated.timing(pulseAnim2, {
-              toValue: 1.45,
-              duration: 600,
+              toValue: 1.5,
+              duration: 550,
               useNativeDriver: true,
             }),
             Animated.timing(pulseAnim2, {
-              toValue: 1,
-              duration: 600,
+              toValue: 1.0,
+              duration: 550,
               useNativeDriver: true,
             }),
           ]),
@@ -136,20 +132,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return () => {
       if (animation) animation.stop();
     };
-  }, [isHoldingToRecord]);
+  }, [isRecording]);
 
-  // --- Voice Recording on Direct Hold ---
-  const startRecordingOnHold = async () => {
+  // --- Start Audio Recording ---
+  const startAudioCapture = async () => {
     try {
-      setIsHoldingToRecord(true);
-      recordingStartTimeRef.current = Date.now();
+      isCapturingRef.current = true;
+      setIsRecording(true);
 
       if (Platform.OS === 'web') {
         let stream: MediaStream | null = null;
         if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
-        if (!stream) return;
+        if (!stream) {
+          isCapturingRef.current = false;
+          setIsRecording(false);
+          setRecordMode('idle');
+          onOpenVoice();
+          return;
+        }
 
         webStreamRef.current = stream;
         webAudioChunksRef.current = [];
@@ -162,7 +164,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         mediaRecorder.start();
       } else {
         const permission = await Audio.requestPermissionsAsync();
-        if (!permission.granted) return;
+        if (!permission.granted) {
+          isCapturingRef.current = false;
+          setIsRecording(false);
+          setRecordMode('idle');
+          onOpenVoice();
+          return;
+        }
 
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
@@ -175,55 +183,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         nativeRecordingRef.current = recording;
       }
     } catch (err) {
-      console.warn('Error starting hold recording:', err);
-      setIsHoldingToRecord(false);
+      console.warn('Error starting audio recording:', err);
+      isCapturingRef.current = false;
+      setIsRecording(false);
+      setRecordMode('idle');
+      onOpenVoice();
     }
   };
 
-  const stopRecordingOnRelease = async () => {
-    const elapsed = Date.now() - recordingStartTimeRef.current;
-    setIsHoldingToRecord(false);
-
-    // If hold was less than 350ms, open the voice assistant modal for convenience
-    if (elapsed < 350) {
-      if (webStreamRef.current) {
-        webStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      if (nativeRecordingRef.current) {
-        nativeRecordingRef.current.stopAndUnloadAsync().catch(() => {});
-        nativeRecordingRef.current = null;
-      }
-      onOpenVoice();
-      return;
-    }
-
+  // --- Stop Audio Recording & Send to Parser ---
+  const stopAudioCaptureAndProcess = async () => {
+    if (!isCapturingRef.current) return;
+    isCapturingRef.current = false;
+    setIsRecording(false);
+    setRecordMode('idle');
     setIsProcessing(true);
 
     try {
       if (Platform.OS === 'web') {
-        if (!webMediaRecorderRef.current) return;
+        if (!webMediaRecorderRef.current) {
+          setIsProcessing(false);
+          return;
+        }
         const mediaRecorder = webMediaRecorderRef.current;
 
         mediaRecorder.onstop = async () => {
           if (webStreamRef.current) {
             webStreamRef.current.getTracks().forEach((t) => t.stop());
+            webStreamRef.current = null;
           }
+          
+          if (webAudioChunksRef.current.length === 0) {
+            setIsProcessing(false);
+            return;
+          }
+
           const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
+          if (audioBlob.size < 500) {
+            // Blob too small / silent
+            setIsProcessing(false);
+            return;
+          }
+
           const formData = new FormData();
-          formData.append('audio', audioBlob, 'hold_speech.webm');
+          formData.append('audio', audioBlob, 'mic_speech.webm');
           formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
           formData.append('current_date', new Date().toISOString().split('T')[0]);
 
           try {
             const response: any = await ApiService.processVoice(formData);
-            if (response && (response.person || response.customerName) && onVoiceResultParsed) {
-              onVoiceResultParsed({
-                partyName: response.person?.name || response.customerName || 'Customer',
-                amount: response.transaction?.amount ?? response.amount ?? 0,
-                type: response.transaction?.direction || response.type || 'gave',
-                note: response.transaction?.reason || response.description || '',
-                date: response.transaction?.date || response.date,
-              });
+            if (response && onVoiceResultParsed) {
+              onVoiceResultParsed(response);
             } else {
               onOpenVoice();
             }
@@ -235,7 +245,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         };
         mediaRecorder.stop();
       } else {
-        if (!nativeRecordingRef.current) return;
+        if (!nativeRecordingRef.current) {
+          setIsProcessing(false);
+          return;
+        }
         const recording = nativeRecordingRef.current;
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
@@ -244,31 +257,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const formData = new FormData();
           formData.append('audio', {
             uri,
-            name: 'hold_speech.m4a',
+            name: 'mic_speech.m4a',
             type: 'audio/m4a',
           } as any);
           formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
           formData.append('current_date', new Date().toISOString().split('T')[0]);
 
           const response: any = await ApiService.processVoice(formData);
-          if (response && (response.person || response.customerName) && onVoiceResultParsed) {
-            onVoiceResultParsed({
-              partyName: response.person?.name || response.customerName || 'Customer',
-              amount: response.transaction?.amount ?? response.amount ?? 0,
-              type: response.transaction?.direction || response.type || 'gave',
-              note: response.transaction?.reason || response.description || '',
-              date: response.transaction?.date || response.date,
-            });
+          if (response && onVoiceResultParsed) {
+            onVoiceResultParsed(response);
           } else {
             onOpenVoice();
           }
         }
+        setIsProcessing(false);
+        nativeRecordingRef.current = null;
       }
     } catch (e) {
-      onOpenVoice();
-    } finally {
       setIsProcessing(false);
-      nativeRecordingRef.current = null;
+      onOpenVoice();
+    }
+  };
+
+  // --- Dual Gesture Handlers ---
+  const handlePressIn = () => {
+    pressStartTimeRef.current = Date.now();
+    if (!isRecording && !isProcessing) {
+      setRecordMode('hold');
+      startAudioCapture();
+    }
+  };
+
+  const handlePressOut = () => {
+    const pressDuration = Date.now() - pressStartTimeRef.current;
+    if (isRecording) {
+      if (pressDuration >= 450) {
+        // User held down and now released -> Stop and process
+        stopAudioCaptureAndProcess();
+      } else {
+        // User tapped briefly -> Switch to tap-to-toggle mode (stays recording)
+        setRecordMode('tap');
+      }
+    }
+  };
+
+  const handleButtonTap = () => {
+    if (isRecording && recordMode === 'tap') {
+      // Second tap while in tap mode -> Stop and process
+      stopAudioCaptureAndProcess();
     }
   };
 
@@ -299,26 +335,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* HERO SECTION: Tap or Hold to Record */}
+      {/* HERO SECTION: Seamless Clean Background */}
       <View style={styles.heroWrapper}>
-        <View style={styles.heroBackgroundGlow} />
-
         <Text style={styles.heroTitle}>
-          {isHoldingToRecord ? 'Listening...' : isProcessing ? 'Processing Voice...' : 'Tap or Hold to Record'}
+          {isRecording
+            ? recordMode === 'tap'
+              ? 'Recording (Tap to Stop)'
+              : 'Listening...'
+            : isProcessing
+            ? 'Processing Voice...'
+            : 'Tap or Hold to Record'}
         </Text>
 
-        <Text style={[styles.heroSubtitle, isHoldingToRecord && { color: '#e11d48', fontWeight: '700' }]}>
-          {isHoldingToRecord
-            ? '🔴 Release button when you are done speaking'
+        <Text
+          style={[
+            styles.heroSubtitle,
+            isRecording && { color: '#e11d48', fontWeight: '800' },
+          ]}
+        >
+          {isRecording
+            ? recordMode === 'tap'
+              ? '🔴 Speak naturally • Tap button when finished'
+              : '🔴 Release button when you are done speaking'
             : isProcessing
             ? '⚡ Transcribing & parsing with AI...'
             : samplePrompts[promptIndex]}
         </Text>
 
-        {/* GIANT CENTERPIECE MIC BUTTON WITH PULSE RINGS */}
+        {/* GIANT CENTERPIECE MIC BUTTON WITH ANIMATED VOICE EQUALIZER */}
         <View style={styles.micButtonContainer}>
           {/* Animated Outer Pulse Ring 2 */}
-          {isHoldingToRecord && (
+          {isRecording && (
             <Animated.View
               style={[
                 styles.pulseRingOuter,
@@ -328,7 +375,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
 
           {/* Animated Inner Pulse Ring 1 */}
-          {isHoldingToRecord && (
+          {isRecording && (
             <Animated.View
               style={[
                 styles.pulseRingInner,
@@ -341,35 +388,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <TouchableOpacity
             style={[
               styles.giantMicButton,
-              isHoldingToRecord && styles.giantMicButtonRecording,
+              isRecording && styles.giantMicButtonRecording,
               isProcessing && styles.giantMicButtonProcessing,
             ]}
-            onPressIn={startRecordingOnHold}
-            onPressOut={stopRecordingOnRelease}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={handleButtonTap}
             activeOpacity={0.9}
-            delayPressIn={50}
+            delayPressIn={40}
           >
             <View
               style={[
                 styles.giantMicInnerCircle,
-                isHoldingToRecord && styles.giantMicInnerRecording,
+                isRecording && styles.giantMicInnerRecording,
               ]}
             >
               {isProcessing ? (
                 <ActivityIndicator color="#ffffff" size="large" />
-              ) : isHoldingToRecord ? (
-                <Radio size={42} color="#ffffff" strokeWidth={2.5} />
+              ) : isRecording ? (
+                /* Animated 5-Bar Equalizer Waveform Logo */
+                <VoiceLogo size={42} color="#ffffff" animated={true} />
               ) : (
-                <Mic size={42} color="#ffffff" strokeWidth={2.5} />
+                /* Clean Mic Icon */
+                <Mic size={40} color="#ffffff" strokeWidth={2.4} />
               )}
             </View>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.holdInstructionHint}>
-          {isHoldingToRecord
-            ? 'Speaking... Release to save'
-            : 'Press & Hold to speak, release to finish'}
+          {isRecording
+            ? recordMode === 'tap'
+              ? 'Tap center button to finish & save'
+              : 'Speaking... Release button to finish'
+            : 'Hold to speak • or Tap once to start/pause'}
         </Text>
       </View>
 
@@ -427,7 +479,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
             <Text style={styles.emptyStateTitle}>No entries recorded yet</Text>
             <Text style={styles.emptyStateSub}>
-              Hold the giant mic above to record your first ledger entry!
+              Tap or hold the giant mic above to record your first ledger entry!
             </Text>
           </View>
         ) : (
@@ -522,25 +574,12 @@ const styles = StyleSheet.create({
   },
   /* Hero Top Section */
   heroWrapper: {
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: '#faf8ff',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  heroBackgroundGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(238, 242, 255, 0.7)',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    backgroundColor: 'transparent',
   },
   heroTitle: {
     fontSize: 26,
@@ -560,8 +599,8 @@ const styles = StyleSheet.create({
   },
   /* Giant Mic Button & Concentric Pulse Rings */
   micButtonContainer: {
-    width: 160,
-    height: 160,
+    width: 164,
+    height: 164,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -569,22 +608,22 @@ const styles = StyleSheet.create({
   },
   pulseRingOuter: {
     position: 'absolute',
-    width: 154,
-    height: 154,
-    borderRadius: 77,
-    backgroundColor: 'rgba(225, 29, 72, 0.15)',
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: 'rgba(99, 102, 241, 0.18)',
   },
   pulseRingInner: {
     position: 'absolute',
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    backgroundColor: 'rgba(225, 29, 72, 0.25)',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(99, 102, 241, 0.28)',
   },
   giantMicButton: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+    width: 106,
+    height: 106,
+    borderRadius: 53,
     backgroundColor: '#0f172a',
     justifyContent: 'center',
     alignItems: 'center',
@@ -595,22 +634,24 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   giantMicButtonRecording: {
-    backgroundColor: '#e11d48',
-    shadowColor: '#e11d48',
+    backgroundColor: '#1e1b4b',
+    shadowColor: '#4338ca',
+    borderColor: '#6366f1',
+    borderWidth: 2,
   },
   giantMicButtonProcessing: {
     backgroundColor: '#6366f1',
   },
   giantMicInnerCircle: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
   },
   giantMicInnerRecording: {
-    backgroundColor: '#be123c',
+    backgroundColor: '#312e81',
   },
   holdInstructionHint: {
     fontSize: 11,
