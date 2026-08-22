@@ -80,6 +80,7 @@ export default function App() {
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
 
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [voiceInitialResult, setVoiceInitialResult] = useState<any | null>(null);
   const [addCustomerModalVisible, setAddCustomerModalVisible] = useState(false);
   const [apiConfigModalVisible, setApiConfigModalVisible] = useState(false);
   const [selectedEditTxn, setSelectedEditTxn] = useState<Transaction | null>(null);
@@ -492,7 +493,10 @@ export default function App() {
               onSelectTransaction={(txn) => {
                 setSelectedEditTxn(txn);
               }}
-              onVoiceResultParsed={handleVoiceParseResult}
+              onVoiceResultParsed={(res) => {
+                setVoiceInitialResult(res);
+                setVoiceModalVisible(true);
+              }}
             />
           )}
 
@@ -734,7 +738,11 @@ export default function App() {
         currency={storeProfile.currency}
         language={storeProfile.language}
         parties={parties}
-        onClose={() => setVoiceModalVisible(false)}
+        initialResult={voiceInitialResult}
+        onClose={() => {
+          setVoiceModalVisible(false);
+          setVoiceInitialResult(null);
+        }}
         onParseVoice={handleVoiceParseResult}
       />
 

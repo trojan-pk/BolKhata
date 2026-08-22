@@ -1,6 +1,227 @@
 import { Request, Response, NextFunction } from 'express';
 
-// Urdu & Roman Urdu word-number extractor with Lakh & Thousand support
+// Comprehensive Urdu & Hindi/Devanagari to Pure Roman English Dictionary
+const SCRIPT_TO_ROMAN_MAP: Record<string, string> = {
+  // Devanagari / Hindi mappings
+  'हमजा': 'Hamza',
+  'हमज़ा': 'Hamza',
+  'ज़ैन': 'Zain',
+  'जैन': 'Zain',
+  'मोहसिन': 'Mohsin',
+  'हसनैन': 'Hasnain',
+  'अली': 'Ali',
+  'उस्मान': 'Usman',
+  'बिलाल': 'Bilal',
+  'कासिम': 'Qasim',
+  'पापा': 'Papa',
+  'सलमान': 'Salman',
+  'कुद्दुस': 'Quddus',
+  'एक लाक': '100000',
+  'एक लाख': '100000',
+  'दो लाख': '200000',
+  'तीन लाख': '300000',
+  'चार लाख': '400000',
+  'पांच लाख': '500000',
+  'दस हजार': '10000',
+  'बीस हजार': '20000',
+  'तीस हजार': '30000',
+  'पचास हजार': '50000',
+  'दो हजार': '2000',
+  'एक हजार': '1000',
+  'रुपये': 'rupay',
+  'रुपए': 'rupay',
+  'रुpay': 'rupay',
+  'रु': 'rupay',
+  'पे': 'pay',
+  'दिये': 'diye',
+  'दिए': 'diye',
+  'दिया': 'diya',
+  'लिये': 'liye',
+  'लिए': 'liye',
+  'लिया': 'liya',
+  'खाना': 'khana',
+  'खाने': 'khane',
+  'को': 'ko',
+  'से': 'se',
+  'ने': 'ne',
+  'का': 'ka',
+  'की': 'ki',
+  'के': 'ke',
+  'के लिये': 'ke liye',
+  'के लिए': 'ke liye',
+  'वापस': 'wapis',
+  'उधार': 'udhaar',
+  'हिसाब': 'hisaab',
+
+  'दस लाख': '1000000',
+  'ایک لاکھ': '100000',
+  'دو لاکھ': '200000',
+  'تین لاکھ': '300000',
+  'چار لاکھ': '400000',
+  'پانچ لاکھ': '500000',
+  'نوے ہزار': '90000',
+  'اسی ہزار': '80000',
+  'ستر ہزار': '70000',
+  'ساٹھ ہزار': '60000',
+  'پچاس ہزار': '50000',
+  'چالیس ہزار': '40000',
+  'تیس ہزار': '30000',
+  'بیس ہزار': '20000',
+  'پندرہ ہزار': '15000',
+  'دس ہزار': '10000',
+  'پانچ ہزار': '5000',
+  'چار ہزار': '4000',
+  'تین ہزار': '3000',
+  'دو ہزار': '2000',
+  'ایک ہزار': '1000',
+  'پانچ سو': '500',
+  'چار سو': '400',
+  'تین سو': '300',
+  'دو سو': '200',
+  'ایک سو': '100',
+  'لاکھ': 'lakh',
+  'ہزار': 'hazar',
+  'سو': 'sau',
+
+  // Urdu Verbs & Nouns
+  'روپے': 'rupay',
+  'روپیہ': 'rupay',
+  'روپئے': 'rupay',
+  'رuqay': 'rupay',
+  'ruqay': 'rupay',
+  'دیے': 'diye',
+  'دیئے': 'diye',
+  'دیا': 'diya',
+  'لیے': 'liye',
+  'لئے': 'liye',
+  'لیئے': 'liye',
+  'لیا': 'liya',
+  'کو': 'ko',
+  'سے': 'se',
+  'نے': 'ne',
+  'کا': 'ka',
+  'کی': 'ki',
+  'کے': 'ke',
+  'کے لیے': 'ke liye',
+  'کےلئے': 'ke liye',
+  'کےلئیے': 'ke liye',
+  'واپس کیے': 'wapis kiye',
+  'واپس': 'wapis',
+  'وصول': 'wasool',
+  'جمع': 'jama',
+  'ادھار': 'udhaar',
+  'حساب': 'hisaab',
+  'بیلنس': 'balance',
+  'زین': 'Zain',
+  'محسن': 'Mohsin',
+  'حسنین': 'Hasnain',
+  'حسین': 'Hussain',
+  'علی': 'Ali',
+  'حمزہ': 'Hamza',
+  'بلال': 'Bilal',
+  'عثمان': 'Usman',
+  'قاسم': 'Qasim',
+  'طارق': 'Tariq',
+  'پاپا': 'Papa',
+  'سلوان': 'Salman',
+  'سلمان': 'Salman',
+  'قدوس': 'Quddus',
+  'عیاشیوں': 'ayyashiyon',
+  'عیاشی': 'ayyashi',
+  'بائیک': 'bike',
+  'ٹیوب': 'tube',
+  'موبائل': 'mobile',
+  'ایپ': 'app',
+  'بناne': 'banane',
+  'بنانے': 'banane',
+  'کھانا': 'khana',
+  'کھانے': 'khanay',
+  'چائے': 'chai',
+  'پٹرول': 'petrol',
+  'راشن': 'rashan',
+};
+
+// Fast script transliterator
+function transliterateToRoman(text: string): string {
+  let res = text;
+  for (const [scriptWord, roman] of Object.entries(SCRIPT_TO_ROMAN_MAP)) {
+    res = res.split(scriptWord).join(roman);
+  }
+  return res.replace(/\s+/g, ' ').trim();
+}
+
+// Standard Pakistani Name dictionary for phonetic mapping
+const COMMON_PAKISTANI_NAMES_MAP: Record<string, string> = {
+  mohsen: 'Mohsin',
+  mohsin: 'Mohsin',
+  hasnain: 'Hasnain',
+  husnain: 'Hasnain',
+  hasnan: 'Hasnain',
+  usmaan: 'Usman',
+  osman: 'Usman',
+  usman: 'Usman',
+  hussain: 'Hussain',
+  husain: 'Hussain',
+  rehman: 'Rehman',
+  rahman: 'Rehman',
+  rehmaan: 'Rehman',
+  rizwan: 'Rizwan',
+  rizwaan: 'Rizwan',
+  faizan: 'Faizan',
+  faizaan: 'Faizan',
+  kamran: 'Kamran',
+  kamraan: 'Kamran',
+  farhan: 'Farhan',
+  farhaan: 'Farhan',
+  tariq: 'Tariq',
+  tarique: 'Tariq',
+  tarik: 'Tariq',
+  shoaib: 'Shoaib',
+  shuayb: 'Shoaib',
+  noman: 'Noman',
+  nouman: 'Noman',
+  sufyan: 'Sufyan',
+  sufiaan: 'Sufyan',
+  adnan: 'Adnan',
+  adnaan: 'Adnan',
+  bilal: 'Bilal',
+  bilaal: 'Bilal',
+  hamza: 'Hamza',
+  zain: 'Zain',
+  zayn: 'Zain',
+  qasim: 'Qasim',
+  qaasim: 'Qasim',
+  qudus: 'Quddus',
+  quddus: 'Quddus',
+  salman: 'Salman',
+};
+
+// Fast Levenshtein distance for fuzzy matching
+function levenshteinDistance(a: string, b: string): number {
+  const an = a.length;
+  const bn = b.length;
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+  const matrix = Array.from({ length: bn + 1 }, (_, i) => [i]);
+  for (let j = 0; j <= an; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= bn; i++) {
+    for (let j = 1; j <= an; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[bn][an];
+}
+
+// Extract exact numeric amount
 function extractAmountFromUrduText(str: string): number {
   const numMatch = str.match(/\d[\d,]*/);
   if (numMatch) {
@@ -16,14 +237,17 @@ function extractAmountFromUrduText(str: string): number {
   const lower = str.toLowerCase();
   let total = 0;
 
-  // Lakhs calculation
   if (str.includes('پانچ لاکھ') || lower.includes('paanch lakh') || lower.includes('5 lakh')) total += 500000;
   else if (str.includes('چار لاکھ') || lower.includes('char lakh') || lower.includes('4 lakh')) total += 400000;
   else if (str.includes('تین لاکھ') || lower.includes('teen lakh') || lower.includes('3 lakh')) total += 300000;
   else if (str.includes('دو لاکھ') || lower.includes('do lakh') || lower.includes('2 lakh')) total += 200000;
   else if (str.includes('ایک لاکھ') || lower.includes('ek lakh') || lower.includes('1 lakh') || str.includes('لاکھ') || lower.includes('lakh')) total += 100000;
 
-  // Thousands calculation
+  if (lower.includes('dhai hazar') || lower.includes('dhaye hazar')) total += 2500;
+  else if (lower.includes('derh hazar') || lower.includes('dedh hazar')) total += 1500;
+  else if (lower.includes('sawa lakh')) total += 125000;
+  else if (lower.includes('dhai lakh')) total += 250000;
+
   if (str.includes('نوے ہزار') || lower.includes('navway hazar')) total += 90000;
   else if (str.includes('اسی ہزار') || lower.includes('assi hazar')) total += 80000;
   else if (str.includes('ستر ہزار') || lower.includes('sattar hazar')) total += 70000;
@@ -40,7 +264,6 @@ function extractAmountFromUrduText(str: string): number {
   else if (str.includes('دو ہزار') || lower.includes('do hazar') || lower.includes('2 hazar')) total += 2000;
   else if (str.includes('ایک ہزار') || lower.includes('ek hazar') || (total === 0 && (str.includes('ہزار') || lower.includes('hazar')))) total += 1000;
 
-  // Hundreds calculation
   if (str.includes('پانچ سو') || lower.includes('paanch sau')) total += 500;
   else if (str.includes('چار سو') || lower.includes('char sau')) total += 400;
   else if (str.includes('تین سو') || lower.includes('teen sau')) total += 300;
@@ -50,7 +273,102 @@ function extractAmountFromUrduText(str: string): number {
   return total;
 }
 
-// Helper to calculate relative date (e.g. kal -> yesterday)
+// Precise Direction Semantics Resolver
+function extractDirection(text: string): 'gave' | 'got' {
+  const lower = text.toLowerCase();
+  
+  if (lower.includes('gave me') || lower.includes('paid me') || lower.includes('sent me') || lower.includes('wapis kiye')) {
+    return 'got';
+  }
+  if (lower.includes('i gave') || lower.includes('paid to') || lower.includes('sent to')) {
+    return 'gave';
+  }
+
+  if (/\bne\s+diye\b/i.test(lower) || /\bne\s+diya\b/i.test(lower)) {
+    return 'got';
+  }
+
+  if (/\bko\s+diye\b/i.test(lower) || /\bko\s+diya\b/i.test(lower) || /\bko\s+udhaar\b/i.test(lower) || /\bko\s+\d+/i.test(lower)) {
+    return 'gave';
+  }
+
+  if (/\bse\s+(liye|liya|liyay|pay\s+liye)\b/i.test(lower) || /\bse\s+\d+/i.test(lower)) {
+    return 'got';
+  }
+
+  if (
+    lower.includes('liye') ||
+    lower.includes('liyay') ||
+    lower.includes('liya') ||
+    lower.includes('wasool') ||
+    lower.includes('jama') ||
+    lower.includes('mile') ||
+    lower.includes('mila') ||
+    lower.includes('received') ||
+    lower.includes('aaye')
+  ) {
+    return 'got';
+  }
+
+  return 'gave';
+}
+
+// Name Extractor from Spoken Text
+function extractPersonFromText(text: string, existingPeople: { id: string; name: string }[] = []): { name: string; matchedId: string | null } {
+  const lower = text.toLowerCase();
+
+  for (const p of existingPeople) {
+    if (new RegExp(`\\b${p.name.toLowerCase()}\\b`, 'i').test(lower)) {
+      return { name: p.name, matchedId: p.id };
+    }
+  }
+
+  const markerMatch = text.match(/([a-zA-Z\u0600-\u06FF]+)\s+(ko|se|ne)\b/i);
+  if (markerMatch && markerMatch[1]) {
+    const rawCandidate = markerMatch[1].trim();
+    if (!['pakistan', 'zindabad', 'rupay', 'hazar', 'lakh', 'sau', '5000', '10000', '2000', '100000', '400'].includes(rawCandidate.toLowerCase())) {
+      return normalizePersonName(rawCandidate, existingPeople);
+    }
+  }
+
+  const FILLERS = new Set([
+    'gave', 'give', 'got', 'received', 'from', 'to', 'for', 'the', 'a', 'and', 'rupees', 'rs', 'credit', 'cash',
+    'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'unhone', 'udhaar', 'rupay', 'rupaye', 'diye', 'diya', 'hue', 'mile', 'wasool', 'jama', 'liye', 'liyay', 'paanch', 'hazar', 'char', 'sau', 'wapis', 'kiye', 'thay', 'tha', 'lakh', 'bees', 'tees', 'ek', 'jahan', 'pakistan', 'zindabad', 'lekin', 'phir', 'bhi'
+  ]);
+
+  const words = text.trim().split(/\s+/);
+  for (const word of words) {
+    const cleaned = word.replace(/[^a-zA-Z]/g, '');
+    if (cleaned && !FILLERS.has(cleaned.toLowerCase()) && isNaN(Number(cleaned)) && cleaned.length >= 3) {
+      return normalizePersonName(cleaned, existingPeople);
+    }
+  }
+
+  return { name: 'Customer', matchedId: null };
+}
+
+// Reason Extractor from Spoken Text
+function extractReasonFromText(text: string, personName: string): string {
+  let cleaned = text;
+  
+  cleaned = cleaned
+    .replace(new RegExp(`\\b${personName}\\b`, 'gi'), '')
+    .replace(/\b(ko|se|ne|ka|ki|ke|maine|isne|unhone)\b/gi, '')
+    .replace(/\b\d+[\d,]*(-pay|-rupay)?\b/gi, '')
+    .replace(/\b(lakh|hazar|sau|thousand|rupay|rupaye|rs|pkr|pay)\b/gi, '')
+    .replace(/\b(diye|diya|diye thay|diya tha|liye|liyay|liya|liye thay|liya tha|wasool|jama|mile|mila|wapis kiye)\b/gi, '')
+    .replace(/[-_,.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  cleaned = cleaned
+    .replace(/^(ke\s*liye|keliye|for)\s*/i, '')
+    .replace(/\s*(ke\s*liye|keliye|for)$/i, '')
+    .trim();
+
+  return cleaned.length >= 3 ? cleaned : '';
+}
+
 function resolveRelativeDate(text: string, baseDateStr?: string): string {
   const baseDate = baseDateStr ? new Date(baseDateStr) : new Date();
   const lower = text.toLowerCase();
@@ -66,29 +384,61 @@ function resolveRelativeDate(text: string, baseDateStr?: string): string {
   return baseDate.toISOString().split('T')[0];
 }
 
-// Helper to TitleCase English names
 function toTitleCase(str: string): string {
   if (!str) return 'Customer';
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-// Fast Local Fallback Rule Parser
-function parseFallbackLocally(inputStr: string, existingPeople: { id: string; name: string }[] = [], currentDate?: string) {
-  const lower = inputStr.toLowerCase();
+function normalizePersonName(rawName: string, existingPeople: { id: string; name: string }[] = []): { name: string; matchedId: string | null } {
+  const cleanRaw = rawName.trim().replace(/^(jahan|maine|isne|unhone|ne|se|ko)\s+/i, '').replace(/[^a-zA-Z0-9\s]/g, '');
+  const nameParts = cleanRaw.split(/\s+/);
+  const singleName = nameParts[0] || 'Customer';
+  const lower = singleName.toLowerCase();
+
+  const exactMatch = existingPeople.find((p) => p.name.toLowerCase() === lower);
+  if (exactMatch) {
+    return { name: exactMatch.name, matchedId: exactMatch.id };
+  }
+
+  let bestFuzzyMatch: { id: string; name: string; dist: number } | null = null;
+  for (const p of existingPeople) {
+    const dist = levenshteinDistance(lower, p.name.toLowerCase());
+    if (dist <= 2) {
+      if (!bestFuzzyMatch || dist < bestFuzzyMatch.dist) {
+        bestFuzzyMatch = { id: p.id, name: p.name, dist };
+      }
+    }
+  }
+
+  if (bestFuzzyMatch) {
+    return { name: bestFuzzyMatch.name, matchedId: bestFuzzyMatch.id };
+  }
+
+  if (COMMON_PAKISTANI_NAMES_MAP[lower]) {
+    const stdName = COMMON_PAKISTANI_NAMES_MAP[lower];
+    const stdMatch = existingPeople.find((p) => p.name.toLowerCase() === stdName.toLowerCase());
+    return { name: stdName, matchedId: stdMatch ? stdMatch.id : null };
+  }
+
+  return { name: toTitleCase(singleName), matchedId: null };
+}
+
+// Fast Local Ground-Truth Deterministic Parser
+function parseLocally(inputStr: string, existingPeople: { id: string; name: string }[] = [], currentDate?: string) {
+  const romanized = transliterateToRoman(inputStr);
+  const lower = romanized.toLowerCase();
 
   const isBalanceQuery =
     lower.includes('hisaab batao') ||
     lower.includes('hisab batao') ||
     lower.includes('balance batao') ||
     lower.includes('kitne lene') ||
-    lower.includes('kitne dene') ||
-    inputStr.includes('حساب') ||
-    inputStr.includes('بیلنس');
+    lower.includes('kitne dene');
 
   if (isBalanceQuery) {
     let queryPerson = 'Customer';
     for (const p of existingPeople) {
-      if (lower.includes(p.name.toLowerCase()) || inputStr.includes(p.name)) {
+      if (lower.includes(p.name.toLowerCase())) {
         queryPerson = p.name;
         break;
       }
@@ -100,91 +450,39 @@ function parseFallbackLocally(inputStr: string, existingPeople: { id: string; na
     };
   }
 
-  const isGot =
-    lower.includes('received') ||
-    lower.includes('receive') ||
-    lower.includes('collected') ||
-    lower.includes('payment') ||
-    lower.includes('paid me') ||
-    lower.includes('got') ||
-    lower.includes('mile') ||
-    lower.includes('wasool') ||
-    lower.includes('jama') ||
-    lower.includes('aaye') ||
-    lower.includes('liye') ||
-    lower.includes('wapis kiye') ||
-    inputStr.includes('لیے') ||
-    inputStr.includes('وصول') ||
-    inputStr.includes('ملے') ||
-    inputStr.includes('جمع');
-
-  const direction: 'gave' | 'got' = isGot ? 'got' : 'gave';
-  const amount = extractAmountFromUrduText(inputStr);
-
-  const FILLERS = new Set([
-    'gave', 'give', 'got', 'received', 'from', 'to', 'for', 'the', 'a', 'and', 'rupees', 'rs', 'credit', 'cash',
-    'ko', 'se', 'ne', 'ka', 'ke', 'ki', 'maine', 'isne', 'udhaar', 'rupay', 'rupaye', 'diye', 'diya', 'hue', 'mile', 'wasool', 'jama', 'liye', 'paanch', 'hazar', 'char', 'sau', 'wapis', 'kiye', 'thay', 'tha', 'lakh', 'bees', 'tees', 'ek'
-  ]);
-
-  const words = inputStr.trim().split(/\s+/);
-  let partyName = 'Customer';
-  for (const word of words) {
-    const cleaned = word.replace(/[^a-zA-Z\u0600-\u06FF]/g, '');
-    if (cleaned && !FILLERS.has(cleaned.toLowerCase()) && !['پانچ', 'چار', 'ہزار', 'سو', 'روپے', 'لیے', 'دیے', 'سے', 'کو', 'نے', 'ایک', 'لاکھ', 'بیس', 'تیس', 'پچاس'].includes(cleaned)) {
-      partyName = cleaned;
-      break;
-    }
-  }
-
-  let reason: string | null = null;
-  if (lower.includes('tube') || inputStr.includes('ٹیوب')) {
-    reason = 'bike tube replacement';
-  } else if (lower.includes('mobile balance') || lower.includes('balance dalwana')) {
-    reason = 'mobile balance';
-  } else if (lower.includes('bike repair') || lower.includes('petrol') || inputStr.includes('بائیک')) {
-    reason = 'bike repair';
-  } else if (lower.includes('rashan') || lower.includes('grocery') || lower.includes('ration')) {
-    reason = 'groceries';
-  }
-
-  const missingFields: string[] = [];
-  if (amount <= 0) missingFields.push('amount');
-
-  // Match existing people for name consistency
-  const matchingCandidates = existingPeople.filter((p) =>
-    p.name.toLowerCase().includes(partyName.toLowerCase()) ||
-    partyName.toLowerCase().includes(p.name.toLowerCase())
-  );
-
-  const isAmbiguous = matchingCandidates.length > 1;
-  const resolvedName = isAmbiguous ? partyName : (matchingCandidates[0]?.name || toTitleCase(partyName));
+  const direction = extractDirection(romanized);
+  const amount = extractAmountFromUrduText(romanized);
+  const normalizedPerson = extractPersonFromText(romanized, existingPeople);
+  const reason = extractReasonFromText(romanized, normalizedPerson.name);
 
   return {
     intent: 'create_transaction' as const,
     person: {
-      name: resolvedName,
-      matched_person_id: matchingCandidates.length === 1 ? matchingCandidates[0].id : null,
+      name: normalizedPerson.name,
+      matched_person_id: normalizedPerson.matchedId,
     },
     transaction: {
       direction,
       amount,
       currency: 'PKR',
-      reason,
-      date: resolveRelativeDate(inputStr, currentDate),
+      reason: reason || null,
+      date: resolveRelativeDate(romanized, currentDate),
       payment_method: null,
     },
-    ambiguous: isAmbiguous,
-    candidates: isAmbiguous ? matchingCandidates : [],
-    missing_fields: missingFields,
-    confidence: amount > 0 ? 0.95 : 0.7,
+    ambiguous: false,
+    candidates: [],
+    missing_fields: amount <= 0 ? ['amount'] : [],
+    confidence: amount > 0 ? 0.98 : 0.7,
   };
 }
 
-// Multi-tier Fast LLM Intent Parser (Groq GPT-OSS 20B / Gemini 3.6 Flash / Qwen 27B)
-async function parseWithLLM(text: string, systemPrompt: string, groqKey?: string, geminiKey?: string): Promise<any | null> {
-  // 1. Try Groq openai/gpt-oss-20b (Ultra-fast ~800ms)
+// Multi-tier Ultra-Fast LLM Intent Parser with Anti-Hallucination Guard
+async function parseWithLLM(text: string, systemPrompt: string, groqKey?: string): Promise<any | null> {
   if (groqKey) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1800);
+
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -192,77 +490,19 @@ async function parseWithLLM(text: string, systemPrompt: string, groqKey?: string
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-20b',
+          model: 'allam-2-7b',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Text: "${text}"` }
           ],
-          response_format: { type: 'json_object' }
-        })
+          response_format: { type: 'json_object' },
+          temperature: 0.0,
+          max_tokens: 120
+        }),
+        signal: controller.signal
       });
 
-      if (groqRes.ok) {
-        const d = (await groqRes.json()) as any;
-        const raw = d.choices?.[0]?.message?.content;
-        if (raw) {
-          return JSON.parse(raw);
-        }
-      }
-    } catch (e) {
-      console.warn('Groq LLM error, falling back to Gemini:', e);
-    }
-  }
-
-  // 2. Try Gemini 3.6 Flash / 2.5 Flash
-  if (geminiKey) {
-    const models = ['gemini-3.6-flash', 'gemini-2.5-flash'];
-    for (const model of models) {
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              { role: 'user', parts: [{ text: `${systemPrompt}\n\nSpoken Text: "${text}"\n\nJSON Output:` }] }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.1
-            }
-          })
-        });
-
-        if (res.ok) {
-          const data = (await res.json()) as any;
-          const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawContent) {
-            return JSON.parse(rawContent);
-          }
-        }
-      } catch (err) {
-        // try next
-      }
-    }
-  }
-
-  // 3. Try Groq qwen/qwen3.6-27b
-  if (groqKey) {
-    try {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'qwen/qwen3.6-27b',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Text: "${text}"` }
-          ],
-          response_format: { type: 'json_object' }
-        })
-      });
+      clearTimeout(timeoutId);
 
       if (groqRes.ok) {
         const d = (await groqRes.json()) as any;
@@ -284,7 +524,6 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
 
   try {
     const groqKey = process.env.GROQ_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
     let text = req.body?.text;
     
     let existingPeople: { id: string; name: string }[] = [];
@@ -305,21 +544,21 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
         return;
       }
 
-      // 1. High-Speed STT: Groq whisper-large-v3-turbo with Roman Urdu Conditioning
       const sttStart = performance.now();
-      console.log('⚡ [Voice API] Calling Groq Whisper Turbo (Roman Urdu Conditioning)...');
+      console.log('⚡ [Voice API] Calling Groq Whisper Turbo (Roman Urdu & Store Context Conditioning)...');
       
       const extension = req.file.originalname.split('.').pop() || 'm4a';
       const audioBlob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || 'audio/m4a' });
       
+      const storeNamesHint = existingPeople.map((p) => p.name).slice(0, 10).join(', ');
+      const promptText = `Hamza, Mohsin, Zain, Ali, Usman, Bilal, Qasim, Papa, Salman, Quddus, Tariq. ${storeNamesHint ? 'Customers: ' + storeNamesHint + '.' : ''} Roman Urdu English: Hamza ko 1 lakh rupay diye, Mohsin se 2000 liye, Papa se 5000 liye, Ali ko 400 diye, diye, liye, udhaar, wasool, jama, rupay.`;
+
       const formData = new FormData();
       formData.append('file', audioBlob, `recording.${extension}`);
       formData.append('model', 'whisper-large-v3-turbo');
-      // Pure Roman Urdu prompt conditioning forces Whisper to output in English/Roman Latin script
-      formData.append(
-        'prompt',
-        'Transcribe in pure Roman Urdu script with English alphabet only: Zain ko 2000 diye bike tube ke liye, Hasnain se 120000 liye, Ali ko 400 diye mobile balance, Papa se 50000 liye, Hamza ne 2000 wapis kiye, Qasim ko 1200 diye, bike repair, rashan, udhaar, jama, wasool, rupaye, diye, liye, lene, dene, hisaab, balance.'
-      );
+      formData.append('prompt', promptText);
+      formData.append('language', 'en'); // Enforce Latin / English / Roman alphabet output
+      formData.append('temperature', '0');
 
       const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
@@ -339,16 +578,19 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
       }
 
       const whisperData = (await whisperResponse.json()) as any;
-      text = whisperData.text;
+      const rawWhisperText = whisperData.text || '';
+      
+      // Instant Transliteration from any mixed Script to 100% Roman Urdu
+      text = transliterateToRoman(rawWhisperText);
       console.log(`✨ [Voice API] Whisper Transcribed (${sttDurationMs}ms): "${text}"`);
     } else if (text) {
+      text = transliterateToRoman(text);
       console.log(`📝 [Voice API] Text command received: "${text}"`);
     } else {
       res.status(400).json({ error: 'No audio file or text received.' });
       return;
     }
 
-    // Silence / Noise Filter
     const cleanedText = (text || '').replace(/[.\s,?!۔]/g, '').trim();
     if (!cleanedText || cleanedText.length < 2) {
       console.log('⚠️ [Voice API] Silence / No speech detected.');
@@ -356,86 +598,63 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    // 2. High-Performance Token-Optimized System Prompt (100% Roman Urdu & English Extraction)
-    const systemPrompt = `You are BolKhata's rapid financial parser.
-Convert Roman Urdu / Urdu spoken text into structured JSON.
+    // Refined System Prompt (Exception-Ready & Zero Mockup Schema)
+    const systemPrompt = `You are BolKhata's rapid ledger entity extractor.
+Convert Roman Urdu / English text into strict JSON.
 
-CONTEXT:
-- Date: "${currentDate}" (${timezone})
-- Store Customers: ${JSON.stringify(existingPeople)}
+SCHEMA:
+{"intent": "create_transaction"|"get_balance", "person": {"name": string}, "transaction": {"direction": "gave"|"got", "amount": number, "reason": string|null, "date": string}}
 
-CRITICAL RULES:
-1. "person.name": English / Latin script TitleCase ONLY (e.g. "Hasnain", "Zain", "Ali", "Papa", "Hamza", "Bilal", "Qasim"). NEVER Arabic/Urdu script. Match Store Customers if name matches.
-2. "direction": "gave" (diye/udhaar/paid) | "got" (liye/wasool/mile/wapis kiye/jama).
-3. "amount": Full numeric PKR value:
-   - "ek lakh bees hazar" / "1 lakh 20 hazar" = 120000
-   - "ek lakh" / "1 lakh" = 100000
-   - "pachaas hazar" / "50 hazar" = 50000
-   - "tees hazar" / "30 hazar" = 30000
-   - "das hazar" / "10 hazar" = 10000
-   - "do hazar" / "2000" = 2000
-4. "reason": reason in English/Roman text or null.
-5. "date": YYYY-MM-DD (kal = yesterday).
+RULES:
+1. "person.name": English Latin TitleCase name found in input text. If no person found, use "Customer".
+2. "direction": "gave" (diye/udhaar/i gave) | "got" (liye/wasool/mile/wapis kiye/jama/gave me/paid me).
+3. "amount": total integer PKR (1 lakh = 100000, dhai hazar = 2500, 400 = 400).
+4. "reason": purpose string or null.
+5. "intent": "get_balance" if asking for balance/hisaab, else "create_transaction".
 
-JSON SCHEMA ONLY:
-{
-  "intent": "create_transaction" | "get_balance" | "get_history",
-  "person": { "name": "Hasnain", "matched_person_id": null },
-  "transaction": { "direction": "got", "amount": 120000, "currency": "PKR", "reason": null, "date": "${currentDate}", "payment_method": null },
-  "ambiguous": boolean,
-  "candidates": [],
-  "missing_fields": [],
-  "confidence": 0.98
-}`;
+JSON ONLY:`;
 
     const llmStart = performance.now();
-    let parsedData = await parseWithLLM(text, systemPrompt, groqKey, geminiKey);
+    let parsedData = await parseWithLLM(text, systemPrompt, groqKey);
 
-    if (!parsedData) {
-      parsedData = parseFallbackLocally(text, existingPeople, currentDate);
-    }
+    const localResult = parseLocally(text, existingPeople, currentDate);
     llmDurationMs = Math.round(performance.now() - llmStart);
 
-    // Name Normalization
-    let rawPersonName =
-      parsedData.person?.name ||
-      parsedData.customerName ||
-      parsedData.partyName ||
-      'Customer';
+    let personName = parsedData?.person?.name || localResult.person.name;
+    let matchedPersonId = parsedData?.person?.matched_person_id || localResult.person.matched_person_id;
 
-    if (/[\u0600-\u06FF]/.test(rawPersonName)) {
-      const match = existingPeople.find((p) =>
-        p.name.toLowerCase().includes(rawPersonName.toLowerCase()) ||
-        rawPersonName.includes(p.name)
-      );
-      rawPersonName = match ? match.name : toTitleCase(rawPersonName);
+    if (personName && !text.toLowerCase().includes(personName.toLowerCase()) && !existingPeople.some(p => p.name.toLowerCase() === personName.toLowerCase())) {
+      personName = localResult.person.name;
+      matchedPersonId = localResult.person.matched_person_id;
     }
 
-    const personName = toTitleCase(rawPersonName);
+    const normalizedPerson = normalizePersonName(personName, existingPeople);
+    personName = normalizedPerson.name;
+    matchedPersonId = normalizedPerson.matchedId || matchedPersonId;
 
-    let amount = parsedData.transaction?.amount ?? parsedData.amount ?? 0;
+    let amount = parsedData?.transaction?.amount ?? localResult.transaction?.amount ?? 0;
     if (amount <= 0) {
       amount = extractAmountFromUrduText(text);
     }
 
-    const direction: 'gave' | 'got' =
-      parsedData.transaction?.direction ||
-      parsedData.type ||
-      (parsedData.intent === 'ADD_PAYMENT' ? 'got' : 'gave');
+    const direction: 'gave' | 'got' = extractDirection(text);
 
-    const reason =
-      parsedData.transaction?.reason ||
-      parsedData.description ||
-      parsedData.note ||
+    let reason =
+      parsedData?.transaction?.reason ||
+      localResult.transaction?.reason ||
       '';
 
+    if (reason && (reason.toLowerCase().includes('rupay') || reason.toLowerCase().includes('diye') || reason.toLowerCase().includes('liye'))) {
+      reason = extractReasonFromText(text, personName);
+    }
+
     const txnDate =
-      parsedData.transaction?.date ||
-      parsedData.date ||
+      parsedData?.transaction?.date ||
+      localResult.transaction?.date ||
       resolveRelativeDate(text, currentDate);
 
     const intent =
-      parsedData.intent === 'get_balance' ? 'get_balance' : 'create_transaction';
+      parsedData?.intent === 'get_balance' || text.toLowerCase().includes('hisaab') ? 'get_balance' : 'create_transaction';
 
     const totalDurationMs = Math.round(performance.now() - totalStartTime);
 
@@ -445,7 +664,7 @@ JSON SCHEMA ONLY:
       partyName: personName,
       person: {
         name: personName,
-        matched_person_id: parsedData.person?.matched_person_id || null,
+        matched_person_id: matchedPersonId,
       },
       amount,
       type: direction,
@@ -460,10 +679,10 @@ JSON SCHEMA ONLY:
         date: txnDate,
         payment_method: null,
       },
-      ambiguous: parsedData.ambiguous || false,
-      candidates: parsedData.candidates || [],
-      missing_fields: amount <= 0 ? ['amount'] : (parsedData.missing_fields || []),
-      confidence: parsedData.confidence || 0.98,
+      ambiguous: false,
+      candidates: [],
+      missing_fields: amount <= 0 ? ['amount'] : [],
+      confidence: 0.98,
       originalText: text,
       timings: {
         sttMs: sttDurationMs,
@@ -479,5 +698,53 @@ JSON SCHEMA ONLY:
   } catch (error) { 
     console.error('Error in processVoice:', error);
     next(error); 
+  }
+};
+
+// ElevenLabs Natural Voice Generation Controller
+export const generateSpeech = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const elevenKey = process.env.ELEVENLABS_API_KEY;
+    const { text, voiceId = '21m00Tcm4TlvDq8ikWAM' } = req.body;
+
+    if (!elevenKey) {
+      res.status(400).json({ error: 'ELEVENLABS_API_KEY not configured', fallback: true });
+      return;
+    }
+
+    if (!text) {
+      res.status(400).json({ error: 'Text is required for TTS', fallback: true });
+      return;
+    }
+
+    const elevenRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elevenKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2_5',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
+    });
+
+    if (!elevenRes.ok) {
+      const errText = await elevenRes.text();
+      console.warn('ElevenLabs API warning:', errText);
+      res.json({ error: errText, fallback: true });
+      return;
+    }
+
+    const audioArrayBuffer = await elevenRes.arrayBuffer();
+    const base64Audio = Buffer.from(audioArrayBuffer).toString('base64');
+    res.json({ audioBase64: `data:audio/mp3;base64,${base64Audio}` });
+  } catch (e: any) {
+    console.error('TTS error:', e);
+    res.json({ error: e?.message || 'TTS failed', fallback: true });
   }
 };

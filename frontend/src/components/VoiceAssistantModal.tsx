@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -11,22 +11,20 @@ import {
   ScrollView,
 } from 'react-native';
 import {
-  Mic,
   X,
   Sparkles,
-  CircleCheck,
-  Volume2,
-  Send,
-  AlertCircle,
+  Check,
   Calendar,
   User,
-  Users,
+  Tag,
+  Mic,
+  Volume2,
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { getTranslation, LanguageCode } from '../i18n/translations';
-import { ApiService, getApiBaseUrl } from '../services/api';
+import { ApiService } from '../services/api';
 import { Party, TransactionType } from '../types';
 
 interface VoiceAssistantModalProps {
@@ -34,6 +32,7 @@ interface VoiceAssistantModalProps {
   currency?: string;
   language?: LanguageCode;
   parties?: Party[];
+  initialResult?: any;
   onClose: () => void;
   onParseVoice: (result: {
     partyName: string;
@@ -49,20 +48,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   currency = 'Rs',
   language = 'roman_ur',
   parties = [],
+  initialResult,
   onClose,
   onParseVoice,
 }) => {
   const t = getTranslation(language);
   const [isListening, setIsListening] = useState(false);
-  const [isRecordingState, setIsRecordingState] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [voiceText, setVoiceText] = useState('');
 
-  // Structured parsed state
-  const [parseResult, setParseResult] = useState<any | null>(null);
-
-  // Editable parsed fields for confirmation
+  // Editable parsed fields
   const [partyName, setPartyName] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [txnType, setTxnType] = useState<TransactionType>('gave');
@@ -71,38 +66,35 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
   // Balance Inquiry state
   const [balanceInfo, setBalanceInfo] = useState<{ personName: string; balance: number } | null>(null);
-
-  // Web MediaRecorder references
-  const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const webAudioChunksRef = useRef<Blob[]>([]);
-  const webStreamRef = useRef<MediaStream | null>(null);
-
-  // Native expo-av recording reference
-  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
-
-  const sampleCommands = [
-    'Ali ko 400 diye mobile balance ke liye',
-    'Hamza ne 2000 wapis kiye',
-    'Kal Ali ko 1500 diye thay bike repair ke',
-    'Zain ko 2000 diye bike tube ke liye',
-    'Papa se 5000 liye',
-    'Ali ka hisaab batao',
-  ];
+  const [hasResult, setHasResult] = useState(false);
 
   // Natural high-clarity voice feedback via Native Device Speech (Urdu / English)
   const speakNativeConfirmation = (person: string, amount: number, direction: 'gave' | 'got', reasonText?: string) => {
     try {
-      Speech.stop();
       const actionUrdu = direction === 'gave' ? 'ادھار دیے گئے ہیں' : 'وصول ہوئے ہیں';
       const reasonPart = reasonText ? `، ${reasonText} کے لیے` : '';
-      const textToSpeak = `${person} کے ${amount} روپے ${actionUrdu}${reasonPart}۔`;
+      const textToSpeak = `${person} کے ${amount} روپے ${actionUrdu}${reasonPart}۔ کھاتے میں سیو کرنے کے لیے کنفرم دبائیں۔`;
 
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = 'ur-PK';
+        utterance.rate = 1.05;
+        const voices = window.speechSynthesis.getVoices();
+        const urVoice = voices.find(v => v.lang.includes('ur') || v.lang.includes('hi') || v.lang.includes('PK'));
+        if (urVoice) utterance.voice = urVoice;
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+
+      Speech.stop();
       Speech.speak(textToSpeak, {
         language: 'ur-PK',
         pitch: 1.0,
-        rate: 0.9,
+        rate: 1.0,
         onError: () => {
-          Speech.speak(`${direction === 'gave' ? 'Gave' : 'Received'} ${amount} rupees ${direction === 'gave' ? 'to' : 'from'} ${person}`, {
+          Speech.speak(`${direction === 'gave' ? 'Gave' : 'Received'} ${amount} rupees ${direction === 'gave' ? 'to' : 'from'} ${person}. Press confirm to save to ledger.`, {
             language: 'en',
           });
         },
@@ -115,7 +107,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleResponse = (resData: any) => {
     if (!resData) return;
     setErrorMessage(null);
-    setParseResult(resData);
+    setHasResult(true);
 
     if (resData.originalText) {
       setVoiceText(resData.originalText);
@@ -130,13 +122,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       );
       if (matched) {
         setBalanceInfo({ personName: matched.name, balance: matched.currentBalance });
-        setStatusMessage(`${matched.name} ka hisaab mil gaya:`);
         try {
           Speech.stop();
           Speech.speak(`${matched.name} ka balance ${matched.currentBalance} rupaye hai.`, { language: 'ur-PK' });
         } catch (e) {}
       } else {
-        setErrorMessage(`"${pName}" aap ki customer list mein nahi mila.`);
+        setErrorMessage(`"${pName}" customer list mein nahi mila.`);
       }
       return;
     }
@@ -158,8 +149,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     const dirValue: TransactionType =
       resData.transaction?.direction === 'got' ||
       resData.type === 'got' ||
-      resData.direction === 'got' ||
-      resData.intent === 'ADD_PAYMENT'
+      resData.direction === 'got'
         ? 'got'
         : 'gave';
 
@@ -181,470 +171,173 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setReason(reasonValue);
     setTxnDate(dateValue);
 
-    if (resData.ambiguous && resData.candidates && resData.candidates.length > 1) {
-      setStatusMessage(`Aik se zyada "${nameValue}" milay. Please select karein:`);
-    } else if (amtValue <= 0) {
-      setStatusMessage(`"${nameValue}" samajh aa gaya, lekin raqam darj karein:`);
-    } else {
-      setStatusMessage('Voice entry parsed! Verify & confirm below:');
-      // Speak natural device confirmation in clear Urdu
+    if (amtValue > 0) {
       speakNativeConfirmation(nameValue, amtValue, dirValue, reasonValue);
     }
   };
 
-  const handleProcessText = async (text: string) => {
-    if (!text.trim()) return;
-    setIsListening(true);
-    setErrorMessage(null);
-    setBalanceInfo(null);
-    setStatusMessage('Analyzing intent & context with AI...');
-    setVoiceText(text);
-
-    try {
-      const peoplePayload = parties.map((p) => ({ id: p.id, name: p.name }));
-      const response = await ApiService.processVoice({
-        text,
-        people: peoplePayload,
-        current_date: new Date().toISOString().split('T')[0],
-      });
-      handleResponse(response);
-    } catch (e: any) {
-      setErrorMessage(`Error: ${e?.message || 'Could not connect to voice server'}`);
-    } finally {
-      setIsListening(false);
-    }
-  };
-
-  // Start web audio recording
-  const startWebRecording = async () => {
-    try {
-      setErrorMessage(null);
-      setBalanceInfo(null);
-      setParseResult(null);
-      setStatusMessage('Listening to microphone...');
-      let stream: MediaStream | null = null;
-
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-
-      if (!stream) {
-        setErrorMessage('Microphone not accessible. Please type or tap a sample command.');
-        return;
-      }
-
-      webStreamRef.current = stream;
-      webAudioChunksRef.current = [];
-
-      const mediaRecorder = new MediaRecorder(stream);
-      webMediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          webAudioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.start();
-      setIsRecordingState(true);
-      setVoiceText('');
-    } catch (err: any) {
-      setErrorMessage('Microphone access denied or not found.');
-    }
-  };
-
-  // Stop web audio recording
-  const stopWebRecording = async () => {
-    if (!webMediaRecorderRef.current) return;
-
-    return new Promise<void>((resolve) => {
-      const mediaRecorder = webMediaRecorderRef.current!;
-
-      mediaRecorder.onstop = async () => {
-        setIsRecordingState(false);
-        setIsListening(true);
-        setStatusMessage('Transcribing & Parsing with AI...');
-
-        if (webStreamRef.current) {
-          webStreamRef.current.getTracks().forEach((track) => track.stop());
-        }
-
-        const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'speech.webm');
-        formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
-        formData.append('current_date', new Date().toISOString().split('T')[0]);
-
-        try {
-          const response = await ApiService.processVoice(formData);
-          handleResponse(response);
-        } catch (e: any) {
-          setErrorMessage(`Voice Process Error: ${e?.message}`);
-        } finally {
-          setIsListening(false);
-          resolve();
-        }
-      };
-
-      mediaRecorder.stop();
-    });
-  };
-
-  // Start Native Mobile Recording (Android / iOS)
-  const startNativeRecording = async () => {
-    try {
-      setErrorMessage(null);
-      setBalanceInfo(null);
-      setParseResult(null);
-      setStatusMessage('Recording speech on mobile...');
-      
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
-        setErrorMessage('Microphone permission denied. Please enable in settings.');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
-
-      nativeRecordingRef.current = recording;
-      setIsRecordingState(true);
-      setVoiceText('');
-    } catch (err: any) {
-      setErrorMessage(`Mic init error: ${err?.message || err}`);
-    }
-  };
-
-  // Stop Native Mobile Recording (Android / iOS)
-  const stopNativeRecording = async () => {
-    if (!nativeRecordingRef.current) return;
-
-    try {
-      setIsRecordingState(false);
-      setIsListening(true);
-      setStatusMessage('Transcribing & Resolving Intent...');
-
-      const recording = nativeRecordingRef.current;
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-
-      if (uri) {
-        const formData = new FormData();
-        formData.append('audio', {
-          uri,
-          name: 'speech.m4a',
-          type: 'audio/m4a',
-        } as any);
-        formData.append('people', JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))));
-        formData.append('current_date', new Date().toISOString().split('T')[0]);
-
-        const response = await ApiService.processVoice(formData);
-        handleResponse(response);
+  useEffect(() => {
+    if (visible) {
+      if (initialResult) {
+        handleResponse(initialResult);
       } else {
-        setErrorMessage('No audio recorded from device.');
-      }
-    } catch (e: any) {
-      setErrorMessage(`API Connection Error to ${getApiBaseUrl()}: ${e?.message}`);
-    } finally {
-      setIsListening(false);
-      nativeRecordingRef.current = null;
-    }
-  };
-
-  const handleMicPress = async () => {
-    if (Platform.OS === 'web') {
-      if (isRecordingState) {
-        await stopWebRecording();
-      } else {
-        await startWebRecording();
-      }
-    } else {
-      if (isRecordingState) {
-        await stopNativeRecording();
-      } else {
-        await startNativeRecording();
+        setHasResult(false);
+        setPartyName('');
+        setAmountStr('');
+        setReason('');
+        setVoiceText('');
       }
     }
-  };
+  }, [visible, initialResult]);
 
   const handleConfirm = () => {
-    const parsedAmount = parseFloat(amountStr) || 0;
-    if (!partyName.trim()) {
-      alert('Please enter or select a customer name');
-      return;
-    }
-    if (parsedAmount <= 0) {
-      alert('Please enter a valid amount');
+    const finalAmount = parseFloat(amountStr.replace(/,/g, '')) || 0;
+    if (finalAmount <= 0) {
+      setErrorMessage('Please enter a valid amount.');
       return;
     }
 
     onParseVoice({
-      partyName: partyName.trim(),
-      amount: parsedAmount,
+      partyName: partyName.trim() || 'Customer',
+      amount: finalAmount,
       type: txnType,
-      note: reason || voiceText,
+      note: reason.trim(),
       date: txnDate,
     });
-    
-    Speech.stop();
-    setVoiceText('');
-    setParseResult(null);
-    setPartyName('');
-    setAmountStr('');
-    setReason('');
-    onClose();
-  };
-
-  const handleCloseModal = () => {
-    Speech.stop();
     onClose();
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalCard}>
+        <View style={styles.cardContainer}>
           {/* Header */}
           <View style={styles.headerRow}>
-            <View style={styles.brandTitleRow}>
-              <Sparkles size={18} color={COLORS.primary} />
-              <Text style={styles.title}>{t.voiceTitle}</Text>
+            <View style={styles.headerBadge}>
+              <Sparkles size={14} color="#0f172a" />
+              <Text style={styles.headerBadgeText}>Voice Entry</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={handleCloseModal}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
               <X size={18} color="#64748b" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body} contentContainerStyle={{ alignItems: 'center' }}>
-            <Text style={styles.subtitle}>
-              Natural Speech AI • Groq Whisper + Gemini
-            </Text>
+          <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Spoken Text Quote */}
+            {voiceText ? (
+              <View style={styles.transcriptBox}>
+                <Volume2 size={14} color="#64748b" style={{ marginRight: 6 }} />
+                <Text style={styles.transcriptText} numberOfLines={2}>
+                  "{voiceText}"
+                </Text>
+              </View>
+            ) : null}
 
-            {/* Error Message */}
-            {errorMessage && (
-              <View style={styles.errorBadge}>
-                <AlertCircle size={14} color="#b91c1c" />
+            {/* Error Badge */}
+            {errorMessage ? (
+              <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
-            )}
+            ) : null}
 
-            {/* Status Message */}
-            {statusMessage && !errorMessage && (
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>{statusMessage}</Text>
-              </View>
-            )}
-
-            {/* Mic Button */}
-            <TouchableOpacity
-              style={[
-                styles.micBigBtn,
-                isRecordingState && styles.micRecording,
-                isListening && styles.micListening,
-              ]}
-              onPress={handleMicPress}
-              activeOpacity={0.8}
-              disabled={isListening}
-            >
-              {isListening ? (
-                <ActivityIndicator color="#ffffff" size="large" />
-              ) : (
-                <Mic size={32} color="#ffffff" strokeWidth={2.5} />
-              )}
-              <Text style={styles.micText}>
-                {isRecordingState
-                  ? 'Recording... Tap to Stop'
-                  : isListening
-                  ? 'Processing Speech...'
-                  : 'Tap to Speak'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Spoken Text Box */}
-            <View style={styles.inputBox}>
-              <Volume2 size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.voiceTextInput}
-                placeholder="Bol kar bole ya type karein..."
-                placeholderTextColor="#94a3b8"
-                value={voiceText}
-                onChangeText={setVoiceText}
-                onSubmitEditing={() => handleProcessText(voiceText)}
-              />
-              {voiceText.length > 0 && !isListening && !isRecordingState && (
-                <TouchableOpacity onPress={() => handleProcessText(voiceText)}>
-                  <Send size={18} color={COLORS.primary} style={{ marginLeft: 8 }} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Ambiguity Resolver: Person Candidates Chips */}
-            {parseResult?.ambiguous && parseResult.candidates && parseResult.candidates.length > 1 && (
-              <View style={styles.ambiguousContainer}>
-                <View style={styles.ambiguousHeader}>
-                  <Users size={14} color="#b45309" />
-                  <Text style={styles.ambiguousHeaderText}>Which person do you mean?</Text>
-                </View>
-                <View style={styles.candidateChipsRow}>
-                  {parseResult.candidates.map((c: any) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[
-                        styles.candidateChip,
-                        partyName === c.name && styles.candidateChipActive,
-                      ]}
-                      onPress={() => {
-                        setPartyName(c.name);
-                        setParseResult({ ...parseResult, ambiguous: false });
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.candidateChipText,
-                          partyName === c.name && styles.candidateChipTextActive,
-                        ]}
-                      >
-                        {c.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Balance Inquiry Result Card */}
+            {/* Balance Query Result */}
             {balanceInfo && (
-              <View style={styles.balanceInquiryCard}>
-                <User size={20} color={COLORS.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.balancePersonName}>{balanceInfo.personName}</Text>
-                  <Text style={styles.balanceStatusText}>
-                    {balanceInfo.balance > 0
-                      ? `Aap Lenge: ${currency} ${balanceInfo.balance.toLocaleString('en-IN')}`
-                      : balanceInfo.balance < 0
-                      ? `Aap Denge: ${currency} ${Math.abs(balanceInfo.balance).toLocaleString('en-IN')}`
-                      : 'Hisaab Barabar Hai (0)'}
-                  </Text>
-                </View>
+              <View style={styles.balanceCard}>
+                <Text style={styles.balanceLabel}>{balanceInfo.personName}</Text>
+                <Text style={styles.balanceAmount}>
+                  {balanceInfo.balance > 0 ? `Lenge: ${currency} ${balanceInfo.balance.toLocaleString('en-IN')}` : `Denge: ${currency} ${Math.abs(balanceInfo.balance).toLocaleString('en-IN')}`}
+                </Text>
               </View>
             )}
 
-            {/* Quick Sample Prompts */}
-            {!parseResult && !balanceInfo && (
-              <>
-                <Text style={styles.sampleHeader}>Natural Voice Command Examples:</Text>
-                <View style={styles.sampleGrid}>
-                  {sampleCommands.map((cmd, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={styles.sampleChip}
-                      onPress={() => handleProcessText(cmd)}
-                    >
-                      <Text style={styles.sampleChipText}>"{cmd}"</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {/* Interactive Confirmation & Validation Form Card */}
-            {parseResult && parseResult.intent !== 'get_balance' && (
-              <View style={styles.parsedCard}>
-                <View style={styles.parsedHeader}>
-                  <CircleCheck size={16} color={COLORS.gotGreen} />
-                  <Text style={styles.parsedTitle}>Transaction Confirmation</Text>
-                </View>
-
-                {/* Gave / Got Toggle */}
-                <View style={styles.typeRow}>
+            {/* Main Transaction Card */}
+            {!balanceInfo && (
+              <View style={styles.formContainer}>
+                {/* Type Selector (Gave / Got Pill Toggle) */}
+                <View style={styles.typeSelectorRow}>
                   <TouchableOpacity
                     style={[
-                      styles.typeBtn,
-                      txnType === 'gave' && styles.typeBtnGaveActive,
+                      styles.typePill,
+                      txnType === 'gave' ? styles.typePillGaveActive : styles.typePillInactive,
                     ]}
                     onPress={() => setTxnType('gave')}
+                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.typeBtnText,
-                        txnType === 'gave' && styles.typeBtnTextActive,
-                      ]}
-                    >
-                      {t.youGaveBtn}
+                    <Text style={[styles.typePillText, txnType === 'gave' && styles.typePillTextActive]}>
+                      🔴 You Gave (Udhaar)
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
-                      styles.typeBtn,
-                      txnType === 'got' && styles.typeBtnGotActive,
+                      styles.typePill,
+                      txnType === 'got' ? styles.typePillGotActive : styles.typePillInactive,
                     ]}
                     onPress={() => setTxnType('got')}
+                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.typeBtnText,
-                        txnType === 'got' && styles.typeBtnTextActive,
-                      ]}
-                    >
-                      {t.youGotBtn}
+                    <Text style={[styles.typePillText, txnType === 'got' && styles.typePillTextActive]}>
+                      🟢 You Got (Wasool)
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Customer Name */}
-                <Text style={styles.fieldLabel}>Person / Customer</Text>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={partyName}
-                  onChangeText={setPartyName}
-                  placeholder="e.g. Ali"
-                  placeholderTextColor="#94a3b8"
-                />
-
-                {/* Amount */}
-                <Text style={styles.fieldLabel}>Amount ({currency})</Text>
-                <TextInput
-                  style={[
-                    styles.fieldInput,
-                    { fontWeight: '800', fontSize: 16 },
-                    (!amountStr || amountStr === '0') && styles.missingFieldHighlight,
-                  ]}
-                  keyboardType="numeric"
-                  value={amountStr}
-                  onChangeText={setAmountStr}
-                  placeholder="e.g. 400"
-                  placeholderTextColor="#94a3b8"
-                />
-
-                {/* Free-form Reason */}
-                <Text style={styles.fieldLabel}>Reason (Optional)</Text>
-                <TextInput
-                  style={styles.fieldInput}
-                  value={reason}
-                  onChangeText={setReason}
-                  placeholder="e.g. mobile balance, bike repair, rashan"
-                  placeholderTextColor="#94a3b8"
-                />
-
-                {/* Date */}
-                <View style={styles.metaRow}>
-                  <Calendar size={12} color="#64748b" />
-                  <Text style={styles.metaText}>Date: {txnDate}</Text>
+                {/* Big Editable Amount Header */}
+                <View style={styles.amountHeroContainer}>
+                  <Text style={styles.amountCurrencyPrefix}>{currency}</Text>
+                  <TextInput
+                    style={styles.amountHeroInput}
+                    keyboardType="numeric"
+                    value={amountStr}
+                    onChangeText={setAmountStr}
+                    placeholder="0"
+                    placeholderTextColor="#cbd5e1"
+                  />
                 </View>
 
-                <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
-                  <Text style={styles.confirmBtnText}>{t.confirmAndSave}</Text>
-                </TouchableOpacity>
+                {/* Minimalist Input Rows */}
+                <View style={styles.inputStack}>
+                  {/* Person / Customer */}
+                  <View style={styles.minimalInputRow}>
+                    <User size={16} color="#64748b" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.minimalTextInput}
+                      value={partyName}
+                      onChangeText={setPartyName}
+                      placeholder="Customer name"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  {/* Reason */}
+                  <View style={styles.minimalInputRow}>
+                    <Tag size={16} color="#64748b" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.minimalTextInput}
+                      value={reason}
+                      onChangeText={setReason}
+                      placeholder="Note / Reason (optional)"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  {/* Date Chip */}
+                  <View style={styles.dateChipRow}>
+                    <Calendar size={13} color="#94a3b8" />
+                    <Text style={styles.dateChipText}>{txnDate}</Text>
+                  </View>
+                </View>
               </View>
             )}
           </ScrollView>
+
+          {/* Primary Action Footer */}
+          <View style={styles.footerActions}>
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm} activeOpacity={0.85}>
+              <Check size={18} color="#ffffff" strokeWidth={2.6} style={{ marginRight: 6 }} />
+              <Text style={styles.confirmButtonText}>Confirm & Save to Ledger</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -654,322 +347,239 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    padding: 16,
   },
-  modalCard: {
+  cardContainer: {
     width: '100%',
-    maxWidth: 420,
-    maxHeight: '90%',
+    maxWidth: 400,
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 12,
   },
-  brandTitleRow: {
+  headerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  title: {
-    fontSize: 15,
+  headerBadgeText: {
+    fontSize: 12,
     fontWeight: '800',
     color: '#0f172a',
+    letterSpacing: 0.2,
   },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  body: {
-    padding: 16,
-    width: '100%',
+  scrollBody: {
+    maxHeight: 460,
   },
-  subtitle: {
-    fontSize: 11,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 10,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
   },
-  errorBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 10,
-    width: '100%',
-  },
-  errorText: {
-    fontSize: 11,
-    color: '#b91c1c',
-    fontWeight: '600',
-    flex: 1,
-  },
-  statusBadge: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 10,
-    width: '100%',
-  },
-  statusText: {
-    fontSize: 11,
-    color: '#1d4ed8',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  micBigBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  micRecording: {
-    backgroundColor: COLORS.gaveRed,
-  },
-  micListening: {
-    backgroundColor: '#6366f1',
-  },
-  micText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  inputBox: {
-    width: '100%',
+  transcriptBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 42,
+    paddingVertical: 10,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 12,
+    borderColor: '#f1f5f9',
   },
-  voiceTextInput: {
+  transcriptText: {
+    fontSize: 12,
+    color: '#475569',
+    fontStyle: 'italic',
     flex: 1,
-    color: '#0f172a',
-    fontSize: 13,
   },
-  ambiguousContainer: {
-    width: '100%',
-    backgroundColor: '#fefce8',
-    borderRadius: 10,
-    padding: 10,
+  errorBox: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
     borderWidth: 1,
-    borderColor: '#fef08a',
+    borderRadius: 12,
+    padding: 10,
     marginBottom: 12,
   },
-  ambiguousHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  ambiguousHeaderText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#854d0e',
-  },
-  candidateChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  candidateChip: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-  },
-  candidateChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  candidateChipText: {
-    fontSize: 11,
-    color: '#334155',
+  errorText: {
+    fontSize: 12,
+    color: '#dc2626',
     fontWeight: '600',
+    textAlign: 'center',
   },
-  candidateChipTextActive: {
-    color: '#ffffff',
-  },
-  balanceInquiryCard: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  balanceCard: {
     backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 14,
+    borderColor: '#bbf7d0',
     borderWidth: 1,
-    borderColor: COLORS.gotGreenBorder,
-    marginBottom: 14,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    marginVertical: 10,
   },
-  balancePersonName: {
+  balanceLabel: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  balanceStatusText: {
-    fontSize: 13,
     fontWeight: '700',
     color: '#166534',
-    marginTop: 2,
-  },
-  sampleHeader: {
-    alignSelf: 'flex-start',
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-    marginBottom: 6,
-  },
-  sampleGrid: {
-    width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  sampleChip: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  sampleChipText: {
-    fontSize: 11,
-    color: '#334155',
-  },
-  parsedCard: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    marginTop: 4,
-  },
-  parsedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  parsedTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-  },
-  typeBtnGaveActive: {
-    backgroundColor: '#fef2f2',
-    borderColor: COLORS.gaveRed,
-  },
-  typeBtnGotActive: {
-    backgroundColor: '#f0fdf4',
-    borderColor: COLORS.gotGreen,
-  },
-  typeBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  typeBtnTextActive: {
-    color: '#0f172a',
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
     marginBottom: 4,
   },
-  fieldInput: {
-    backgroundColor: '#ffffff',
+  balanceAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#15803d',
+  },
+  formContainer: {
+    width: '100%',
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  typePill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typePillGaveActive: {
+    backgroundColor: '#ffe4e6',
+    borderWidth: 1.5,
+    borderColor: '#e11d48',
+  },
+  typePillGotActive: {
+    backgroundColor: '#ccfbf1',
+    borderWidth: 1.5,
+    borderColor: '#0d9488',
+  },
+  typePillInactive: {
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 13,
+    borderColor: '#e2e8f0',
+  },
+  typePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  typePillTextActive: {
     color: '#0f172a',
-    marginBottom: 8,
+    fontWeight: '900',
   },
-  missingFieldHighlight: {
-    borderColor: COLORS.gaveRed,
-    backgroundColor: '#fff5f5',
+  amountHeroContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
-  metaRow: {
+  amountCurrencyPrefix: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#64748b',
+    marginRight: 6,
+  },
+  amountHeroInput: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
+    minWidth: 100,
+    textAlign: 'center',
+    padding: 0,
+  },
+  inputStack: {
+    gap: 10,
+  },
+  minimalInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  minimalTextInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    padding: 0,
+  },
+  dateChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    marginTop: 2,
   },
-  metaText: {
+  dateChipText: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#94a3b8',
     fontWeight: '600',
   },
-  confirmBtn: {
-    backgroundColor: COLORS.gotGreen,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
+  footerActions: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#ffffff',
   },
-  confirmBtnText: {
+  confirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
