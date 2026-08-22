@@ -45,6 +45,7 @@ import { ApiConfigModal } from './src/components/ApiConfigModal';
 import { CustomerDetailModal } from './src/components/CustomerDetailModal';
 
 // Screens
+import { HomeScreen } from './src/screens/HomeScreen';
 import { CustomersScreen } from './src/screens/CustomersScreen';
 import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
@@ -476,44 +477,22 @@ export default function App() {
         {/* Tab Screen Views */}
         <View style={styles.mainContentArea}>
           {activeTab === 'home' && (
-            <ScrollView
-              contentContainerStyle={{ paddingBottom: 110 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Dashboard Metrics */}
-              <DashboardCards
-                totalReceivable={totalReceivable}
-                totalPayable={totalPayable}
-                todayCashIn={todayCashIn}
-                todayCashOut={todayCashOut}
-                currency={storeProfile.currency}
-                language={storeProfile.language}
-                onPressReceivable={() => handleTabChange('customers', 1)}
-                onPressPayable={() => handleTabChange('customers', 1)}
-              />
-
-              {/* Quick Grahak Ledger Summary */}
-              <View style={styles.homeSectionHeader}>
-                <Text style={styles.homeSectionTitle}>{t.recentParties}</Text>
-                <TouchableOpacity onPress={() => handleTabChange('customers', 1)}>
-                  <Text style={styles.viewAllText}>
-                    {t.viewAll} ({parties.length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ paddingHorizontal: 16 }}>
-                {parties.slice(0, 5).map((party) => (
-                  <CustomerCard
-                    key={party.id}
-                    party={party}
-                    currency={storeProfile.currency}
-                    language={storeProfile.language}
-                    onPress={() => setSelectedParty(party)}
-                  />
-                ))}
-              </View>
-            </ScrollView>
+            <HomeScreen
+              parties={parties}
+              transactions={transactions}
+              totalReceivable={totalReceivable}
+              totalPayable={totalPayable}
+              currency={storeProfile.currency}
+              language={storeProfile.language}
+              onOpenVoice={() => setVoiceModalVisible(true)}
+              onViewAllCustomers={() => handleTabChange('customers', 1)}
+              onViewAllTransactions={() => handleTabChange('reports', 3)}
+              onSelectParty={(party) => setSelectedParty(party)}
+              onSelectTransaction={(txn) => {
+                setSelectedEditTxn(txn);
+              }}
+              onVoiceResultParsed={handleVoiceParseResult}
+            />
           )}
 
           {activeTab === 'customers' && (
