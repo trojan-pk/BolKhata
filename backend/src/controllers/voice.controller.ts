@@ -6,7 +6,7 @@ Analyze spoken South Asian business ledger text (which may be in Urdu script, Ro
 
 Return JSON in this EXACT schema:
 {
-  "intent": "create_transaction" | "get_balance",
+  "intent": "create_transaction" | "update_transaction" | "delete_transaction" | "delete_customer" | "get_balance",
   "person": {
     "name": "Person Name in Roman English TitleCase"
   },
@@ -15,15 +15,32 @@ Return JSON in this EXACT schema:
     "amount": number,
     "reason": "purpose of payment or null",
     "date": "YYYY-MM-DD"
+  },
+  "searchCriteria": {
+    "previousAmount": number or null,
+    "relativeTime": "last" | "today" | "yesterday" | null
+  },
+  "changes": {
+    "amount": number or null,
+    "direction": "gave" | "got" | null,
+    "reason": "updated purpose or null"
   }
 }
 
 Guidelines:
-1. Always convert any Urdu/Arabic/Hindi names to standard Pakistani Roman English TitleCase (e.g. "اسامہ" -> "Usama", "احسان" -> "Ehsan", "علی" -> "Ali", "زین" -> "Zain", "عثمان" -> "Usman", "پاپا" -> "Papa", "بلال" -> "Bilal", "حمزہ" -> "Hamza", "وقاص" -> "Waqas", "عمر" -> "Umar").
-2. Calculate South Asian numerical terms accurately (1 lakh = 100000, 5 lakh = 500000, 5 hazar / پانچ ہزار = 5000, 2 hazar = 2000, dhai hazar = 2500, derh hazar = 1500, 400 = 400).
-3. "direction": "gave" for giving money / udhaar / i gave / ko diye / paid to; "got" for receiving money / wasool / jama / se liye / liye / paid me / gave me / wapis kiye.
-4. Extract only the genuine purpose / item into "reason" (e.g. "electronic ka samaan buy karne", "cycle repair", "khana"). Do not include the person's name, currency or amounts in the reason.
-5. If user is asking for hisaab / balance / account status, set "intent": "get_balance".
+1. Names: Always convert Urdu/Arabic/Hindi names to standard Pakistani Roman English TitleCase (e.g. "اسامہ" -> "Usama", "احسان" -> "Ehsan", "علی" -> "Ali", "زین" -> "Zain", "عثمان" -> "Usman", "پاپا" -> "Papa", "بلال" -> "Bilal", "حمزہ" -> "Hamza", "وقاص" -> "Waqas", "عمر" -> "Umar").
+2. Numbers: Calculate South Asian numerical terms accurately (1 lakh = 100000, 5 lakh = 500000, 5 hazar / پانچ ہزار = 5000, 2 hazar = 2000, dhai hazar = 2500, derh hazar = 1500, 400 = 400).
+3. Intents:
+   - "create_transaction": Default for recording a new ledger entry ("Zain ko 2000 diye", "Ali se 500 liye").
+   - "update_transaction": When changing or correcting an existing entry ("Zain ki pichli entry 2000 ki jagah 1500 kardo", "Ali ka 500 wala hisaab badal kar 800 kardo", "Change Zain's last transaction to 3000", "Hamza ke 400 mein note likh do petrol").
+     * Set "searchCriteria" with the target entry being modified (e.g. "previousAmount": 2000 or "relativeTime": "last").
+     * Set "changes" with the new desired values (e.g. "amount": 1500). Also put the new amount in "transaction.amount".
+   - "delete_transaction": When removing/cancelling an existing entry ("Zain ka aakhri hisaab delete kardo", "Ali ki 500 wali entry khatam kardo", "Delete the last entry of Zain").
+     * Set "searchCriteria" with "previousAmount" or "relativeTime": "last".
+   - "delete_customer": When removing an entire customer account from the ledger ("Zain ko list se hata do / delete kardo").
+   - "get_balance": When asking for balance status / hisaab ("Zain ka hisaab batao", "How much does Ali owe?").
+4. "direction": "gave" for giving money / udhaar / i gave / ko diye / paid to; "got" for receiving money / wasool / jama / se liye / liye / paid me / gave me / wapis kiye.
+5. "reason": Extract genuine purpose / item into "reason" (e.g. "electronic ka samaan", "cycle repair", "khana", "petrol"). Do not include the person's name or amounts.
 
 Return strict JSON ONLY with no markdown wrappers.`;
 
@@ -299,6 +316,8 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
     const direction: 'gave' | 'got' = parsedData?.transaction?.direction === 'got' ? 'got' : 'gave';
     const reason = parsedData?.transaction?.reason || '';
     const txnDate = parsedData?.transaction?.date || currentDate;
+    const searchCriteria = parsedData?.searchCriteria || null;
+    const changes = parsedData?.changes || null;
 
     const totalDurationMs = Math.round(performance.now() - totalStartTime);
 
@@ -315,6 +334,8 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
       direction,
       description: reason,
       note: reason,
+      searchCriteria,
+      changes,
       transaction: {
         direction,
         amount,

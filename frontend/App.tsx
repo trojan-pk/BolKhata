@@ -617,12 +617,16 @@ function BolKhata() {
         currency={storeProfile.currency}
         language={storeProfile.language}
         parties={parties}
+        transactions={transactions}
         initialResult={voiceResult}
         onClose={() => {
           setVoiceOpen(false);
           setVoiceResult(null);
         }}
         onParseVoice={applyVoiceEntry}
+        onUpdateTransaction={saveEditedTransaction}
+        onDeleteTransaction={deleteTransaction}
+        onDeleteParty={deleteParty}
       />
 
       <ApiConfigModal
