@@ -100,12 +100,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const matchParty = (needle: string) =>
-    parties.find((p) => {
-      const a = p.name.toLowerCase().trim();
-      const b = needle.toLowerCase().trim();
-      return a.includes(b) || b.includes(a);
+  const matchParty = (needle: string) => {
+    if (!needle) return undefined;
+    const cleanNeedle = String(needle || '').toLowerCase().trim();
+    if (!cleanNeedle) return undefined;
+    return parties.find((p) => {
+      if (!p || !p.name) return false;
+      const a = String(p.name || '').toLowerCase().trim();
+      return a.includes(cleanNeedle) || cleanNeedle.includes(a);
     });
+  };
 
   /** Speaks text back in English via Web Speech / Expo Speech. */
   const speakText = (text: string) => {
@@ -140,7 +144,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     const rawIntent: VoiceActionIntent = data.intent || 'create_transaction';
     setActiveIntent(rawIntent);
 
-    const person = (data.person?.name || data.customerName || data.partyName || '').trim();
+    const rawPerson = data.person?.name ?? data.customerName ?? data.partyName ?? '';
+    const person = String(rawPerson || '').trim();
     const matchedP = person ? matchParty(person) : undefined;
 
     // 1. BALANCE QUERY INTENT
@@ -325,7 +330,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           ...targetTxnToUpdate,
           amount: parsedVal,
           type,
-          note: reason.trim(),
+          note: String(reason || '').trim(),
           date,
         });
       }
@@ -352,8 +357,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     }
 
     // D. Create New Transaction
+    const cleanName = String(name || '').trim();
+    const cleanReason = String(reason || '').trim();
     const value = parseAmount(amount);
-    if (!name.trim()) {
+    if (!cleanName) {
       setError(COPY.txn.invalidName);
       return;
     }
@@ -362,10 +369,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       return;
     }
     onParseVoice({
-      partyName: name.trim(),
+      partyName: cleanName,
       amount: value,
       type,
-      note: reason.trim(),
+      note: cleanReason,
       date,
     });
     onClose();
