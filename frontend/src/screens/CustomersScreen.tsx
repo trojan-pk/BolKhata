@@ -68,13 +68,14 @@ export const CustomersScreen: React.FC<{
   );
 
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = String(query || '').trim().toLowerCase();
     const digits = needle.replace(/\D/g, '');
 
     return parties
       .filter((party) => {
+        if (!party) return false;
         if (needle) {
-          const matchesName = party.name.toLowerCase().includes(needle);
+          const matchesName = String(party.name || '').toLowerCase().includes(needle);
           const matchesPhone =
             digits.length > 0 &&
             (party.mobile || '').replace(/\D/g, '').includes(digits);
@@ -90,11 +91,11 @@ export const CustomersScreen: React.FC<{
         const bOpen = b.currentBalance !== 0;
         if (aOpen !== bOpen) return aOpen ? -1 : 1;
         if (aOpen) return Math.abs(b.currentBalance) - Math.abs(a.currentBalance);
-        return a.name.localeCompare(b.name);
+        return (a.name || '').localeCompare(b.name || '');
       });
   }, [parties, query, filter]);
 
-  const searching = query.trim().length > 0;
+  const searching = String(query || '').trim().length > 0;
 
   return (
     <View style={styles.screen}>
