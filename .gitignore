@@ -30,3 +30,5 @@ lerna-debug.log*
 
 # Build output
 dist/
+/backend/wa
+/tests

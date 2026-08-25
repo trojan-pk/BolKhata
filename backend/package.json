@@ -13,13 +13,25 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "resolutions": {
+    "baileys/libsignal": "github:AliAryanTech/libsignal-node"
+  },
+  "overrides": {
+    "baileys": {
+      "libsignal": "github:AliAryanTech/libsignal-node"
+    }
+  },
   "dependencies": {
+    "@hapi/boom": "^10.0.1",
     "@supabase/supabase-js": "^2.112.3",
+    "baileys": "^7.0.0-rc14",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "jetdb": "^1.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
+    "qr-image": "^3.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

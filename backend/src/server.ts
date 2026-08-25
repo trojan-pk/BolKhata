@@ -6,6 +6,7 @@ import customerRoutes from './routes/customer.routes';
 import transactionRoutes from './routes/transaction.routes';
 import voiceRoutes from './routes/voice.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import waRoutes from './routes/whatsapp.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -47,6 +48,7 @@ app.use('/customers', customerRoutes);
 app.use('/transactions', transactionRoutes);
 app.use('/voice', voiceRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/wa', waRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
