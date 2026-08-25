@@ -4,9 +4,11 @@ import {
   Globe,
   Info,
   Server,
+  Sparkles,
   Store,
   Trash2,
 } from 'lucide-react-native';
+import { FaWhatsapp } from 'react-icons/fa';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, SPACE, TYPE } from '../theme/tokens';
@@ -25,6 +27,9 @@ import {
   TextField,
   useFeedback,
 } from '../ui';
+import { WhatsAppLinkModal } from '../components/WhatsAppLinkModal';
+import { WaTemplateModal } from '../components/WaTemplateModal';
+import { ApiService } from '../services/api';
 
 const CURRENCIES = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
 
@@ -44,6 +49,8 @@ const APP_VERSION = '1.0.0';
  * that only appears once something has actually changed — no silent writes, no
  * button that does nothing.
  */
+const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 export const SettingsScreen: React.FC<{
   storeProfile: StoreProfile;
   onUpdateStore: (updated: StoreProfile) => void;
@@ -57,6 +64,18 @@ export const SettingsScreen: React.FC<{
   const [mobile, setMobile] = useState(storeProfile.mobile);
   const [currency, setCurrency] = useState(storeProfile.currency);
   const [language, setLanguage] = useState<LanguageCode>(storeProfile.language);
+
+  // WhatsApp state
+  const [waLinked, setWaLinked] = useState(false);
+  const [waPhone, setWaPhone] = useState<string | undefined>(undefined);
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+
+  useEffect(() => {
+    ApiService.checkWaStatus(WA_USER_ID)
+      .then((s) => { setWaLinked(s.linked); setWaPhone(s.phone); })
+      .catch(() => {});
+  }, []);
 
   // Keep the form in step when the profile changes elsewhere (e.g. after erase).
   useEffect(() => {
@@ -227,6 +246,55 @@ export const SettingsScreen: React.FC<{
           </Card>
         </View>
 
+        {/* -------------------------------------------------- whatsapp -- */}
+        <View>
+          <GroupLabel text="WhatsApp Integration" />
+          <Card padding={0}>
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={() => setWaModalOpen(true)}
+              leading={
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: waLinked ? '#E8F9F0' : '#F1F5F9',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <FaWhatsapp size={20} color={waLinked ? '#25D366' : '#64748B'} />
+                </View>
+              }
+              title="WhatsApp Account Link"
+              subtitle={
+                waLinked
+                  ? `Linked: +${waPhone ?? '…'}`
+                  : 'Link your WA to send reminders'
+              }
+              trailing={
+                <Badge
+                  label={waLinked ? 'Linked' : 'Not linked'}
+                  tone={waLinked ? 'credit' : 'neutral'}
+                />
+              }
+              chevron
+            />
+            <Divider inset={SPACE.lg} />
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={() => setTemplateModalOpen(true)}
+              leading={<IconWell icon={Sparkles} tone="accent" />}
+              title="Reminder Message Templates"
+              subtitle="Choose preset or customize reminder format"
+              chevron
+            />
+          </Card>
+        </View>
+
         {/* ---------------------------------------------------------- about -- */}
         <View>
           <GroupLabel text={COPY.settings.aboutSection} />
@@ -256,6 +324,19 @@ export const SettingsScreen: React.FC<{
           />
         ) : null}
       </ScrollView>
+
+      <WhatsAppLinkModal
+        visible={waModalOpen}
+        userId={WA_USER_ID}
+        onClose={() => setWaModalOpen(false)}
+        onLinked={(phone) => { setWaLinked(true); setWaPhone(phone); }}
+        onUnlinked={() => { setWaLinked(false); setWaPhone(undefined); }}
+      />
+
+      <WaTemplateModal
+        visible={templateModalOpen}
+        onClose={() => setTemplateModalOpen(false)}
+      />
     </View>
   );
 };

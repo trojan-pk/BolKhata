@@ -3,7 +3,6 @@ import {
   Animated,
   BackHandler,
   Easing,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,14 +11,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Calendar,
   CheckCheck,
   ChevronLeft,
+  Clock,
   MessageCircle,
   Minus,
   Phone,
   Plus,
   Trash2,
 } from 'lucide-react-native';
+import { FaWhatsapp } from 'react-icons/fa6';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import {
@@ -53,6 +56,9 @@ import {
   groupByDate,
   normalisePhone,
 } from '../utils/format';
+import { ApiService } from '../services/api';
+import { getActiveTemplateText } from '../services/reminderTemplates';
+import { WaScheduleModal, getTimeRemainingText } from './WaScheduleModal';
 
 /**
  * A customer's full account: what they owe, and every entry that got them
@@ -95,6 +101,70 @@ export const CustomerLedgerPanel: React.FC<{
 
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
+
+  // WhatsApp backend, schedule & cooldown state
+  const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
+  const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
+  const [waLinked, setWaLinked] = useState(false);
+  const [lastReminderAt, setLastReminderAt] = useState<string | null>(null);
+  const [cooldownSecs, setCooldownSecs] = useState<number>(0);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [pendingSchedule, setPendingSchedule] = useState<any | null>(null);
+
+  const fetchSchedules = () => {
+    if (!party?.id) return;
+    ApiService.getScheduledWaReminders(WA_USER_ID)
+      .then((list) => {
+        const found = list.find(
+          (s: any) => s.customerId === party.id && s.status === 'PENDING'
+        );
+        setPendingSchedule(found || null);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    ApiService.checkWaStatus(WA_USER_ID)
+      .then((s) => setWaLinked(s.linked))
+      .catch(() => {});
+    fetchSchedules();
+  }, [party?.id]);
+
+  // Check 1-hour cooldown for active party
+  useEffect(() => {
+    if (!party?.id) return;
+    const key = `@bolkhata_wa_last_sent_${party.id}`;
+    AsyncStorage.getItem(key).then((val) => {
+      if (val) {
+        const lastMs = parseInt(val, 10);
+        const elapsed = Date.now() - lastMs;
+        if (elapsed < COOLDOWN_MS) {
+          setCooldownSecs(Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+          setLastReminderAt(new Date(lastMs).toISOString());
+        } else {
+          setCooldownSecs(0);
+        }
+      } else {
+        setCooldownSecs(0);
+      }
+    });
+  }, [party?.id]);
+
+  // Live 1-second countdown ticker
+  useEffect(() => {
+    if (cooldownSecs <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSecs((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSecs]);
 
   /* ------------------------------------------------------------ animation -- */
   useEffect(() => {
@@ -166,18 +236,38 @@ export const CustomerLedgerPanel: React.FC<{
     );
   };
 
-  const remind = () => {
-    const message = encodeURIComponent(
-      `Hello ${party.name},\n\n` +
-        `A ledger reminder from ${storeName}. Your outstanding balance is ` +
-        `${formatMoney(Math.abs(balance), currency)}.\n\n` +
-        `Please arrange payment when convenient. Thank you.`
-    );
-    Linking.openURL(`whatsapp://send?phone=${phone}&text=${message}`).catch(() => {
-      Linking.openURL(`https://wa.me/${phone}?text=${message}`).catch(() =>
-        toast('WhatsApp is not available on this device', 'error')
-      );
-    });
+  const remind = async () => {
+    if (!waLinked) {
+      toast('Link your WhatsApp in Settings first', 'error');
+      return;
+    }
+    if (!party?.id || cooldownSecs > 0) return;
+
+    setSendingReminder(true);
+    try {
+      const activeTemplate = await getActiveTemplateText();
+      const result = await ApiService.sendWaReminder(WA_USER_ID, {
+        id: party.id,
+        phone: party.mobile,
+        name: party.name,
+        balance: party.currentBalance,
+        message: activeTemplate,
+        storeName: storeName,
+      });
+      if (result.success) {
+        const now = Date.now();
+        await AsyncStorage.setItem(`@bolkhata_wa_last_sent_${party.id}`, now.toString());
+        setLastReminderAt(new Date(now).toISOString());
+        setCooldownSecs(3600); // 1-hour cooldown
+        toast('Reminder sent via WhatsApp ✓');
+      } else {
+        toast(result.error ?? 'Failed to send reminder', 'error');
+      }
+    } catch {
+      toast('Could not reach server', 'error');
+    } finally {
+      setSendingReminder(false);
+    }
   };
 
   const settle = async () => {
@@ -281,22 +371,14 @@ export const CustomerLedgerPanel: React.FC<{
             padding={SPACE.lg}
             radius={RADIUS.xl}
           >
-            <View style={styles.balanceRow}>
-              <View style={styles.balanceText}>
+            <View style={styles.balanceHeader}>
+              <View style={styles.labelGroup}>
                 <Text style={[TYPE.overline, styles.balanceLabel]}>
                   {statusLabel}
                 </Text>
-                <Money
-                  value={balance}
-                  currency={currency}
-                  size="title1"
-                  tone={settled ? 'muted' : toCollect ? 'credit' : 'debit'}
-                  style={styles.balanceValue}
-                />
                 <Badge
                   label={COPY.party.entriesCount(entries.length)}
                   tone="neutral"
-                  style={styles.entriesBadge}
                 />
               </View>
 
@@ -307,19 +389,110 @@ export const CustomerLedgerPanel: React.FC<{
                   variant="secondary"
                   size="sm"
                   onPress={settle}
+                  style={styles.settleBtn}
                 />
               ) : null}
             </View>
+
+            <Money
+              value={balance}
+              currency={currency}
+              size="title1"
+              tone={settled ? 'muted' : toCollect ? 'credit' : 'debit'}
+              style={styles.balanceValue}
+            />
           </Card>
 
           {/* ------------------------------------------- whatsapp reminder -- */}
           {toCollect && phone ? (
-            <Press onPress={remind} style={styles.reminder}>
-              <MessageCircle size={16} color={COLORS.whatsapp} strokeWidth={2.2} />
-              <Text style={[TYPE.label, styles.reminderText]}>
-                {COPY.party.reminderCta}
-              </Text>
-            </Press>
+            <View style={styles.waSectionRow}>
+              <Press
+                onPress={remind}
+                disabled={!waLinked || sendingReminder || cooldownSecs > 0}
+                style={[
+                  styles.waBtn,
+                  !waLinked && styles.waBtnDisabled,
+                  cooldownSecs > 0 && styles.waBtnCooldown,
+                  sendingReminder && styles.waBtnSending,
+                ]}
+              >
+                <FaWhatsapp
+                  size={20}
+                  color={
+                    cooldownSecs > 0
+                      ? '#128C7E'
+                      : waLinked
+                      ? '#FFFFFF'
+                      : COLORS.textMuted
+                  }
+                />
+                <Text
+                  style={[
+                    styles.waBtnText,
+                    !waLinked && styles.waBtnTextDim,
+                    cooldownSecs > 0 && styles.waBtnTextCooldown,
+                  ]}
+                >
+                  {sendingReminder
+                    ? 'Sending…'
+                    : cooldownSecs > 0
+                    ? `Remind in ${Math.floor(cooldownSecs / 60)}m ${cooldownSecs % 60 < 10 ? '0' : ''}${cooldownSecs % 60}s`
+                    : waLinked
+                    ? 'Send WA Reminder'
+                    : 'Link WA in Settings'}
+                </Text>
+                {cooldownSecs > 0 ? (
+                  <View style={styles.cooldownBadge}>
+                    <Text style={styles.cooldownBadgeText}>1h Cooldown</Text>
+                  </View>
+                ) : null}
+              </Press>
+
+              <Press
+                onPress={() => {
+                  if (!waLinked) {
+                    toast('Link your WhatsApp in Settings first', 'error');
+                    return;
+                  }
+                  setScheduleModalOpen(true);
+                }}
+                style={styles.scheduleBtn}
+              >
+                <Clock size={18} color="#128C7E" strokeWidth={2.2} />
+                <Text style={styles.scheduleBtnText}>Schedule</Text>
+              </Press>
+            </View>
+          ) : null}
+
+          {/* Active scheduled reminder badge */}
+          {pendingSchedule ? (
+            <View style={styles.scheduledBanner}>
+              <Clock size={16} color="#128C7E" />
+              <View style={styles.scheduledTextCol}>
+                <Text style={styles.scheduledBannerText}>
+                  Scheduled for{' '}
+                  {new Date(pendingSchedule.scheduledAt).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+                <Text style={styles.scheduledCountdownText}>
+                  (Sends {getTimeRemainingText(pendingSchedule.scheduledAt)})
+                </Text>
+              </View>
+              <Press
+                onPress={async () => {
+                  await ApiService.cancelScheduledWaReminder(WA_USER_ID, pendingSchedule.id);
+                  toast('Schedule cancelled');
+                  fetchSchedules();
+                }}
+                style={styles.cancelSchBtn}
+              >
+                <Text style={styles.cancelSchText}>Cancel</Text>
+              </Press>
+            </View>
           ) : null}
 
           {/* -------------------------------------------------- statement -- */}
@@ -386,6 +559,24 @@ export const CustomerLedgerPanel: React.FC<{
           </View>
         </View>
       </View>
+
+      <WaScheduleModal
+        visible={scheduleModalOpen}
+        userId={WA_USER_ID}
+        customer={
+          party
+            ? {
+                id: party.id,
+                name: party.name,
+                phone: party.mobile,
+                balance: party.currentBalance,
+              }
+            : null
+        }
+        storeName={storeName}
+        onClose={() => setScheduleModalOpen(false)}
+        onScheduled={fetchSchedules}
+      />
     </Animated.View>
   );
 };
@@ -445,38 +636,148 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.lg,
     paddingBottom: SPACE.huge,
   },
-  balanceRow: {
+  balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: SPACE.md,
   },
-  balanceText: {
-    flex: 1,
+  settleBtn: {
+    width: 'auto',
+    flexShrink: 0,
+  },
+  labelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    flexWrap: 'wrap',
   },
   balanceLabel: {
     color: COLORS.textSecondary,
   },
   balanceValue: {
-    marginTop: SPACE.xs,
+    marginTop: SPACE.sm + 2,
   },
-  entriesBadge: {
-    marginTop: SPACE.sm,
+  waSectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginTop: SPACE.md,
   },
-  reminder: {
+  waBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACE.sm,
-    marginTop: SPACE.md,
     paddingVertical: SPACE.md,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.whatsappSoft,
-    borderWidth: 1,
-    borderColor: COLORS.creditBorder,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.xl,
+    backgroundColor: '#25D366',
+    shadowColor: '#25D366',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  reminderText: {
-    color: COLORS.creditStrong,
+  scheduleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.xl,
+    backgroundColor: '#E8F9F0',
+    borderWidth: 1.5,
+    borderColor: '#128C7E',
+  },
+  scheduleBtnText: {
+    ...TYPE.label,
+    color: '#075E54',
+    fontWeight: '700',
+  },
+  scheduledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACE.sm,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.lg,
+    backgroundColor: '#E8F9F0',
+    borderWidth: 1,
+    borderColor: '#25D366',
+  },
+  scheduledTextCol: {
+    flex: 1,
+    marginLeft: 8,
+    gap: 1,
+  },
+  scheduledBannerText: {
+    ...TYPE.caption,
+    color: '#075E54',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  scheduledCountdownText: {
+    ...TYPE.caption,
+    color: '#128C7E',
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  cancelSchBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: RADIUS.xs,
+  },
+  cancelSchText: {
+    ...TYPE.caption,
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  waBtnText: {
+    ...TYPE.label,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  waBtnTextDim: {
+    color: COLORS.textMuted,
+  },
+  waBtnTextCooldown: {
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  waBtnDisabled: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.hairline,
+    borderWidth: 1,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  waBtnCooldown: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    borderWidth: 1.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  waBtnSending: {
+    opacity: 0.7,
+  },
+  cooldownBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    marginLeft: SPACE.xs,
+  },
+  cooldownBadgeText: {
+    ...TYPE.caption,
+    color: '#0F172A',
+    fontSize: 12,
     fontWeight: '700',
   },
   statement: {
