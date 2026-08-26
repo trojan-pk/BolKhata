@@ -38,6 +38,8 @@ import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
+import { OnboardingWizardModal } from './src/screens/OnboardingWizardModal';
 import { supabase } from './src/services/supabase';
 import { Session } from '@supabase/supabase-js';
 import { todayISO } from './src/utils/format';
@@ -101,6 +103,7 @@ function BolKhata() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authView, setAuthView] = useState<'welcome' | 'auth'>('welcome');
 
   /* --------------------------------------------------------------- routing -- */
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -127,40 +130,7 @@ function BolKhata() {
   const appOpacity = useRef(new Animated.Value(0)).current;
   const appShift = useRef(new Animated.Value(10)).current;
 
-  useEffect(() => {
-    (async () => {
-      const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
-        StorageService.getStoreProfile(),
-        StorageService.getParties(),
-        StorageService.getTransactions(),
-        StorageService.getCashbook(),
-      ]);
-      setStoreProfile(profile);
-      setParties(loadedParties);
-      setTransactions(loadedTxns);
-      setCashbook(loadedCash);
-      setLoading(false);
-    })();
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (_event === 'SIGNED_IN' || _event === 'SIGNED_OUT') {
-        // Trigger splash on auth state changes as requested
-        setSplashVisible(true);
-        splashOpacity.setValue(1);
-        appOpacity.setValue(0);
-        appShift.setValue(10);
-        setTimeout(finishSplash, 2500); 
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const userId = session?.user?.id;
 
   const finishSplash = useCallback(() => {
     Animated.parallel([
@@ -185,6 +155,55 @@ function BolKhata() {
     ]).start(() => setSplashVisible(false));
   }, [splashOpacity, appOpacity, appShift]);
 
+  const loadUserData = useCallback(async (uid?: string) => {
+    setLoading(true);
+    try {
+      const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
+        StorageService.getStoreProfile(uid),
+        StorageService.getParties(uid),
+        StorageService.getTransactions(uid),
+        StorageService.getCashbook(uid),
+      ]);
+      setStoreProfile(profile);
+      setParties(loadedParties);
+      setTransactions(loadedTxns);
+      setCashbook(loadedCash);
+    } catch (e) {
+      console.warn('[BolKhata] Error loading user data:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+      if (session?.user?.id) {
+        loadUserData(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (_event === 'SIGNED_IN' && session?.user?.id) {
+        loadUserData(session.user.id);
+        setSplashVisible(true);
+        splashOpacity.setValue(1);
+        appOpacity.setValue(0);
+        appShift.setValue(10);
+        setTimeout(finishSplash, 2000); 
+      } else if (_event === 'SIGNED_OUT') {
+        setParties([]);
+        setTransactions([]);
+        setCashbook([]);
+        setStoreProfile(INITIAL_STORE_PROFILE);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUserData, finishSplash]);
+
   /* ------------------------------------------------------------ persistence -- */
 
   const commit = useCallback(
@@ -192,22 +211,22 @@ function BolKhata() {
       setParties(nextParties);
       setTransactions(nextTxns);
       await Promise.all([
-        StorageService.saveParties(nextParties),
-        StorageService.saveTransactions(nextTxns),
+        StorageService.saveParties(nextParties, userId),
+        StorageService.saveTransactions(nextTxns, userId),
       ]);
     },
-    []
+    [userId]
   );
 
   const commitCashbook = useCallback(async (next: CashbookEntry[]) => {
     setCashbook(next);
-    await StorageService.saveCashbook(next);
-  }, []);
+    await StorageService.saveCashbook(next, userId);
+  }, [userId]);
 
   const saveProfile = useCallback(async (next: StoreProfile) => {
     setStoreProfile(next);
-    await StorageService.saveStoreProfile(next);
-  }, []);
+    await StorageService.saveStoreProfile(next, userId);
+  }, [userId]);
 
   /* -------------------------------------------------------------- mutations -- */
 
@@ -258,13 +277,14 @@ function BolKhata() {
 
   const deleteParty = useCallback(
     async (partyId: string) => {
+      await StorageService.deleteParty(partyId, userId);
       await commit(
         parties.filter((p) => p.id !== partyId),
         transactions.filter((t) => t.partyId !== partyId)
       );
       if (selectedParty?.id === partyId) setSelectedParty(null);
     },
-    [parties, transactions, commit, selectedParty]
+    [parties, transactions, commit, selectedParty, userId]
   );
 
   const addTransaction = useCallback(
@@ -404,6 +424,7 @@ function BolKhata() {
       const target = transactions.find((t) => t.id === txnId);
       if (!target) return;
 
+      await StorageService.deleteTransaction(txnId, userId);
       const nextTxns = transactions.filter((t) => t.id !== txnId);
       const nextParties = withRecalculatedBalance(parties, nextTxns, target.partyId);
       await commit(nextParties, nextTxns);
@@ -412,7 +433,7 @@ function BolKhata() {
         setSelectedParty(nextParties.find((p) => p.id === target.partyId) || null);
       }
     },
-    [transactions, parties, commit, selectedParty]
+    [transactions, parties, commit, selectedParty, userId]
   );
 
   const addCashEntry = useCallback(
@@ -435,13 +456,14 @@ function BolKhata() {
 
   const deleteCashEntry = useCallback(
     async (id: string) => {
+      await StorageService.deleteCashbookEntry(id, userId);
       await commitCashbook(cashbook.filter((c) => c.id !== id));
     },
-    [cashbook, commitCashbook]
+    [cashbook, commitCashbook, userId]
   );
 
   const eraseAll = useCallback(async () => {
-    await StorageService.clearAll();
+    await StorageService.clearUserStorage(userId);
     setParties([]);
     setTransactions([]);
     setCashbook([]);
@@ -449,7 +471,7 @@ function BolKhata() {
     setSelectedParty(null);
     setEditingTxn(null);
     toast('All data erased');
-  }, [toast]);
+  }, [toast, userId]);
 
   /* ----------------------------------------------------------------- totals -- */
 
@@ -544,7 +566,14 @@ function BolKhata() {
       {/* Main Application or Auth Flow */}
       {!authLoading && !splashVisible ? (
         !session ? (
-          <AuthScreen />
+          authView === 'welcome' ? (
+            <WelcomeScreen
+              onGetStarted={() => setAuthView('auth')}
+              onLogin={() => setAuthView('auth')}
+            />
+          ) : (
+            <AuthScreen onBackToWelcome={() => setAuthView('welcome')} />
+          )
         ) : (
           <Animated.View
             style={[
@@ -568,6 +597,17 @@ function BolKhata() {
             </View>
 
             <TabBar active={activeTab} onChange={setActiveTab} />
+
+            {/* Post-Signup Personalization & Business Setup Wizard */}
+            {session && !storeProfile.isOnboarded && (
+              <OnboardingWizardModal
+                visible={true}
+                userEmail={session.user.email}
+                onComplete={async (updatedProfile) => {
+                  await saveProfile(updatedProfile);
+                }}
+              />
+            )}
           </Animated.View>
         )
       ) : null}

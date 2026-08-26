@@ -30,11 +30,22 @@ export const AppBar: React.FC<{
       >
         <Avatar name={name} size={38} tone="ink" />
         <View style={styles.identityText}>
-          <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
-            {name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
+              {name}
+            </Text>
+            {storeProfile.accountType === 'commercial' && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryBadgeText}>
+                  {storeProfile.businessCategory ? storeProfile.businessCategory.split(' ')[0] : '🏢'}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={[TYPE.caption, styles.owner]} numberOfLines={1}>
-            {owner || 'Voice ledger'}
+            {owner
+              ? `${owner} · ${storeProfile.accountType === 'personal' ? 'Personal' : 'Merchant'}`
+              : 'Voice ledger'}
           </Text>
         </View>
       </Press>
@@ -76,8 +87,22 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   name: {
     color: COLORS.textPrimary,
+  },
+  categoryBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
   },
   owner: {
     color: COLORS.textMuted,
