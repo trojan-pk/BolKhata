@@ -1,6 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 
-const DEVELOPER_EMAIL = 'test@bolkhata.com';
+const DEFAULT_DEV_EMAILS = [
+  'talhairfan1947@gmail.com',
+  'test@bolkhata.com',
+  'admin@bolkhata.com',
+  'dev@bolkhata.com',
+];
+
+const envDevEmails = process.env.DEVELOPER_EMAILS
+  ? process.env.DEVELOPER_EMAILS.split(',').map((e) => e.trim().toLowerCase())
+  : [];
+
+const DEVELOPER_EMAILS = new Set([...DEFAULT_DEV_EMAILS, ...envDevEmails]);
+
 const DAILY_LIMIT = Number(process.env.DAILY_VOICE_LIMIT) || 50;
 
 // In-memory store: { [userId]: { date: string, count: number } }
@@ -14,10 +26,17 @@ export const voiceLimitMiddleware = (req: Request, res: Response, next: NextFunc
     return;
   }
 
-  // Developer Bypass
-  if (user.email === DEVELOPER_EMAIL) {
-    next();
-    return;
+  const userEmail = (user.email || '').toLowerCase().trim();
+
+  // Developer / Admin Unlimited Bypass
+  if (
+    DEVELOPER_EMAILS.has(userEmail) ||
+    userEmail.endsWith('@bolkhata.com') ||
+    user.user_metadata?.is_developer === true ||
+    user.app_metadata?.is_developer === true ||
+    user.app_metadata?.role === 'admin'
+  ) {
+    return next();
   }
 
   const userId = user.id;
