@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Party, Transaction, CashbookEntry, StoreProfile, VoiceCommandParseResult } from '../types';
+import { supabase } from './supabase';
 
 // Dynamically resolve API URL for Web, LAN IP, and Mobile Expo Go
 export const getApiBaseUrl = () => {
@@ -33,6 +34,19 @@ export const getApiBaseUrl = () => {
   return 'http://localhost:3000';
 };
 
+// Helper to retrieve active Supabase Authorization Bearer header
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch (e) {
+    // Non-blocking
+  }
+  return {};
+}
+
 export const ApiService = {
   getStoreProfile: async (): Promise<StoreProfile> => {
     return {
@@ -49,17 +63,15 @@ export const ApiService = {
   saveStoreProfile: async (updated: StoreProfile): Promise<void> => {},
 
   getParties: async (): Promise<Party[]> => [],
-
   createParty: async (party: { name: string; mobile: string }): Promise<Party | null> => null,
-
   getTransactions: async (): Promise<Transaction[]> => [],
-
   createTransaction: async (data: { partyId: string; type: string; amount: number; description: string }) => null,
 
   processVoice: async (
     data: FormData | { text: string; people?: { id: string; name: string }[]; current_date?: string }
   ): Promise<VoiceCommandParseResult> => {
     const targetUrl = `${getApiBaseUrl()}/voice/process`;
+    const authHeaders = await getAuthHeaders();
     
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
     
@@ -69,6 +81,7 @@ export const ApiService = {
         body: data,
         headers: {
           'Accept': 'application/json',
+          ...authHeaders,
         },
       });
       
@@ -93,6 +106,7 @@ export const ApiService = {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify(data),
       });
@@ -113,6 +127,28 @@ export const ApiService = {
       console.log('[ApiService] Voice result:', cleanLog);
       return resJson;
     }
+  },
+
+  generateSpeech: async (text: string, voiceId?: string): Promise<{ audioBase64: string } | null> => {
+    try {
+      const targetUrl = `${getApiBaseUrl()}/voice/tts`;
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ text, voiceId }),
+      });
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (e) {
+      console.warn('[ApiService] TTS generation error:', e);
+    }
+    return null;
   },
   
   saveParties: async (newParties: Party[]) => {},

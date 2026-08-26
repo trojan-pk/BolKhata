@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 const DEVELOPER_EMAIL = 'test@bolkhata.com';
-const DAILY_LIMIT = 10;
+const DAILY_LIMIT = Number(process.env.DAILY_VOICE_LIMIT) || 50;
 
 // In-memory store: { [userId]: { date: string, count: number } }
 const usageCache: Record<string, { date: string; count: number }> = {};

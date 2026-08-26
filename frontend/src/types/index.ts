@@ -44,6 +44,9 @@ export interface StoreProfile {
   language: 'ur' | 'roman_ur' | 'en' | 'hi' | 'bn' | 'es';
   expressApiUrl?: string;
   isBackendConnected?: boolean;
+  accountType?: 'commercial' | 'personal';
+  businessCategory?: string;
+  isOnboarded?: boolean;
 }
 
 export interface VoiceCommandParseResult {

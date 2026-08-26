@@ -35,6 +35,12 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 app.get('/', (req: Request, res: Response) => {
+  // If requested by a web browser, redirect to the Expo frontend
+  if (req.accepts('html') && !req.xhr) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    res.redirect(frontendUrl);
+    return;
+  }
   res.json({
     status: 'ok',
     message: 'BolKhata Voice Ledger API is running',
