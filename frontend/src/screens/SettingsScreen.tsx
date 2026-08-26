@@ -314,6 +314,25 @@ export const SettingsScreen: React.FC<{
           </Card>
         </View>
 
+        {/* ---------------------------------------------------------- auth -- */}
+        <View>
+          <GroupLabel text="Account" />
+          <Card padding={0}>
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={async () => {
+                const { supabase } = await import('../services/supabase');
+                await supabase.auth.signOut();
+              }}
+              leading={<IconWell icon={Trash2} tone="debit" />}
+              title="Log Out"
+              subtitle="Sign out of your account"
+              chevron
+            />
+          </Card>
+        </View>
+
         {dirty ? (
           <Button
             label={COPY.common.save}

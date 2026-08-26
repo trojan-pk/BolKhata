@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
+import { supabase } from '../services/supabase.service';
 
 // Extend Express Request type to include user
 declare global {
@@ -12,7 +10,7 @@ declare global {
   }
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -23,10 +21,16 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
   const token = authHeader.split(' ')[1];
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      return;
+    }
+    
+    req.user = user;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    res.status(401).json({ error: 'Unauthorized: Internal Server Error' });
   }
 };
