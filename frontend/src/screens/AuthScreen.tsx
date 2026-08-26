@@ -27,11 +27,12 @@ if (Platform.OS !== 'web') {
 type AuthMode = 'login' | 'signup';
 
 interface AuthScreenProps {
+  initialMode?: 'login' | 'signup';
   onBackToWelcome?: () => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onBackToWelcome }) => {
-  const [mode, setMode] = useState<AuthMode>('login');
+export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onBackToWelcome }) => {
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

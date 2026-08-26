@@ -1,192 +1,113 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Easing,
-  Platform,
-  ScrollView,
 } from 'react-native';
-import { Mic, Cloud, Send, ChevronRight, Sparkles, ShieldCheck } from 'lucide-react-native';
+import { Mic, Cloud, Send, ShieldCheck, ArrowRight, LogIn, UserPlus } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { FONTS } from '../theme/typography';
 import { VoiceLogo } from '../components/VoiceLogo';
 
 interface WelcomeScreenProps {
-  onGetStarted: () => void;
+  onSignUp: () => void;
   onLogin: () => void;
 }
 
-const GREETINGS = [
-  { text: 'خوش آمدید', font: FONTS.headingBold, size: 44, lang: 'Urdu' },
-  { text: 'Welcome', font: FONTS.headingBold, size: 44, lang: 'English' },
-  { text: 'جی آیاں نوں', font: FONTS.headingBold, size: 44, lang: 'Punjabi' },
-  { text: 'BolKhata', font: FONTS.headingBold, size: 46, isBrand: true },
-];
-
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onGetStarted, onLogin }) => {
-  const [index, setIndex] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(15)).current;
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
   const contentFade = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(14)).current;
 
-  // Animate greeting cycle
   useEffect(() => {
-    // Initial content entrance
-    Animated.timing(contentFade, {
-      toValue: 1,
-      duration: 800,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-
-    const animateGreeting = () => {
-      // Fade in
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 450,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 450,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // Hold for 1.8s
-        setTimeout(() => {
-          // Fade out
-          Animated.parallel([
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: 350,
-              easing: Easing.in(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(slideAnim, {
-              toValue: -15,
-              duration: 350,
-              easing: Easing.in(Easing.cubic),
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            slideAnim.setValue(15);
-            setIndex((prev) => (prev + 1) % GREETINGS.length);
-          });
-        }, 1800);
-      });
-    };
-
-    animateGreeting();
-    const interval = setInterval(animateGreeting, 2700);
-    return () => clearInterval(interval);
+    Animated.parallel([
+      Animated.timing(contentFade, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUp, {
+        toValue: 0,
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
-
-  const currentGreeting = GREETINGS[index];
 
   return (
     <View style={styles.container}>
-      {/* Soft background aura circles */}
-      <View style={styles.auraTop} pointerEvents="none" />
-      <View style={styles.auraBottom} pointerEvents="none" />
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top Logo and Multilingual Greeting (Apple "Hello" Style) */}
-        <View style={styles.heroSection}>
-          <View style={styles.logoWrapper}>
-            <VoiceLogo size={64} animated={true} multiColor={true} />
-          </View>
-
-          <View style={styles.greetingBox}>
-            <Animated.Text
-              style={[
-                styles.greetingText,
-                {
-                  fontFamily: currentGreeting.font,
-                  fontSize: currentGreeting.size,
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                  color: currentGreeting.isBrand ? COLORS.primary : COLORS.ink,
-                },
-              ]}
-            >
-              {currentGreeting.text}
-            </Animated.Text>
-          </View>
-
-          <Text style={styles.heroSubtitle}>
-            Voice-First Digital Ledger & Khata for Smart Merchants & Daily Life.
-          </Text>
+      <Animated.View
+        style={[
+          styles.contentWrapper,
+          {
+            opacity: contentFade,
+            transform: [{ translateY: slideUp }],
+          },
+        ]}
+      >
+        {/* Minimalist Solid Black Voice Logo */}
+        <View style={styles.logoSection}>
+          <VoiceLogo size={56} color={COLORS.ink} animated={true} multiColor={false} />
         </View>
 
-        {/* Feature Cards Grid */}
-        <Animated.View style={[styles.featuresContainer, { opacity: contentFade }]}>
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <Mic size={22} color="#4F46E5" />
-            </View>
-            <View style={styles.featureTextBox}>
-              <Text style={styles.featureTitle}>Speak in Urdu or English</Text>
-              <Text style={styles.featureDesc}>
-                Just speak your transactions: "Aslam bhai ko 500 udhaar diye". Instant voice parsing.
-              </Text>
-            </View>
+        {/* Clean English Heading */}
+        <Text style={styles.headingTitle}>Welcome</Text>
+        <Text style={styles.brandSubtitle}>BolKhata · Digital Voice Ledger</Text>
+
+        <Text style={styles.tagline}>
+          Track customer udhaar, cashbook, and personal expenses with smart voice commands.
+        </Text>
+
+        {/* Concise Feature Badges */}
+        <View style={styles.featureRow}>
+          <View style={styles.featurePill}>
+            <Mic size={14} color={COLORS.ink} />
+            <Text style={styles.featurePillText}>Speak to Record</Text>
           </View>
 
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <Send size={22} color="#059669" />
-            </View>
-            <View style={styles.featureTextBox}>
-              <Text style={styles.featureTitle}>1-Tap WhatsApp Receipts</Text>
-              <Text style={styles.featureDesc}>
-                Send balance reminders, payment confirmations, and PDF ledgers straight to WhatsApp.
-              </Text>
-            </View>
+          <View style={styles.featurePill}>
+            <Send size={14} color="#16a34a" />
+            <Text style={styles.featurePillText}>WhatsApp Receipts</Text>
           </View>
 
-          <View style={styles.featureCard}>
-            <View style={[styles.featureIconBox, { backgroundColor: '#F0F9FF' }]}>
-              <Cloud size={22} color="#0284C7" />
-            </View>
-            <View style={styles.featureTextBox}>
-              <Text style={styles.featureTitle}>100% Cloud Synced & Offline</Text>
-              <Text style={styles.featureDesc}>
-                Access your khata from any phone or computer with real-time Supabase cloud backup.
-              </Text>
-            </View>
+          <View style={styles.featurePill}>
+            <Cloud size={14} color="#0284c7" />
+            <Text style={styles.featurePillText}>Cloud Synced</Text>
           </View>
-        </Animated.View>
+        </View>
 
-        {/* Action Buttons */}
-        <Animated.View style={[styles.actionSection, { opacity: contentFade }]}>
+        {/* Action Buttons: Sign Up & Log In */}
+        <View style={styles.actionSection}>
           <TouchableOpacity
-            style={styles.getStartedButton}
-            onPress={onGetStarted}
+            style={styles.primaryButton}
+            onPress={onSignUp}
             activeOpacity={0.88}
           >
-            <Text style={styles.getStartedText}>Get Started</Text>
-            <ChevronRight size={20} color="#FFFFFF" />
+            <UserPlus size={18} color="#FFFFFF" />
+            <Text style={styles.primaryButtonText}>Create Free Account</Text>
+            <ArrowRight size={16} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.loginButton} onPress={onLogin} activeOpacity={0.75}>
-            <Text style={styles.loginText}>
-              Already have an account? <Text style={styles.loginTextBold}>Log In</Text>
-            </Text>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={onLogin}
+            activeOpacity={0.8}
+          >
+            <LogIn size={18} color={COLORS.ink} />
+            <Text style={styles.secondaryButtonText}>Log In</Text>
           </TouchableOpacity>
+        </View>
 
-          <View style={styles.securityBadge}>
-            <ShieldCheck size={14} color={COLORS.textMuted} />
-            <Text style={styles.securityText}>End-to-End Secure • Multi-Tenant Cloud</Text>
-          </View>
-        </Animated.View>
-      </ScrollView>
+        {/* Bottom Trust Badge */}
+        <View style={styles.trustBadge}>
+          <ShieldCheck size={13} color={COLORS.textMuted} />
+          <Text style={styles.trustText}>Private & Secure • Multi-Tenant Cloud</Text>
+        </View>
+      </Animated.View>
     </View>
   );
 };
@@ -195,154 +116,116 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.paper,
-    position: 'relative',
-  },
-  scrollContent: {
-    flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-    maxWidth: 520,
+    alignItems: 'center',
+    padding: 24,
+  },
+  contentWrapper: {
     width: '100%',
-    alignSelf: 'center',
-  },
-  auraTop: {
-    position: 'absolute',
-    top: -100,
-    right: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(79, 70, 229, 0.06)',
-  },
-  auraBottom: {
-    position: 'absolute',
-    bottom: -100,
-    left: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(5, 150, 105, 0.06)',
-  },
-  heroSection: {
+    maxWidth: 390,
     alignItems: 'center',
-    marginBottom: 32,
   },
-  logoWrapper: {
-    marginBottom: 20,
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  greetingBox: {
-    height: 60,
+  logoSection: {
+    marginBottom: 16,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
   },
-  greetingText: {
+  headingTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 34,
     fontWeight: '800',
+    color: COLORS.ink,
     textAlign: 'center',
     letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  heroSubtitle: {
+  brandSubtitle: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.inkSoft,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  tagline: {
     fontFamily: FONTS.body,
-    fontSize: 15,
+    fontSize: 13,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 360,
-    marginTop: 4,
+    lineHeight: 19,
+    marginBottom: 24,
+    paddingHorizontal: 8,
   },
-  featuresContainer: {
-    gap: 14,
+  featureRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 32,
   },
-  featureCard: {
+  featurePill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    padding: 16,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.hairline,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
-  featureIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  featureTextBox: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 15,
+  featurePillText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
     color: COLORS.textPrimary,
-    marginBottom: 3,
-  },
-  featureDesc: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: COLORS.textMuted,
-    lineHeight: 18,
   },
   actionSection: {
-    gap: 12,
-    alignItems: 'center',
+    width: '100%',
+    gap: 10,
   },
-  getStartedButton: {
+  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.ink,
-    width: '100%',
-    height: 52,
-    borderRadius: 14,
+    height: 48,
+    borderRadius: 12,
     gap: 8,
     shadowColor: COLORS.ink,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  getStartedText: {
+  primaryButtonText: {
     fontFamily: FONTS.bodySemiBold,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  loginButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.hairline,
+    height: 46,
+    borderRadius: 12,
+    gap: 8,
   },
-  loginText: {
-    fontFamily: FONTS.body,
+  secondaryButtonText: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  loginTextBold: {
-    fontFamily: FONTS.bodyBold,
     color: COLORS.ink,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  securityBadge: {
+  trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 8,
+    marginTop: 24,
   },
-  securityText: {
+  trustText: {
     fontFamily: FONTS.body,
     fontSize: 11,
     color: COLORS.textMuted,

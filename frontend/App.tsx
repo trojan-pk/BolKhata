@@ -104,6 +104,7 @@ function BolKhata() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authView, setAuthView] = useState<'welcome' | 'auth'>('welcome');
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   /* --------------------------------------------------------------- routing -- */
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -568,11 +569,20 @@ function BolKhata() {
         !session ? (
           authView === 'welcome' ? (
             <WelcomeScreen
-              onGetStarted={() => setAuthView('auth')}
-              onLogin={() => setAuthView('auth')}
+              onSignUp={() => {
+                setAuthMode('signup');
+                setAuthView('auth');
+              }}
+              onLogin={() => {
+                setAuthMode('login');
+                setAuthView('auth');
+              }}
             />
           ) : (
-            <AuthScreen onBackToWelcome={() => setAuthView('welcome')} />
+            <AuthScreen
+              initialMode={authMode}
+              onBackToWelcome={() => setAuthView('welcome')}
+            />
           )
         ) : (
           <Animated.View
