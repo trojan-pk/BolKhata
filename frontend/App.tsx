@@ -37,6 +37,9 @@ import { CustomersScreen } from './src/screens/CustomersScreen';
 import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
+import { supabase } from './src/services/supabase';
+import { Session } from '@supabase/supabase-js';
 import { todayISO } from './src/utils/format';
 
 /* -------------------------------------------------------------- ledger math -- */
@@ -96,6 +99,8 @@ function BolKhata() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cashbook, setCashbook] = useState<CashbookEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   /* --------------------------------------------------------------- routing -- */
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -136,6 +141,25 @@ function BolKhata() {
       setCashbook(loadedCash);
       setLoading(false);
     })();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (_event === 'SIGNED_IN' || _event === 'SIGNED_OUT') {
+        // Trigger splash on auth state changes as requested
+        setSplashVisible(true);
+        splashOpacity.setValue(1);
+        appOpacity.setValue(0);
+        appShift.setValue(10);
+        setTimeout(finishSplash, 2500); 
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const finishSplash = useCallback(() => {
@@ -517,30 +541,36 @@ function BolKhata() {
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      <Animated.View
-        style={[
-          styles.app,
-          {
-            paddingTop: insets.top,
-            opacity: appOpacity,
-            transform: [{ translateY: appShift }],
-          },
-        ]}
-      >
-        <View style={styles.shell}>
-          <AppBar
-            storeProfile={storeProfile}
-            onOpenSettings={() => setActiveTab('settings')}
-          />
+      {/* Main Application or Auth Flow */}
+      {!authLoading && !splashVisible ? (
+        !session ? (
+          <AuthScreen />
+        ) : (
+          <Animated.View
+            style={[
+              styles.app,
+              {
+                paddingTop: insets.top,
+                opacity: appOpacity,
+                transform: [{ translateY: appShift }],
+              },
+            ]}
+          >
+            <View style={styles.shell}>
+              <AppBar
+                storeProfile={storeProfile}
+                onOpenSettings={() => setActiveTab('settings')}
+              />
 
-          {/* Keyed so each tab fades in rather than snapping into place. */}
-          <ScreenTransition key={activeTab} tabKey={activeTab}>
-            {screen()}
-          </ScreenTransition>
-        </View>
+              <ScreenTransition key={activeTab} tabKey={activeTab}>
+                {screen()}
+              </ScreenTransition>
+            </View>
 
-        <TabBar active={activeTab} onChange={setActiveTab} />
-      </Animated.View>
+            <TabBar active={activeTab} onChange={setActiveTab} />
+          </Animated.View>
+        )
+      ) : null}
 
       {/* -------------------------------------------------- splash overlay -- */}
       {splashVisible ? (
