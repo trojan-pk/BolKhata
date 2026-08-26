@@ -3,6 +3,7 @@ import {
   Animated,
   BackHandler,
   Easing,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,7 +22,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react-native';
-import { FaWhatsapp } from 'react-icons/fa6';
+import { WhatsAppIcon } from './WhatsAppIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
@@ -416,7 +417,7 @@ export const CustomerLedgerPanel: React.FC<{
                   sendingReminder && styles.waBtnSending,
                 ]}
               >
-                <FaWhatsapp
+                <WhatsAppIcon
                   size={20}
                   color={
                     cooldownSecs > 0
@@ -771,7 +772,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.pill,
     marginLeft: SPACE.xs,
   },
   cooldownBadgeText: {

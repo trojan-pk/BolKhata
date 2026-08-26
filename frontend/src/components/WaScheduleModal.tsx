@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
   timePill: {
     paddingHorizontal: SPACE.md,
     paddingVertical: SPACE.xs,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.pill,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: COLORS.hairline,
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#D9FDD3',
     paddingHorizontal: SPACE.md,
     paddingVertical: 3,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.pill,
     marginTop: 2,
   },
   countdownPillText: {

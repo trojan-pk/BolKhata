@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { FaWhatsapp } from "react-icons/fa6";
+import { WhatsAppIcon } from './WhatsAppIcon';
 import { Link2Off } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
@@ -141,7 +141,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.waIcon}>
-              <FaWhatsapp size={22} color="#25D366" />
+              <WhatsAppIcon size={22} color="#25D366" />
             </View>
             <Text style={[TYPE.title2, styles.title]}>WhatsApp Account Link</Text>
           </View>
@@ -159,7 +159,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         {status === 'linked' && phone ? (
           <View style={styles.linkedCard}>
             <View style={styles.linkedHeader}>
-              <FaWhatsapp size={35} color="#25D366" strokeWidth={2} />
+              <WhatsAppIcon size={35} color="#25D366" />
               <View style={styles.linkedTextCol}>
                 <Text style={[TYPE.title3, styles.linkedTitle]}>WhatsApp Linked & Active</Text>
                 <Text style={[TYPE.body, styles.linkedPhone]}>Phone: +{phone}</Text>

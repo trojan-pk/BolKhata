@@ -8,7 +8,7 @@ import {
   Store,
   Trash2,
 } from 'lucide-react-native';
-import { FaWhatsapp } from 'react-icons/fa';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, SPACE, TYPE } from '../theme/tokens';
@@ -265,7 +265,7 @@ export const SettingsScreen: React.FC<{
                     justifyContent: 'center',
                   }}
                 >
-                  <FaWhatsapp size={20} color={waLinked ? '#25D366' : '#64748B'} />
+                  <WhatsAppIcon size={20} color={waLinked ? '#25D366' : '#64748B'} />
                 </View>
               }
               title="WhatsApp Account Link"
