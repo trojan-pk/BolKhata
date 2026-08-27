@@ -5,7 +5,7 @@
     "scheme": "veldger",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logoicon.png",
+    "icon": "./assets/BKS-01-01.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/logoicon.png"
+        "foregroundImage": "./assets/BKS-01-01.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -24,7 +24,7 @@
       "package": "com.veldger.app"
     },
     "web": {
-      "favicon": "./assets/logoicon.png"
+      "favicon": "./assets/BKS-01-01.png"
     },
     "extra": {
       "eas": {
