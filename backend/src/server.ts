@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    app: 'BolKhata API',
+    app: 'Veldger API',
     uptime: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -43,7 +43,7 @@ app.get('/', (req: Request, res: Response) => {
   }
   res.json({
     status: 'ok',
-    message: 'BolKhata Voice Ledger API is running',
+    message: 'Veldger Voice Ledger API is running',
     version: '2.0.0',
   });
 });
@@ -60,14 +60,14 @@ app.use('/wa', waRoutes);
 app.use(errorHandler);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 [BolKhata Backend] Running on http://0.0.0.0:${PORT} (Ready for Mobile & Web)`);
+  console.log(`🚀 [Veldger Backend] Running on http://0.0.0.0:${PORT} (Ready for Mobile & Web)`);
 });
 
 // Graceful Shutdown
 const handleGracefulShutdown = (signal: string) => {
-  console.log(`\n🛑 [BolKhata Backend] ${signal} signal received. Closing HTTP server gracefully...`);
+  console.log(`\n🛑 [Veldger Backend] ${signal} signal received. Closing HTTP server gracefully...`);
   server.close(() => {
-    console.log('✅ [BolKhata Backend] HTTP server closed cleanly.');
+    console.log('✅ [Veldger Backend] HTTP server closed cleanly.');
     process.exit(0);
   });
 };

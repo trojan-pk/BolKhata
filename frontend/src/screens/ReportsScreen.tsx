@@ -32,7 +32,7 @@ export const ReportsScreen: React.FC<{
   currency?: string;
   storeName?: string;
   onSelectParty?: (party: Party) => void;
-}> = ({ parties, currency = 'Rs', storeName = 'BolKhata', onSelectParty }) => {
+}> = ({ parties, currency = 'Rs', storeName = 'Veldger', onSelectParty }) => {
   const { toast } = useFeedback();
 
   const { debtors, creditors, toCollect, toPay, stale } = useMemo(() => {

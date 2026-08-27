@@ -86,13 +86,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <FeedbackProvider>
-        <BolKhata />
+        <Veldger />
       </FeedbackProvider>
     </SafeAreaProvider>
   );
 }
 
-function BolKhata() {
+function Veldger() {
   const insets = useSafeAreaInsets();
   const { toast } = useFeedback();
 

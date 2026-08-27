@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 // Universal AI System Prompt for Ledger Intent Parsing
-const SYSTEM_INSTRUCTION = `You are BolKhata's intelligent ledger parser.
+const SYSTEM_INSTRUCTION = `You are Veldger's intelligent ledger parser.
 Analyze spoken South Asian business ledger text (which may be in Urdu script, Roman Urdu, Hindi, or English) and extract structured transaction JSON.
 
 Return JSON in this EXACT schema:

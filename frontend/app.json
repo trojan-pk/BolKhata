@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "BolKhata",
-    "slug": "bolkhata",
-    "scheme": "bolkhata",
+    "name": "Veldger",
+    "slug": "veldger",
+    "scheme": "veldger",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logoicon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bolkhata.app"
+      "bundleIdentifier": "com.veldger.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +21,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.bolkhata.app"
+      "package": "com.veldger.app"
     },
     "web": {
       "favicon": "./assets/logoicon.png"

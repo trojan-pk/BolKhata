@@ -88,7 +88,7 @@ export const CustomerLedgerPanel: React.FC<{
   party,
   transactions,
   currency = 'Rs',
-  storeName = 'BolKhata',
+  storeName = 'Veldger',
   onClose,
   onAddGave,
   onAddGot,
