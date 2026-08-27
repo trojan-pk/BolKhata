@@ -263,7 +263,7 @@ function Veldger() {
           }
         }
       } catch (err) {
-        console.warn('[BolKhata] Deep link auth error:', err);
+        console.warn('[Veldger] Deep link auth error:', err);
       }
     };
 
