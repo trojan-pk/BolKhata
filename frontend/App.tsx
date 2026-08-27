@@ -210,25 +210,22 @@ function BolKhata() {
     Promise.all([
       supabase.auth.getSession(),
       StorageService.getIntroSeen(),
-    ]).then(([{ data: { session } }, introSeen]) => {
+    ]).then(async ([{ data: { session } }, introSeen]) => {
       if (cancelled) return;
       setSession(session);
-      // Only a first-time, signed-out visitor gets the pitch. An existing
-      // session goes straight to the ledger.
       if (!session && !introSeen) setAuthView('intro');
-      setAuthLoading(false);
       if (session?.user?.id) {
-        loadUserData(session.user.id);
+        await loadUserData(session.user.id);
+      }
+      if (!cancelled) {
+        setAuthLoading(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN' && session?.user?.id) {
-        // No splash replay here on purpose: the app layer is already faded in by
-        // this point, and `CrossFade` carries auth → ledger forward. Re-showing
-        // the splash read as a jump backwards through the flow.
-        loadUserData(session.user.id);
+        await loadUserData(session.user.id);
       } else if (_event === 'SIGNED_OUT') {
         setParties([]);
         setTransactions([]);
@@ -709,7 +706,7 @@ function BolKhata() {
               <TabBar active={activeTab} onChange={setActiveTab} />
 
               {/* Post-signup personalisation & business setup wizard */}
-              {session && !storeProfile.isOnboarded && (
+              {!loading && session && !storeProfile.isOnboarded && (
                 <OnboardingWizardModal
                   visible={true}
                   userEmail={session.user.email}
