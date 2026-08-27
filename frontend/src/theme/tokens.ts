@@ -156,6 +156,14 @@ export const MOTION = {
   base: 240,
   /** Screen-level transitions. */
   slow: 380,
+  /**
+   * First-run pacing. Deliberately slower than `slow` — the intro, welcome and
+   * setup screens are the only place in the app where the user is being led
+   * rather than getting work done, so the motion is allowed to take its time.
+   */
+  editorial: 520,
+  /** Gap between staggered siblings in a first-run entrance. */
+  stagger: 60,
   /** Spring for anything the finger drives. */
   spring: { friction: 9, tension: 90, useNativeDriver: true } as const,
   /** Softer spring for indicators that trail behind a tap. */

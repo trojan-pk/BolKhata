@@ -1,6 +1,7 @@
 import React, { useCallback, useRef } from 'react';
 import {
   Animated,
+  Easing,
   Pressable,
   PressableProps,
   StyleProp,
@@ -123,25 +124,50 @@ export const Press: React.FC<PressProps> = ({
 /**
  * Fade-and-rise entrance used by list rows and cards. Index-staggered so a
  * screen assembles itself instead of snapping in all at once.
+ *
+ * The defaults are tuned for lists — quick, and capped at eight steps so a long
+ * list never leaves the last row waiting. First-run screens override them with
+ * `MOTION.stagger` / `MOTION.editorial` for a slower, more deliberate assembly.
  */
 export const Enter: React.FC<{
   index?: number;
   distance?: number;
+  /** Gap between siblings, in ms. */
+  stagger?: number;
+  duration?: number;
+  /** Extra wait before the stagger clock starts, in ms. */
+  delay?: number;
+  /**
+   * Steps after which the stagger stops accumulating. Lists cap this so row 40
+   * doesn't wait a second and a half; a short first-run sequence lifts it so
+   * every element gets its own beat.
+   */
+  maxSteps?: number;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
-}> = ({ index = 0, distance = 8, style, children }) => {
+}> = ({
+  index = 0,
+  distance = 8,
+  stagger = 35,
+  duration = MOTION.base,
+  delay = 0,
+  maxSteps = 8,
+  style,
+  children,
+}) => {
   const progress = useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
       Animated.timing(progress, {
         toValue: 1,
-        duration: MOTION.base,
+        duration,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
-    }, Math.min(index, 8) * 35);
+    }, delay + Math.min(index, maxSteps) * stagger);
     return () => clearTimeout(timer);
-  }, [index, progress]);
+  }, [index, progress, stagger, duration, delay, maxSteps]);
 
   return (
     <Animated.View

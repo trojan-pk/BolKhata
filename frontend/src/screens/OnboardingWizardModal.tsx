@@ -1,32 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Modal,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from 'react-native';
 import {
-  Building2,
-  User,
-  CheckCircle2,
-  Sparkles,
-  ArrowRight,
   ArrowLeft,
-  Store,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
   Phone,
-  Coins,
-  Tag,
+  Sparkles,
+  Store,
+  User,
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { FONTS } from '../theme/typography';
+import { MOTION } from '../theme/tokens';
 import { StoreProfile } from '../types';
-import { useFeedback } from '../ui';
+import { Button, CrossFade, Enter, Press, useFeedback } from '../ui';
 
 interface OnboardingWizardModalProps {
   visible: boolean;
@@ -98,14 +97,18 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         isBackendConnected: true,
       };
 
+      // No success toast: the caller plays a drawn-check beat on the way into the
+      // ledger, and a toast on top of it would be saying the same thing twice.
       await onComplete(profile);
-      toast('Welcome to BolKhata! Setup complete.');
     } catch (e: any) {
       toast(e.message || 'Error completing setup.');
     } finally {
       setSaving(false);
     }
   };
+
+  /** Step 2's fields arrive on their own beats once the step has swapped in. */
+  const beat = { stagger: MOTION.stagger, duration: MOTION.editorial } as const;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
@@ -121,246 +124,343 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
               <Text style={styles.badgePillText}>Quick 1-Minute Setup</Text>
             </View>
 
-            <Text style={styles.headingTitle}>
-              {step === 1 ? 'How will you use BolKhata?' : 'Personalize Your Experience'}
-            </Text>
-            <Text style={styles.headingSubtitle}>
-              {step === 1
-                ? 'Select your purpose to tailor ledger categories, reminders, and features.'
-                : accountType === 'commercial'
-                ? 'Enter your business details to generate branded WhatsApp receipts.'
-                : 'Enter your name to track personal debts, loans, and daily expenses.'}
-            </Text>
+            {/* Only the wording changes between steps, so only it cross-fades. */}
+            <CrossFade phase={`h${step}`} distance={14} style={styles.headings}>
+              <Text style={styles.headingTitle}>
+                {step === 1 ? 'How will you use BolKhata?' : 'Personalize Your Experience'}
+              </Text>
+              <Text style={styles.headingSubtitle}>
+                {step === 1
+                  ? 'Select your purpose to tailor ledger categories, reminders, and features.'
+                  : accountType === 'commercial'
+                  ? 'Enter your business details to generate branded WhatsApp receipts.'
+                  : 'Enter your name to track personal debts, loans, and daily expenses.'}
+              </Text>
+            </CrossFade>
 
-            {/* Step Indicators */}
-            <View style={styles.stepBar}>
-              <View style={[styles.stepDot, styles.stepDotActive]} />
-              <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
-              <View style={[styles.stepDot, step === 2 && styles.stepDotActive]} />
-            </View>
+            <StepBar step={step} />
           </View>
 
-          {/* STEP 1: Account Type Selection */}
-          {step === 1 && (
-            <View style={styles.stepOneCards}>
-              <TouchableOpacity
-                style={[
-                  styles.typeCard,
-                  accountType === 'commercial' && styles.typeCardSelected,
-                ]}
-                onPress={() => setAccountType('commercial')}
-                activeOpacity={0.88}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}>
-                    <Building2 size={26} color="#4F46E5" />
-                  </View>
-                  {accountType === 'commercial' && (
-                    <CheckCircle2 size={22} color="#4F46E5" />
-                  )}
-                </View>
-                <Text style={styles.cardTitle}>Commercial & Business</Text>
-                <Text style={styles.cardDesc}>
-                  For shopkeepers, dukaandaar, retail stores, wholesalers, agencies, and freelancers.
-                </Text>
-                <View style={styles.perksList}>
-                  <Text style={styles.perkItem}>• Customer & Supplier Ledger (Udhaar)</Text>
-                  <Text style={styles.perkItem}>• Daily Cashbook (Rokar In/Out)</Text>
-                  <Text style={styles.perkItem}>• WhatsApp Balance Reminders</Text>
-                </View>
-              </TouchableOpacity>
+          <CrossFade phase={`s${step}`}>
+            {step === 1 ? (
+              /* STEP 1: Account Type Selection */
+              <View style={styles.stepOneCards}>
+                <Enter index={0} {...beat}>
+                  <TypeCard
+                    icon={Building2}
+                    iconBg="#EEF2FF"
+                    iconTint="#4F46E5"
+                    title="Commercial & Business"
+                    desc="For shopkeepers, dukaandaar, retail stores, wholesalers, agencies, and freelancers."
+                    perks={[
+                      '• Customer & Supplier Ledger (Udhaar)',
+                      '• Daily Cashbook (Rokar In/Out)',
+                      '• WhatsApp Balance Reminders',
+                    ]}
+                    selected={accountType === 'commercial'}
+                    onPress={() => setAccountType('commercial')}
+                  />
+                </Enter>
 
-              <TouchableOpacity
-                style={[
-                  styles.typeCard,
-                  accountType === 'personal' && styles.typeCardSelected,
-                ]}
-                onPress={() => setAccountType('personal')}
-                activeOpacity={0.88}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
-                    <User size={26} color="#059669" />
-                  </View>
-                  {accountType === 'personal' && (
-                    <CheckCircle2 size={22} color="#059669" />
-                  )}
-                </View>
-                <Text style={styles.cardTitle}>Personal & Daily Use</Text>
-                <Text style={styles.cardDesc}>
-                  For individuals, students, roommates, and family finances.
-                </Text>
-                <View style={styles.perksList}>
-                  <Text style={styles.perkItem}>• Friends & Family loans given / taken</Text>
-                  <Text style={styles.perkItem}>• Personal daily expense tracking</Text>
-                  <Text style={styles.perkItem}>• Zero accounting jargon</Text>
-                </View>
-              </TouchableOpacity>
+                <Enter index={1} {...beat}>
+                  <TypeCard
+                    icon={User}
+                    iconBg="#ECFDF5"
+                    iconTint="#059669"
+                    title="Personal & Daily Use"
+                    desc="For individuals, students, roommates, and family finances."
+                    perks={[
+                      '• Friends & Family loans given / taken',
+                      '• Personal daily expense tracking',
+                      '• Zero accounting jargon',
+                    ]}
+                    selected={accountType === 'personal'}
+                    onPress={() => setAccountType('personal')}
+                  />
+                </Enter>
 
-              <TouchableOpacity style={styles.primaryButton} onPress={handleNext} activeOpacity={0.88}>
-                <Text style={styles.primaryButtonText}>Continue</Text>
-                <ArrowRight size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          )}
+                <Enter index={2} {...beat} style={styles.continueSlot}>
+                  <Button
+                    label="Continue"
+                    variant="primary"
+                    size="lg"
+                    icon={ArrowRight}
+                    iconPosition="right"
+                    fullWidth
+                    onPress={handleNext}
+                  />
+                </Enter>
+              </View>
+            ) : (
+              /* STEP 2: Detail Form */
+              <View style={styles.formContainer}>
+                {accountType === 'commercial' ? (
+                  <>
+                    <Enter index={0} {...beat} style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>
+                        Shop / Business Name <Text style={styles.requiredStar}>*</Text>
+                      </Text>
+                      <View style={styles.inputBox}>
+                        <Store size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="e.g. Al-Madina Superstore"
+                          placeholderTextColor={COLORS.textMuted}
+                          value={storeName}
+                          onChangeText={setStoreName}
+                        />
+                      </View>
+                    </Enter>
 
-          {/* STEP 2: Detail Form */}
-          {step === 2 && (
-            <View style={styles.formContainer}>
-              {accountType === 'commercial' ? (
-                <>
-                  <View style={styles.inputGroup}>
+                    <Enter index={1} {...beat} style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>
+                        Owner / Manager Name <Text style={styles.requiredStar}>*</Text>
+                      </Text>
+                      <View style={styles.inputBox}>
+                        <User size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="e.g. Haji Aslam"
+                          placeholderTextColor={COLORS.textMuted}
+                          value={ownerName}
+                          onChangeText={setOwnerName}
+                        />
+                      </View>
+                    </Enter>
+
+                    <Enter index={2} {...beat} style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Business Category</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.categoryScroll}
+                      >
+                        {BUSINESS_CATEGORIES.map((cat) => (
+                          <Press
+                            key={cat}
+                            onPress={() => setBusinessCategory(cat)}
+                            accessibilityLabel={cat}
+                            style={[
+                              styles.categoryChip,
+                              businessCategory === cat && styles.categoryChipSelected,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.categoryChipText,
+                                businessCategory === cat && styles.categoryChipTextSelected,
+                              ]}
+                            >
+                              {cat}
+                            </Text>
+                          </Press>
+                        ))}
+                      </ScrollView>
+                    </Enter>
+                  </>
+                ) : (
+                  <Enter index={0} {...beat} style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>
-                      Shop / Business Name <Text style={styles.requiredStar}>*</Text>
-                    </Text>
-                    <View style={styles.inputBox}>
-                      <Store size={18} color={COLORS.textMuted} style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="e.g. Al-Madina Superstore"
-                        placeholderTextColor={COLORS.textMuted}
-                        value={storeName}
-                        onChangeText={setStoreName}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>
-                      Owner / Manager Name <Text style={styles.requiredStar}>*</Text>
+                      Your Name <Text style={styles.requiredStar}>*</Text>
                     </Text>
                     <View style={styles.inputBox}>
                       <User size={18} color={COLORS.textMuted} style={styles.inputIcon} />
                       <TextInput
                         style={styles.textInput}
-                        placeholder="e.g. Haji Aslam"
+                        placeholder="e.g. Zain Ali"
                         placeholderTextColor={COLORS.textMuted}
                         value={ownerName}
                         onChangeText={setOwnerName}
                       />
                     </View>
-                  </View>
+                  </Enter>
+                )}
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Business Category</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.categoryScroll}
-                    >
-                      {BUSINESS_CATEGORIES.map((cat) => (
-                        <TouchableOpacity
-                          key={cat}
-                          style={[
-                            styles.categoryChip,
-                            businessCategory === cat && styles.categoryChipSelected,
-                          ]}
-                          onPress={() => setBusinessCategory(cat)}
-                        >
-                          <Text
-                            style={[
-                              styles.categoryChipText,
-                              businessCategory === cat && styles.categoryChipTextSelected,
-                            ]}
-                          >
-                            {cat}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </>
-              ) : (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Your Name <Text style={styles.requiredStar}>*</Text>
-                  </Text>
+                <Enter index={3} {...beat} style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Phone / WhatsApp Number</Text>
                   <View style={styles.inputBox}>
-                    <User size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                    <Phone size={18} color={COLORS.textMuted} style={styles.inputIcon} />
                     <TextInput
                       style={styles.textInput}
-                      placeholder="e.g. Zain Ali"
+                      placeholder="e.g. 03001234567"
                       placeholderTextColor={COLORS.textMuted}
-                      value={ownerName}
-                      onChangeText={setOwnerName}
+                      keyboardType="phone-pad"
+                      value={phone}
+                      onChangeText={setPhone}
                     />
                   </View>
-                </View>
-              )}
+                </Enter>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone / WhatsApp Number</Text>
-                <View style={styles.inputBox}>
-                  <Phone size={18} color={COLORS.textMuted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. 03001234567"
-                    placeholderTextColor={COLORS.textMuted}
-                    keyboardType="phone-pad"
-                    value={phone}
-                    onChangeText={setPhone}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Preferred Currency</Text>
-                <View style={styles.currencyRow}>
-                  {CURRENCIES.map((c) => (
-                    <TouchableOpacity
-                      key={c.value}
-                      style={[
-                        styles.currencyChip,
-                        currency === c.value && styles.currencyChipSelected,
-                      ]}
-                      onPress={() => setCurrency(c.value)}
-                    >
-                      <Text
+                <Enter index={4} {...beat} style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Preferred Currency</Text>
+                  <View style={styles.currencyRow}>
+                    {CURRENCIES.map((c) => (
+                      <Press
+                        key={c.value}
+                        onPress={() => setCurrency(c.value)}
+                        accessibilityLabel={c.label}
                         style={[
-                          styles.currencyChipText,
-                          currency === c.value && styles.currencyChipTextSelected,
+                          styles.currencyChip,
+                          currency === c.value && styles.currencyChipSelected,
                         ]}
                       >
-                        {c.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+                        <Text
+                          style={[
+                            styles.currencyChipText,
+                            currency === c.value && styles.currencyChipTextSelected,
+                          ]}
+                        >
+                          {c.label}
+                        </Text>
+                      </Press>
+                    ))}
+                  </View>
+                </Enter>
 
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => setStep(1)}
-                  disabled={saving}
-                >
-                  <ArrowLeft size={18} color={COLORS.ink} />
-                  <Text style={styles.backButtonText}>Back</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.finishButton, saving && styles.buttonDisabled]}
-                  onPress={handleFinish}
-                  disabled={saving}
-                  activeOpacity={0.88}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Text style={styles.primaryButtonText}>Complete Setup</Text>
-                      <CheckCircle2 size={18} color="#FFFFFF" />
-                    </>
-                  )}
-                </TouchableOpacity>
+                <Enter index={5} {...beat} style={styles.buttonRow}>
+                  <Button
+                    label="Back"
+                    variant="secondary"
+                    size="lg"
+                    icon={ArrowLeft}
+                    disabled={saving}
+                    onPress={() => setStep(1)}
+                  />
+                  <Button
+                    label="Complete Setup"
+                    variant="primary"
+                    size="lg"
+                    icon={CheckCircle2}
+                    iconPosition="right"
+                    loading={saving}
+                    onPress={handleFinish}
+                    style={styles.finishButton}
+                  />
+                </Enter>
               </View>
-            </View>
-          )}
+            )}
+          </CrossFade>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
+
+/* ------------------------------------------------------------------ step bar -- */
+
+/**
+ * Two dots joined by a connector that fills as you advance.
+ *
+ * The connector uses `scaleX` with a `translateX` correction so it grows from its
+ * left edge rather than its centre — animating `width` would be a layout pass per
+ * frame and couldn't go on the native driver.
+ */
+const CONNECTOR = 32;
+const DOT = 10;
+const SLOT = 24;
+
+const StepBar: React.FC<{ step: 1 | 2 }> = ({ step }) => {
+  const progress = useRef(new Animated.Value(step === 2 ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: step === 2 ? 1 : 0,
+      duration: MOTION.editorial,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [step, progress]);
+
+  /*
+   * Translate-then-scale, in that order, so the translation isn't itself scaled.
+   * Half the width at s=0 puts the shrunk line flush against its left edge.
+   */
+  const fillLine = {
+    transform: [
+      {
+        translateX: progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-CONNECTOR / 2, 0],
+        }),
+      },
+      {
+        scaleX: progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.0001, 1],
+        }),
+      },
+    ],
+  };
+
+  /*
+   * The dot grows from its centre instead — 0.42 of the 24px slot is 10px, so it
+   * starts exactly the size of the hairline dot underneath and stretches into a
+   * pill. Same trick as the intro dots: cross-fade a scaled overlay rather than
+   * animate `width` or `backgroundColor`, neither of which is native-driveable.
+   */
+  const fillDot = {
+    opacity: progress,
+    transform: [
+      {
+        scaleX: progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [DOT / SLOT, 1],
+        }),
+      },
+    ],
+  };
+
+  return (
+    <View style={styles.stepBar}>
+      <View style={[styles.stepDot, styles.stepDotActive]} />
+
+      <View style={styles.stepLine}>
+        <Animated.View style={[styles.stepLineFill, fillLine]} />
+      </View>
+
+      <View style={styles.stepSlot}>
+        <View style={styles.stepDot} />
+        <Animated.View style={[styles.stepDotFill, fillDot]} />
+      </View>
+    </View>
+  );
+};
+
+/* ----------------------------------------------------------------- type card -- */
+
+const TypeCard: React.FC<{
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  iconBg: string;
+  iconTint: string;
+  title: string;
+  desc: string;
+  perks: string[];
+  selected: boolean;
+  onPress: () => void;
+}> = ({ icon: Icon, iconBg, iconTint, title, desc, perks, selected, onPress }) => (
+  <Press
+    onPress={onPress}
+    accessibilityLabel={title}
+    accessibilityState={{ selected }}
+    style={[styles.typeCard, selected && styles.typeCardSelected]}
+  >
+    <View style={styles.cardHeader}>
+      <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+        <Icon size={26} color={iconTint} />
+      </View>
+      {selected && <CheckCircle2 size={22} color={iconTint} />}
+    </View>
+    <Text style={styles.cardTitle}>{title}</Text>
+    <Text style={styles.cardDesc}>{desc}</Text>
+    <View style={styles.perksList}>
+      {perks.map((perk) => (
+        <Text key={perk} style={styles.perkItem}>
+          {perk}
+        </Text>
+      ))}
+    </View>
+  </Press>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -395,6 +495,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4F46E5',
   },
+  headings: {
+    alignItems: 'center',
+  },
   headingTitle: {
     fontFamily: FONTS.headingBold,
     fontSize: 24,
@@ -417,25 +520,45 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stepDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: DOT,
+    height: DOT,
+    borderRadius: DOT / 2,
     backgroundColor: COLORS.hairline,
   },
   stepDotActive: {
     backgroundColor: COLORS.ink,
-    width: 24,
+    width: SLOT,
+  },
+  /** Slot for step 2's dot: a hairline circle with an ink pill layered over it. */
+  stepSlot: {
+    width: SLOT,
+    height: DOT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: DOT,
+    borderRadius: DOT / 2,
+    backgroundColor: COLORS.ink,
   },
   stepLine: {
-    width: 32,
+    width: CONNECTOR,
     height: 2,
     backgroundColor: COLORS.hairline,
+    overflow: 'hidden',
   },
-  stepLineActive: {
+  stepLineFill: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.ink,
   },
   stepOneCards: {
     gap: 16,
+  },
+  continueSlot: {
+    marginTop: 8,
   },
   typeCard: {
     backgroundColor: COLORS.surface,
@@ -578,55 +701,12 @@ const styles = StyleSheet.create({
   currencyChipTextSelected: {
     color: '#FFFFFF',
   },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.ink,
-    height: 50,
-    borderRadius: 14,
-    gap: 8,
-    marginTop: 8,
-  },
-  primaryButtonText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    height: 50,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    gap: 6,
-  },
-  backButtonText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 14,
-    color: COLORS.ink,
-  },
   finishButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.ink,
-    height: 50,
-    borderRadius: 14,
-    gap: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
 });

@@ -7,6 +7,11 @@ const KEYS = {
   PARTIES: 'bolkhata_parties_v2',
   TRANSACTIONS: 'bolkhata_transactions_v2',
   CASHBOOK: 'bolkhata_cashbook_v2',
+  /**
+   * Whether the first-run intro slides have been shown. Device-scoped, not
+   * user-scoped — see `getIntroSeen`.
+   */
+  INTRO_SEEN: 'bolkhata_intro_seen_v1',
 };
 
 // User-scoped key helper so different accounts never leak local data
@@ -31,6 +36,34 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [];
 export const INITIAL_CASHBOOK: CashbookEntry[] = [];
 
 export const StorageService = {
+  // ---------------------------------------------------------------- First run
+  /**
+   * Whether the intro slides have already been shown on this device.
+   *
+   * Deliberately *not* run through `userKey()`: the intro plays before anyone
+   * has signed in, so there's no user id to scope it by — and on a shared phone
+   * it would be odd to replay the pitch for each account.
+   *
+   * Fails closed to `true` on a read error, so a storage fault can't trap
+   * someone in the intro on every launch.
+   */
+  getIntroSeen: async (): Promise<boolean> => {
+    try {
+      return (await AsyncStorage.getItem(KEYS.INTRO_SEEN)) === 'true';
+    } catch (e) {
+      console.warn('[Storage] Intro flag read error:', e);
+      return true;
+    }
+  },
+
+  setIntroSeen: async (): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(KEYS.INTRO_SEEN, 'true');
+    } catch (e) {
+      console.warn('[Storage] Intro flag write error:', e);
+    }
+  },
+
   // ------------------------------------------------------------- Store Profile
   getStoreProfile: async (userId?: string): Promise<StoreProfile> => {
     // 1. Try Supabase cloud if authenticated

@@ -1,15 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Easing,
-} from 'react-native';
-import { Mic, Cloud, Send, ShieldCheck, ArrowRight, LogIn, UserPlus } from 'lucide-react-native';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { ArrowRight, ShieldCheck } from 'lucide-react-native';
+
 import { COLORS } from '../theme/colors';
-import { FONTS } from '../theme/typography';
+import { GUTTER, MAX_CONTENT_WIDTH, MOTION, SPACE, TYPE } from '../theme/tokens';
+import { COPY } from '../i18n/copy';
+import { Button, Enter } from '../ui';
 import { VoiceLogo } from '../components/VoiceLogo';
 
 interface WelcomeScreenProps {
@@ -17,97 +13,65 @@ interface WelcomeScreenProps {
   onLogin: () => void;
 }
 
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
-  const contentFade = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(14)).current;
+const C = COPY.onboarding.welcome;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(contentFade, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUp, {
-        toValue: 0,
-        duration: 500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+/**
+ * The sign-in fork.
+ *
+ * Everything here arrives on its own beat rather than as one block — the mark
+ * first, then the words, then what to do about them. The three product
+ * propositions that used to sit here as pills are now the intro slides, which
+ * leaves this screen doing one job.
+ */
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
+  onSignUp,
+  onLogin,
+}) => {
+  const beat = { stagger: MOTION.stagger, duration: MOTION.editorial } as const;
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.contentWrapper,
-          {
-            opacity: contentFade,
-            transform: [{ translateY: slideUp }],
-          },
-        ]}
-      >
-        {/* Minimalist Solid Black Voice Logo */}
-        <View style={styles.logoSection}>
-          <VoiceLogo size={56} color={COLORS.ink} animated={true} multiColor={false} />
-        </View>
+      <View style={styles.shell}>
+        <Enter index={0} {...beat} style={styles.mark}>
+          <VoiceLogo size={56} color={COLORS.ink} animated multiColor={false} />
+        </Enter>
 
-        {/* Clean English Heading */}
-        <Text style={styles.headingTitle}>Welcome</Text>
-        <Text style={styles.brandSubtitle}>BolKhata · Digital Voice Ledger</Text>
+        <Enter index={1} {...beat}>
+          <Text style={styles.title}>{C.title}</Text>
+        </Enter>
 
-        <Text style={styles.tagline}>
-          Track customer udhaar, cashbook, and personal expenses with smart voice commands.
-        </Text>
+        <Enter index={2} {...beat}>
+          <Text style={styles.subtitle}>{C.subtitle}</Text>
+        </Enter>
 
-        {/* Concise Feature Badges */}
-        <View style={styles.featureRow}>
-          <View style={styles.featurePill}>
-            <Mic size={14} color={COLORS.ink} />
-            <Text style={styles.featurePillText}>Speak to Record</Text>
-          </View>
+        <Enter index={3} {...beat}>
+          <Text style={styles.tagline}>{C.tagline}</Text>
+        </Enter>
 
-          <View style={styles.featurePill}>
-            <Send size={14} color="#16a34a" />
-            <Text style={styles.featurePillText}>WhatsApp Receipts</Text>
-          </View>
-
-          <View style={styles.featurePill}>
-            <Cloud size={14} color="#0284c7" />
-            <Text style={styles.featurePillText}>Cloud Synced</Text>
-          </View>
-        </View>
-
-        {/* Action Buttons: Sign Up & Log In */}
-        <View style={styles.actionSection}>
-          <TouchableOpacity
-            style={styles.primaryButton}
+        <Enter index={4} {...beat} style={styles.actions}>
+          <Button
+            label={C.createAccount}
             onPress={onSignUp}
-            activeOpacity={0.88}
-          >
-            <UserPlus size={18} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Create Free Account</Text>
-            <ArrowRight size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
+            variant="primary"
+            size="lg"
+            icon={ArrowRight}
+            iconPosition="right"
+            fullWidth
+          />
+          <Button
+            label={C.logIn}
             onPress={onLogin}
-            activeOpacity={0.8}
-          >
-            <LogIn size={18} color={COLORS.ink} />
-            <Text style={styles.secondaryButtonText}>Log In</Text>
-          </TouchableOpacity>
-        </View>
+            variant="secondary"
+            size="lg"
+            fullWidth
+          />
+        </Enter>
 
-        {/* Bottom Trust Badge */}
-        <View style={styles.trustBadge}>
-          <ShieldCheck size={13} color={COLORS.textMuted} />
-          <Text style={styles.trustText}>Private & Secure • Multi-Tenant Cloud</Text>
-        </View>
-      </Animated.View>
+        <Enter index={5} {...beat} style={styles.trust}>
+          <ShieldCheck size={13} color={COLORS.textMuted} strokeWidth={2} />
+          <Text style={styles.trustText}>{C.trust}</Text>
+        </Enter>
+      </View>
     </View>
   );
 };
@@ -118,116 +82,48 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.paper,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: GUTTER,
   },
-  contentWrapper: {
+  shell: {
     width: '100%',
-    maxWidth: 390,
-    alignItems: 'center',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignItems: 'stretch',
   },
-  logoSection: {
-    marginBottom: 16,
+  mark: {
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: SPACE.lg,
   },
-  headingTitle: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 34,
-    fontWeight: '800',
+  title: {
+    ...TYPE.display,
     color: COLORS.ink,
     textAlign: 'center',
-    letterSpacing: -0.5,
-    marginBottom: 4,
+    marginBottom: SPACE.xs,
   },
-  brandSubtitle: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 14,
+  subtitle: {
+    ...TYPE.label,
     color: COLORS.inkSoft,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: SPACE.md,
   },
   tagline: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
+    ...TYPE.bodySm,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 24,
-    paddingHorizontal: 8,
+    marginBottom: SPACE.xxxl,
+    paddingHorizontal: SPACE.sm,
   },
-  featureRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 32,
+  actions: {
+    gap: SPACE.md,
   },
-  featurePill: {
+  trust: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    justifyContent: 'center',
     gap: 6,
-  },
-  featurePillText: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 12,
-    color: COLORS.textPrimary,
-  },
-  actionSection: {
-    width: '100%',
-    gap: 10,
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.ink,
-    height: 48,
-    borderRadius: 12,
-    gap: 8,
-    shadowColor: COLORS.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  primaryButtonText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    height: 46,
-    borderRadius: 12,
-    gap: 8,
-  },
-  secondaryButtonText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 14,
-    color: COLORS.ink,
-    fontWeight: '600',
-  },
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 24,
+    marginTop: SPACE.xxl,
   },
   trustText: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
+    ...TYPE.caption,
     color: COLORS.textMuted,
   },
 });

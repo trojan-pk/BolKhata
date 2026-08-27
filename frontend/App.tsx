@@ -21,8 +21,9 @@ import {
   TransactionType,
 } from './src/types';
 
-import { FeedbackProvider, useFeedback } from './src/ui';
+import { CrossFade, FeedbackProvider, useFeedback } from './src/ui';
 import { SplashScreen } from './src/components/SplashScreen';
+import { SetupCelebration } from './src/components/SetupCelebration';
 import { AppBar } from './src/components/AppBar';
 import { TabBar, TabKey } from './src/components/TabBar';
 import { AddCustomerModal } from './src/components/AddCustomerModal';
@@ -38,6 +39,7 @@ import { CashbookScreen } from './src/screens/CashbookScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { IntroScreen } from './src/screens/IntroScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { OnboardingWizardModal } from './src/screens/OnboardingWizardModal';
 import { supabase } from './src/services/supabase';
@@ -103,8 +105,20 @@ function BolKhata() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authView, setAuthView] = useState<'welcome' | 'auth'>('welcome');
+  /**
+   * The pre-session flow. `intro` is only ever entered once per device — see
+   * `StorageService.getIntroSeen`.
+   */
+  const [authView, setAuthView] = useState<'intro' | 'welcome' | 'auth'>('welcome');
+  /** Which way the next pre-session transition travels. `-1` is a step back. */
+  const [authDirection, setAuthDirection] = useState<1 | -1>(1);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  /**
+   * Holds the owner's name while the setup-complete beat plays, and doubles as
+   * the flag that it's playing. Set after `saveProfile` resolves, so the beat
+   * only ever celebrates a write that actually landed.
+   */
+  const [celebrateName, setCelebrateName] = useState<string | null>(null);
 
   /* --------------------------------------------------------------- routing -- */
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -127,6 +141,15 @@ function BolKhata() {
 
   /* ---------------------------------------------------------------- splash -- */
   const [splashVisible, setSplashVisible] = useState(true);
+  /**
+   * Flips the moment the splash *starts* lifting, rather than when it's gone.
+   *
+   * The content underneath is gated on this, so it mounts and rises while the
+   * splash is still dissolving. Waiting for `splashVisible` to clear meant the
+   * splash faded out to reveal an empty background, then the app appeared in one
+   * jump — the fade-in below never had anything to fade in over.
+   */
+  const [splashLifting, setSplashLifting] = useState(false);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const appOpacity = useRef(new Animated.Value(0)).current;
   const appShift = useRef(new Animated.Value(10)).current;
@@ -134,6 +157,7 @@ function BolKhata() {
   const userId = session?.user?.id;
 
   const finishSplash = useCallback(() => {
+    setSplashLifting(true);
     Animated.parallel([
       Animated.timing(splashOpacity, {
         toValue: 0,
@@ -177,8 +201,20 @@ function BolKhata() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let cancelled = false;
+
+    // Both answers are needed before the first screen can be chosen, so they're
+    // resolved together — settling `authLoading` early would show Welcome for a
+    // frame before the intro replaced it.
+    Promise.all([
+      supabase.auth.getSession(),
+      StorageService.getIntroSeen(),
+    ]).then(([{ data: { session } }, introSeen]) => {
+      if (cancelled) return;
       setSession(session);
+      // Only a first-time, signed-out visitor gets the pitch. An existing
+      // session goes straight to the ledger.
+      if (!session && !introSeen) setAuthView('intro');
       setAuthLoading(false);
       if (session?.user?.id) {
         loadUserData(session.user.id);
@@ -188,22 +224,32 @@ function BolKhata() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN' && session?.user?.id) {
+        // No splash replay here on purpose: the app layer is already faded in by
+        // this point, and `CrossFade` carries auth → ledger forward. Re-showing
+        // the splash read as a jump backwards through the flow.
         loadUserData(session.user.id);
-        setSplashVisible(true);
-        splashOpacity.setValue(1);
-        appOpacity.setValue(0);
-        appShift.setValue(10);
-        setTimeout(finishSplash, 2000); 
       } else if (_event === 'SIGNED_OUT') {
         setParties([]);
         setTransactions([]);
         setCashbook([]);
         setStoreProfile(INITIAL_STORE_PROFILE);
+        setAuthView('welcome');
+        setAuthDirection(-1);
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [loadUserData, finishSplash]);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [loadUserData]);
+
+  /** Leaving the intro is one-way: the flag is written as the transition starts. */
+  const finishIntro = useCallback(() => {
+    void StorageService.setIntroSeen();
+    setAuthDirection(1);
+    setAuthView('welcome');
+  }, []);
 
   /* ------------------------------------------------------------ persistence -- */
 
@@ -564,62 +610,95 @@ function BolKhata() {
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      {/* Main Application or Auth Flow */}
-      {!authLoading && !splashVisible ? (
-        !session ? (
-          authView === 'welcome' ? (
-            <WelcomeScreen
-              onSignUp={() => {
-                setAuthMode('signup');
-                setAuthView('auth');
-              }}
-              onLogin={() => {
-                setAuthMode('login');
-                setAuthView('auth');
-              }}
-            />
-          ) : (
-            <AuthScreen
-              initialMode={authMode}
-              onBackToWelcome={() => setAuthView('welcome')}
-            />
-          )
-        ) : (
-          <Animated.View
-            style={[
-              styles.app,
-              {
-                paddingTop: insets.top,
-                opacity: appOpacity,
-                transform: [{ translateY: appShift }],
-              },
-            ]}
-          >
-            <View style={styles.shell}>
-              <AppBar
-                storeProfile={storeProfile}
-                onOpenSettings={() => setActiveTab('settings')}
-              />
-
-              <ScreenTransition key={activeTab} tabKey={activeTab}>
-                {screen()}
-              </ScreenTransition>
-            </View>
-
-            <TabBar active={activeTab} onChange={setActiveTab} />
-
-            {/* Post-Signup Personalization & Business Setup Wizard */}
-            {session && !storeProfile.isOnboarded && (
-              <OnboardingWizardModal
-                visible={true}
-                userEmail={session.user.email}
-                onComplete={async (updatedProfile) => {
-                  await saveProfile(updatedProfile);
+      {/* ----------------------------------- first run → auth → the ledger -- */}
+      {/*
+        One CrossFade spans the whole pre-app sequence, so every boundary in it
+        dissolves: intro → welcome → auth, auth → welcome going back, and
+        auth → ledger once a session lands. That last one is what the 2s splash
+        replay used to paper over.
+      */}
+      {!authLoading && splashLifting ? (
+        <CrossFade
+          phase={session ? 'app' : authView}
+          direction={authDirection}
+          fill
+        >
+          {!session ? (
+            authView === 'intro' ? (
+              <IntroScreen onDone={finishIntro} />
+            ) : authView === 'welcome' ? (
+              <WelcomeScreen
+                onSignUp={() => {
+                  setAuthMode('signup');
+                  setAuthDirection(1);
+                  setAuthView('auth');
+                }}
+                onLogin={() => {
+                  setAuthMode('login');
+                  setAuthDirection(1);
+                  setAuthView('auth');
                 }}
               />
-            )}
-          </Animated.View>
-        )
+            ) : (
+              <AuthScreen
+                initialMode={authMode}
+                onBackToWelcome={() => {
+                  setAuthDirection(-1);
+                  setAuthView('welcome');
+                }}
+              />
+            )
+          ) : (
+            <Animated.View
+              style={[
+                styles.app,
+                {
+                  paddingTop: insets.top,
+                  opacity: appOpacity,
+                  transform: [{ translateY: appShift }],
+                },
+              ]}
+            >
+              <View style={styles.shell}>
+                <AppBar
+                  storeProfile={storeProfile}
+                  onOpenSettings={() => setActiveTab('settings')}
+                />
+
+                <ScreenTransition key={activeTab} tabKey={activeTab}>
+                  {screen()}
+                </ScreenTransition>
+              </View>
+
+              <TabBar active={activeTab} onChange={setActiveTab} />
+
+              {/* Post-signup personalisation & business setup wizard */}
+              {session && !storeProfile.isOnboarded && (
+                <OnboardingWizardModal
+                  visible={true}
+                  userEmail={session.user.email}
+                  onComplete={async (updatedProfile) => {
+                    await saveProfile(updatedProfile);
+                    setCelebrateName(updatedProfile.ownerName);
+                  }}
+                />
+              )}
+            </Animated.View>
+          )}
+        </CrossFade>
+      ) : null}
+
+      {/* -------------------------------------------- setup-complete beat -- */}
+      {/*
+        Above the ledger, below the splash. The wizard is already unmounted by
+        the time this renders — saving the profile flips `isOnboarded` — so this
+        beat covers the hand-off and dissolves to reveal Home behind it.
+      */}
+      {celebrateName ? (
+        <SetupCelebration
+          name={celebrateName}
+          onDone={() => setCelebrateName(null)}
+        />
       ) : null}
 
       {/* -------------------------------------------------- splash overlay -- */}

@@ -234,4 +234,72 @@ export const COPY = {
     unreachable: "Couldn't reach that address",
     savedToast: 'Connection settings saved',
   },
+
+  /**
+   * The first-run sequence: intro slides → welcome → auth → setup wizard.
+   *
+   * Kept short on purpose. This is the one part of the app a user reads rather
+   * than works in, so every line has to earn its place.
+   */
+  onboarding: {
+    skip: 'Skip',
+    next: 'Next',
+    getStarted: 'Get started',
+
+    slides: [
+      {
+        title: 'Speak to record',
+        body: 'Say what you gave or got. The entry writes itself — in English or Urdu.',
+      },
+      {
+        title: 'WhatsApp receipts',
+        body: 'Send a customer their balance and a clean receipt without leaving the app.',
+      },
+      {
+        title: 'Synced and safe',
+        body: 'Your ledger backs up to the cloud, so a lost phone never means a lost khata.',
+      },
+    ],
+
+    welcome: {
+      title: 'Welcome',
+      subtitle: 'BolKhata · Digital voice ledger',
+      tagline:
+        'Track customer udhaar, cashbook, and daily expenses with your voice.',
+      createAccount: 'Create free account',
+      logIn: 'Log in',
+      trust: 'Private and secure · Cloud synced',
+    },
+
+    auth: {
+      back: 'Back',
+      subtitleLogin: 'Welcome back to your ledger',
+      subtitleSignup: 'Create your ledger',
+      subtitleConfirm: 'Check your inbox',
+      email: 'Email address',
+      password: 'Password',
+      logIn: 'Log in',
+      signUp: 'Sign up',
+      or: 'OR',
+      google: 'Google',
+      github: 'GitHub',
+      toSignup: 'New here? Create an account',
+      toLogin: 'Already have an account? Log in',
+      confirmHeading: 'Verify your email',
+      confirmBody: 'Click the link we sent to activate your account.',
+      backToLogin: 'Back to log in',
+      needBoth: 'Enter both an email and a password.',
+      shortPassword: 'Password must be at least 6 characters.',
+      failed: 'Authentication failed.',
+      oauthFailed: (provider: string) => `${provider} sign-in failed.`,
+      verificationSent: 'Verification email sent — check your inbox.',
+      accountCreated: 'Account created',
+    },
+
+    setupDone: {
+      title: "You're all set",
+      greeting: (name: string) => `You're all set, ${name}`,
+      body: 'Opening your ledger',
+    },
+  },
 } as const;
