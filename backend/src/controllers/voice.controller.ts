@@ -39,9 +39,11 @@ Guidelines:
      * Set "searchCriteria" with "previousAmount" or "relativeTime": "last".
    - "delete_customer": When removing an entire customer account from the ledger ("Zain ko list se hata do / delete kardo").
    - "get_balance": When asking for balance status / hisaab ("Zain ka hisaab batao", "How much does Ali owe?").
-4. "direction": "gave" for giving money / udhaar / i gave / ko diye / paid to; "got" for receiving money / wasool / jama / se liye / liye / paid me / gave me / wapis kiye.
-5. "reason": Extract genuine purpose / item into "reason" (e.g. "electronic ka samaan", "cycle repair", "khana", "petrol"). Do not include the person's name or amounts.
-6. use your own brain also if guideline fails or you are not sure about any case .
+4. "direction" (CRITICAL LEDGER RULE):
+   - "gave" (Lene Hain / You gave / Credit given to customer): Use when you gave money/items to someone and they now owe you ("Zain ko 2000 diye", "Ali se 500 lene hain", "udhaar diya", "paid to customer").
+   - "got" (Dene Hain / To Pay / You owe the person / Credit taken from supplier/person): Use when you received goods/service on credit and YOU owe them money, or you collected cash ("Abbas bhai se cutting karayi paise dene hain", "Dukan wale ko 500 dene hain", "Udhaar liya", "Ali se 500 liye", "Payment received").
+5. "reason": Extract genuine purpose / item into "reason" (e.g. "cutting", "electronic ka samaan", "cycle repair", "khana", "petrol"). Do not include the person's name or amounts.
+6. Use deep context reasoning: if the speaker says they availed a service or bought an item without paying ("paise nahi diye", "dene hain"), this is a debt you owe ("got" / To Pay), NOT that you already gave money ("gave").
 
 Return strict JSON ONLY with no markdown wrappers.`;
 
