@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -238,9 +239,46 @@ function BolKhata() {
       }
     });
 
+    const handleDeepLink = async (event: { url: string }) => {
+      const url = event.url;
+      if (!url) return;
+
+      try {
+        // 1. PKCE code exchange
+        const parsed = Linking.parse(url);
+        if (parsed.queryParams?.code) {
+          await supabase.auth.exchangeCodeForSession(String(parsed.queryParams.code));
+          return;
+        }
+
+        // 2. Implicit flow token extraction from hash (#access_token=...)
+        const hashIdx = url.indexOf('#');
+        if (hashIdx !== -1) {
+          const hashStr = url.substring(hashIdx + 1);
+          const hashParams = new URLSearchParams(hashStr);
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[BolKhata] Deep link auth error:', err);
+      }
+    };
+
+    const linkSub = Linking.addEventListener('url', handleDeepLink);
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      linkSub.remove();
     };
   }, [loadUserData]);
 
