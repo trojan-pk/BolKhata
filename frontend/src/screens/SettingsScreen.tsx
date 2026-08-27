@@ -3,10 +3,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   Globe,
   Info,
-  Server,
+  LogOut,
   Sparkles,
   Store,
-  Trash2,
 } from 'lucide-react-native';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { COLORS } from '../theme/colors';
@@ -30,6 +29,7 @@ import {
 import { WhatsAppLinkModal } from '../components/WhatsAppLinkModal';
 import { WaTemplateModal } from '../components/WaTemplateModal';
 import { ApiService } from '../services/api';
+import { supabase } from '../services/supabase';
 
 const CURRENCIES = ['Rs', 'PKR', '₨', '₹', '$', '৳', '€', '£'];
 
@@ -45,18 +45,14 @@ const VOICE_LANGUAGES: { key: LanguageCode; label: string }[] = [
 const APP_VERSION = '1.0.0';
 
 /**
- * Grouped settings. Edits are held locally and committed with an explicit Save
- * that only appears once something has actually changed — no silent writes, no
- * button that does nothing.
+ * Grouped settings for users.
  */
 const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 export const SettingsScreen: React.FC<{
   storeProfile: StoreProfile;
   onUpdateStore: (updated: StoreProfile) => void;
-  onOpenApiConfig: () => void;
-  onEraseAll: () => void;
-}> = ({ storeProfile, onUpdateStore, onOpenApiConfig, onEraseAll }) => {
+}> = ({ storeProfile, onUpdateStore }) => {
   const { toast, confirm } = useFeedback();
 
   const [name, setName] = useState(storeProfile.name);
@@ -106,16 +102,6 @@ export const SettingsScreen: React.FC<{
       language,
     });
     toast(COPY.settings.savedToast);
-  };
-
-  const eraseAll = async () => {
-    const ok = await confirm({
-      title: COPY.settings.clearConfirmTitle,
-      body: COPY.settings.clearConfirmBody,
-      confirmLabel: COPY.settings.clearConfirmCta,
-      destructive: true,
-    });
-    if (ok) onEraseAll();
   };
 
   return (
@@ -211,41 +197,6 @@ export const SettingsScreen: React.FC<{
           </Card>
         </View>
 
-        {/* ----------------------------------------------------------- data -- */}
-        <View>
-          <GroupLabel text={COPY.settings.dataSection} />
-          <Card padding={0}>
-            <Row
-              variant="plain"
-              style={styles.listRow}
-              onPress={onOpenApiConfig}
-              leading={<IconWell icon={Server} tone="accent" />}
-              title={COPY.settings.connection}
-              subtitle={
-                storeProfile.isBackendConnected
-                  ? COPY.settings.connectionOn
-                  : COPY.settings.connectionOff
-              }
-              trailing={
-                <Badge
-                  label={storeProfile.isBackendConnected ? 'On' : 'Off'}
-                  tone={storeProfile.isBackendConnected ? 'credit' : 'neutral'}
-                />
-              }
-              chevron
-            />
-            <Divider inset={SPACE.lg} />
-            <Row
-              variant="plain"
-              style={styles.listRow}
-              onPress={eraseAll}
-              leading={<IconWell icon={Trash2} tone="debit" />}
-              title={COPY.settings.clearData}
-              subtitle={COPY.settings.clearDataHint}
-            />
-          </Card>
-        </View>
-
         {/* -------------------------------------------------- whatsapp -- */}
         <View>
           <GroupLabel text="WhatsApp Integration" />
@@ -322,10 +273,9 @@ export const SettingsScreen: React.FC<{
               variant="plain"
               style={styles.listRow}
               onPress={async () => {
-                const { supabase } = await import('../services/supabase');
                 await supabase.auth.signOut();
               }}
-              leading={<IconWell icon={Trash2} tone="debit" />}
+              leading={<IconWell icon={LogOut} tone="debit" />}
               title="Log Out"
               subtitle="Sign out of your account"
               chevron

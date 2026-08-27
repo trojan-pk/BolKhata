@@ -1,14 +1,15 @@
 {
   "expo": {
-    "name": "BolKhata-App",
-    "slug": "BolKhata-App",
+    "name": "BolKhata",
+    "slug": "bolkhata",
     "scheme": "bolkhata",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bolkhata.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,10 +23,15 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.anonymous.BolKhataApp"
+      "package": "com.bolkhata.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c3d5ad0a-f68b-4130-8b66-371fe5b72488"
+      }
     }
   }
 }

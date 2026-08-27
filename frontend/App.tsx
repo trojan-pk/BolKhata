@@ -597,8 +597,6 @@ function BolKhata() {
           <SettingsScreen
             storeProfile={storeProfile}
             onUpdateStore={saveProfile}
-            onOpenApiConfig={() => setApiConfigOpen(true)}
-            onEraseAll={eraseAll}
           />
         );
       default:

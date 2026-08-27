@@ -26,6 +26,7 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "babel-plugin-transform-imports": "^2.0.0",
+    "eas-cli": "^22.6.0",
     "typescript": "^5.3.3"
   },
   "scripts": {
@@ -34,7 +35,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "type-check": "tsc --noEmit",
-    "build": "expo export -p web"
+    "build": "expo export -p web",
+    "build:apk": "eas build -p android --profile preview"
   },
   "private": true
 }
