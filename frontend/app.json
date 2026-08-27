@@ -5,7 +5,7 @@
     "scheme": "bolkhata",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logoicon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        "foregroundImage": "./assets/logoicon.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -24,7 +24,7 @@
       "package": "com.bolkhata.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logoicon.png"
     },
     "extra": {
       "eas": {
