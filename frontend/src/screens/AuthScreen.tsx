@@ -142,13 +142,31 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
       if (Platform.OS !== 'web' && data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         if (res.type === 'success' && res.url) {
-          const parsed = Linking.parse(res.url);
-          const params = parsed.queryParams;
-          if (params?.access_token && params?.refresh_token) {
-            await supabase.auth.setSession({
-              access_token: params.access_token as string,
-              refresh_token: params.refresh_token as string,
+          let accessToken: string | undefined;
+          let refreshToken: string | undefined;
+
+          // 1. Try parsing from hash fragment (#access_token=...)
+          const hashIdx = res.url.indexOf('#');
+          if (hashIdx !== -1) {
+            const hashStr = res.url.substring(hashIdx + 1);
+            const hashParams = new URLSearchParams(hashStr);
+            accessToken = hashParams.get('access_token') ?? undefined;
+            refreshToken = hashParams.get('refresh_token') ?? undefined;
+          }
+
+          // 2. Fallback to query params (?access_token=...)
+          if (!accessToken || !refreshToken) {
+            const parsed = Linking.parse(res.url);
+            accessToken = (parsed.queryParams?.access_token as string) || accessToken;
+            refreshToken = (parsed.queryParams?.refresh_token as string) || refreshToken;
+          }
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
             });
+            if (sessionError) throw sessionError;
           }
         }
       }
