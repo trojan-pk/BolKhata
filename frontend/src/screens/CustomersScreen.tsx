@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Search, SearchX, UserPlus, Users, X } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowUpRight, Search, SearchX, UserPlus, Users, X } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, SPACE, TYPE } from '../theme/tokens';
@@ -230,12 +230,24 @@ const TotalCell: React.FC<{
   value: number;
   currency: string;
   tone: 'credit' | 'debit';
-}> = ({ label, value, currency, tone }) => (
-  <View style={styles.totalCell}>
-    <Text style={[TYPE.caption, styles.totalLabel]}>{label}</Text>
-    <Money value={value} currency={currency} size="title3" tone={tone} />
-  </View>
-);
+}> = ({ label, value, currency, tone }) => {
+  const isCredit = tone === 'credit';
+  const Icon = isCredit ? ArrowDownLeft : ArrowUpRight;
+  const iconColor = isCredit ? COLORS.credit : COLORS.debit;
+  const iconBg = isCredit ? COLORS.creditSoft : COLORS.debitSoft;
+
+  return (
+    <View style={styles.totalCell}>
+      <View style={[styles.totalIconBadge, { backgroundColor: iconBg }]}>
+        <Icon size={14} color={iconColor} strokeWidth={2.6} />
+      </View>
+      <View style={styles.totalTextWrap}>
+        <Text style={[TYPE.caption, styles.totalLabel]}>{label}</Text>
+        <Money value={value} currency={currency} size="title3" tone={tone} />
+      </View>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   screen: {
@@ -267,14 +279,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.md,
   },
   totalCell: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
+    gap: SPACE.sm,
+  },
+  totalIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  totalTextWrap: {
+    gap: 1,
   },
   totalLabel: {
     color: COLORS.textMuted,
+    fontWeight: '600',
   },
   rows: {
     gap: SPACE.sm,

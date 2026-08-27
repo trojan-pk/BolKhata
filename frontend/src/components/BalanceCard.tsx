@@ -80,8 +80,10 @@ const SplitStat: React.FC<{
   tone: 'credit' | 'debit';
   onPress?: () => void;
 }> = ({ label, value, currency, tone, onPress }) => {
-  const Icon = tone === 'credit' ? ArrowDownLeft : ArrowUpRight;
-  const tint = tone === 'credit' ? '#5FE3A1' : '#FF9C8F';
+  const isCredit = tone === 'credit';
+  const Icon = isCredit ? ArrowDownLeft : ArrowUpRight;
+  const tint = isCredit ? '#10B981' : '#F43F5E';
+  const badgeBg = isCredit ? 'rgba(16, 185, 129, 0.18)' : 'rgba(244, 63, 94, 0.18)';
 
   return (
     <Press
@@ -93,7 +95,9 @@ const SplitStat: React.FC<{
       style={styles.stat}
     >
       <View style={styles.statHead}>
-        <Icon size={13} color={tint} strokeWidth={2.4} />
+        <View style={[styles.statIconBadge, { backgroundColor: badgeBg }]}>
+          <Icon size={12} color={tint} strokeWidth={2.8} />
+        </View>
         <Text style={[TYPE.caption, styles.statLabel]}>{label}</Text>
       </View>
       <Money
@@ -152,12 +156,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: SPACE.md,
     paddingHorizontal: SPACE.lg - 4,
-    gap: 3,
+    gap: 4,
   },
   statHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
+  },
+  statIconBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statLabel: {
     color: COLORS.textOnInkMuted,
