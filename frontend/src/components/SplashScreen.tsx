@@ -16,7 +16,7 @@ interface SplashScreenProps {
   ownerName?: string;
 }
 
-const LETTERS = ['V', 'e', 'l', 'd', 'g', 'e', 'r'];
+const LETTERS = ['B', 'o', 'l', 'K', 'h', 'a', 't', 'a'];
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
   const logoFade = useRef(new Animated.Value(0)).current;

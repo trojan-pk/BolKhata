@@ -86,13 +86,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <FeedbackProvider>
-        <Veldger />
+        <BolKhata />
       </FeedbackProvider>
     </SafeAreaProvider>
   );
 }
 
-function Veldger() {
+function BolKhata() {
   const insets = useSafeAreaInsets();
   const { toast } = useFeedback();
 
@@ -263,7 +263,7 @@ function Veldger() {
           }
         }
       } catch (err) {
-        console.warn('[Veldger] Deep link auth error:', err);
+        console.warn('[BolKhata] Deep link auth error:', err);
       }
     };
 

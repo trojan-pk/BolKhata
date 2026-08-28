@@ -127,7 +127,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
             {/* Only the wording changes between steps, so only it cross-fades. */}
             <CrossFade phase={`h${step}`} distance={14} style={styles.headings}>
               <Text style={styles.headingTitle}>
-                {step === 1 ? 'How will you use Veldger?' : 'Personalize Your Experience'}
+                {step === 1 ? 'How will you use BolKhata?' : 'Personalize Your Experience'}
               </Text>
               <Text style={styles.headingSubtitle}>
                 {step === 1

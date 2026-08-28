@@ -276,7 +276,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     signOut: 'Sign Out',
     settingsSavedSuccess: 'Settings kamiyabi se save ho gayi!',
 
-    voiceTitle: 'Veldger Voice Assistant',
+    voiceTitle: 'BolKhata Voice Assistant',
     voiceSubtitle: 'Bolein ya prompt select karein, khata khud save ho jayega',
     tapToSpeak: 'Bolne Ke Liye Mic Dabayein',
     recordingTapToStop: 'Recording ho rahi hai... Rokne ke liye dabayein',
@@ -592,7 +592,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     signOut: 'Sign Out',
     settingsSavedSuccess: 'Shop settings saved successfully!',
 
-    voiceTitle: 'Veldger Voice Assistant',
+    voiceTitle: 'BolKhata Voice Assistant',
     voiceSubtitle: 'Speak or tap a command to auto-fill your ledger',
     tapToSpeak: 'Tap to Speak',
     recordingTapToStop: 'Recording... Tap to stop',
@@ -1066,7 +1066,7 @@ export const TRANSLATIONS: Record<LanguageCode, Translations> = {
     signOut: 'Cerrar Sesión',
     settingsSavedSuccess: '¡Ajustes guardados con éxito!',
 
-    voiceTitle: 'Asistente de Voz Veldger',
+    voiceTitle: 'Asistente de Voz BolKhata',
     voiceSubtitle: 'Hable o toque una frase para registrar',
     tapToSpeak: 'Tocar y Hablar',
     recordingTapToStop: 'Grabando... Toque para detener',

@@ -7,7 +7,7 @@
  * specific, and free of jargon a shopkeeper would have to decode.
  */
 export const COPY = {
-  brand: 'Veldger',
+  brand: 'BolKhata',
 
   nav: {
     home: 'Home',
@@ -263,7 +263,7 @@ export const COPY = {
 
     welcome: {
       title: 'Welcome',
-      subtitle: 'Veldger · Digital voice ledger',
+      subtitle: 'BolKhata · Digital voice ledger',
       tagline:
         'Track customer udhaar, cashbook, and daily expenses with your voice.',
       createAccount: 'Create free account',

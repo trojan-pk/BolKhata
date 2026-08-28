@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 // Universal AI System Prompt for Ledger Intent Parsing
-const SYSTEM_INSTRUCTION = `You are Veldger's financial ledger parser.
+const SYSTEM_INSTRUCTION = `You are BolKhata's financial ledger parser.
 Analyze spoken South Asian business and personal ledger statements (in Urdu, Roman Urdu, Hindi, or English) and extract clean JSON.
 
 SCHEMA:

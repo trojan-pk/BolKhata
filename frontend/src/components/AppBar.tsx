@@ -15,7 +15,7 @@ export const AppBar: React.FC<{
   onOpenSettings: () => void;
   onPressIdentity?: () => void;
 }> = ({ storeProfile, onOpenSettings, onPressIdentity }) => {
-  const name = storeProfile.name?.trim() || 'Veldger';
+  const name = storeProfile.name?.trim() || 'BolKhata';
   const owner = storeProfile.ownerName?.trim();
   const synced = !!storeProfile.isBackendConnected;
 

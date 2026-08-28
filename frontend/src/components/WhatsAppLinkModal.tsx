@@ -152,7 +152,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
 
         <Text style={[TYPE.body, styles.subtitle]}>
           Link your WhatsApp account to send payment reminders directly from
-          Veldger — no browser tabs needed!
+          BolKhata — no browser tabs needed!
         </Text>
 
         {/* ── linked ── */}
