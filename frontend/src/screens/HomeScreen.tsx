@@ -363,44 +363,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ------------------------------------------------------ voice stage -- */}
-      <View style={styles.stage}>
-        <Text style={[TYPE.title1, styles.stageTitle]}>{stageTitle}</Text>
-
-        <Animated.Text
-          style={[
-            TYPE.bodySm,
-            styles.stageLine,
-            orbState === 'idle' && { opacity: promptFade },
-          ]}
-          numberOfLines={2}
-        >
-          {stageLine}
-        </Animated.Text>
-
-        <VoiceOrb
-          size={orbSize}
-          state={orbState}
-          maxDurationMs={MAX_SESSION_MS}
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          onPressOut={handlePressOut}
-        />
-
-        {orbState === 'idle' ? (
-          <View style={styles.stageFooter}>
-            <Badge label="Urdu or English" tone="accent" />
-            <Text style={[TYPE.caption, styles.stageHint]}>
-              {COPY.home.hintIdle}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.stageFooter} />
-        )}
-      </View>
-
-      {/* ---------------------------------------------------- net position -- */}
-      <View style={styles.block}>
+      {/* ------------------------------------------- 1. Financial Hero Card -- */}
+      <View style={styles.heroBlock}>
         <BalanceCard
           toCollect={toCollect}
           toPay={toPay}
@@ -411,7 +375,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         />
       </View>
 
-      {/* -------------------------------------------------- recent activity -- */}
+      {/* ------------------------------------- 2. Sleek Voice Assistant Hub -- */}
+      <View style={styles.voiceSection}>
+        <View style={styles.voiceCard}>
+          <View style={styles.voiceCardHeader}>
+            <View style={styles.voiceTag}>
+              <Sparkles size={13} color={COLORS.accent} />
+              <Text style={[TYPE.caption, styles.voiceTagText]}>AI Voice Entry</Text>
+            </View>
+            <Badge
+              label={orbState === 'recording' ? 'Listening…' : orbState === 'processing' ? 'Thinking…' : 'Urdu / Roman / Eng'}
+              tone={orbState === 'recording' ? 'debit' : orbState === 'processing' ? 'accent' : 'neutral'}
+              dot={orbState !== 'idle'}
+            />
+          </View>
+
+          <View style={styles.orbWrapper}>
+            <VoiceOrb
+              size={Math.min(orbSize, 172)}
+              state={orbState}
+              maxDurationMs={MAX_SESSION_MS}
+              onPress={handlePress}
+              onLongPress={handleLongPress}
+              onPressOut={handlePressOut}
+            />
+          </View>
+
+          <View style={styles.voiceFooter}>
+            <Text style={[TYPE.title3, styles.stageTitle]}>{stageTitle}</Text>
+            <Animated.Text
+              style={[
+                TYPE.caption,
+                styles.stageLine,
+                orbState === 'idle' && { opacity: promptFade },
+              ]}
+              numberOfLines={1}
+            >
+              {stageLine}
+            </Animated.Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ------------------------------------------------ 3. Recent Activity -- */}
       <View style={styles.block}>
         <SectionHeader
           title={COPY.home.recentActivity}
@@ -450,38 +456,73 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: COLORS.paper,
   },
   content: {
     paddingBottom: 132,
   },
-  stage: {
-    alignItems: 'center',
+  heroBlock: {
+    paddingHorizontal: GUTTER,
     paddingTop: SPACE.sm,
-    paddingHorizontal: SPACE.xxl,
   },
-  stageTitle: {
-    textAlign: 'center',
+  voiceSection: {
+    paddingHorizontal: GUTTER,
+    marginTop: SPACE.lg,
   },
-  stageLine: {
-    ...TYPE.bodySm,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: SPACE.xs + 2,
-    minHeight: 38,
-  },
-  stageFooter: {
+  voiceCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.lg,
+    borderWidth: 1,
+    borderColor: COLORS.hairline,
     alignItems: 'center',
-    gap: SPACE.sm,
-    minHeight: 52,
+    shadowColor: '#0B0F1A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  voiceCardHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACE.xs,
+  },
+  voiceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  voiceTagText: {
+    color: COLORS.accent,
+    fontWeight: '600',
+  },
+  orbWrapper: {
+    paddingVertical: SPACE.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceFooter: {
+    alignItems: 'center',
+    gap: 3,
     marginTop: SPACE.xs,
   },
-  stageHint: {
-    color: COLORS.textFaint,
+  stageTitle: {
+    color: COLORS.textPrimary,
     textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  stageLine: {
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   block: {
     paddingHorizontal: GUTTER,
-    marginTop: SPACE.xxl,
+    marginTop: SPACE.xl,
   },
   list: {
     gap: SPACE.sm,

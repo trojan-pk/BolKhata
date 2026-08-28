@@ -24,6 +24,12 @@ app.use(cors({
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
+// Global Request Logger
+app.use((req: Request, _res: Response, next) => {
+  console.log(`📥 [HTTP ${new Date().toLocaleTimeString()}] ${req.method} ${req.originalUrl} (${req.ip || 'unknown'})`);
+  next();
+});
+
 // Health Check Endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.json({

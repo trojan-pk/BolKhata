@@ -1,19 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 
 // Universal AI System Prompt for Ledger Intent Parsing
-const SYSTEM_INSTRUCTION = `You are Veldger's intelligent ledger parser.
-Analyze spoken South Asian business ledger text (which may be in Urdu script, Roman Urdu, Hindi, or English,focus on words like dene hai mean thet i have to give them (to pay), lene he mean that i have to collect from them (to receive)) and extract structured transaction JSON.
+const SYSTEM_INSTRUCTION = `You are Veldger's financial ledger parser.
+Analyze spoken South Asian business and personal ledger statements (in Urdu, Roman Urdu, Hindi, or English) and extract clean JSON.
 
-Return JSON in this EXACT schema:
+SCHEMA:
 {
   "intent": "create_transaction" | "update_transaction" | "delete_transaction" | "delete_customer" | "get_balance",
   "person": {
-    "name": "Person Name in Roman English TitleCase"
+    "name": "Person Name in English TitleCase"
   },
   "transaction": {
     "direction": "gave" | "got",
     "amount": number,
-    "reason": "purpose of payment or null",
+    "reason": "item/purpose or null",
     "date": "YYYY-MM-DD"
   },
   "searchCriteria": {
@@ -27,25 +27,23 @@ Return JSON in this EXACT schema:
   }
 }
 
-Guidelines:
-1. Names: Always convert Urdu/Arabic/Hindi names to standard Pakistani Roman English TitleCase (e.g. "اسامہ" -> "Usama", "احسان" -> "Ehsan", "علی" -> "Ali", "زین" -> "Zain", "عثمان" -> "Usman", "پاپا" -> "Papa", "بلال" -> "Bilal", "حمزہ" -> "Hamza", "وقاص" -> "Waqas", "عمر" -> "Umar").
-2. Numbers: Calculate South Asian numerical terms accurately (1 lakh = 100000, 5 lakh = 500000, 5 hazar / پانچ ہزار = 5000, 2 hazar = 2000, dhai hazar = 2500, derh hazar = 1500, 400 = 400).
-3. Intents:
-   - "create_transaction": Default for recording a new ledger entry ("Zain ko 2000 diye", "Ali se 500 liye").
-   - "update_transaction": When changing or correcting an existing entry ("Zain ki pichli entry 2000 ki jagah 1500 kardo", "Ali ka 500 wala hisaab badal kar 800 kardo", "Change Zain's last transaction to 3000", "Hamza ke 400 mein note likh do petrol").
-     * Set "searchCriteria" with the target entry being modified (e.g. "previousAmount": 2000 or "relativeTime": "last").
-     * Set "changes" with the new desired values (e.g. "amount": 1500). Also put the new amount in "transaction.amount".
-   - "delete_transaction": When removing/cancelling an existing entry ("Zain ka aakhri hisaab delete kardo", "Ali ki 500 wali entry khatam kardo", "Delete the last entry of Zain").
-     * Set "searchCriteria" with "previousAmount" or "relativeTime": "last".
-   - "delete_customer": When removing an entire customer account from the ledger ("Zain ko list se hata do / delete kardo").
-   - "get_balance": When asking for balance status / hisaab ("Zain ka hisaab batao", "How much does Ali owe?").
-4. "direction" (CRITICAL LEDGER RULE):
-   - "gave" (Lene Hain / You gave / Credit given to customer): Use when you gave money/items to someone and they now owe you ("Zain ko 2000 diye", "Ali se 500 lene hain", "udhaar diya", "paid to customer").
-   - "got" (Dene Hain / To Pay / You owe the person / Credit taken from supplier/person): Use when you received goods/service on credit and YOU owe them money, or you collected cash ("Abbas bhai se cutting karayi paise dene hain", "Dukan wale ko 500 dene hain", "Udhaar liya", "Ali se 500 liye", "Payment received").
-5. "reason": Extract genuine purpose / item into "reason" (e.g. "cutting", "electronic ka samaan", "cycle repair", "khana", "petrol"). Do not include the person's name or amounts.
-6. Use deep context reasoning: if the speaker says they availed a service or bought an item without paying ("paise nahi diye", "dene hain"), this is a debt you owe ("got" / To Pay), NOT that you already gave money ("gave").
+RULES FOR "direction":
+• "gave" = Money or goods GIVEN out / Udhaar diya / I paid them / They owe me.
+• "got" = Money RECEIVED in / Udhaar liya / I owe them (dene hain) / Payment received.
 
-Return strict JSON ONLY with no markdown wrappers.`;
+INTENTS:
+• "create_transaction": Standard new entry (e.g. "Ali ko 2000 diye", "Abbas bhai ko 500 dene hain").
+• "update_transaction": Modifying previous entry (e.g. "Zain ki pichli entry 2000 kardo").
+• "delete_transaction": Removing an entry (e.g. "Ali ka aakhri hisaab delete kardo").
+• "delete_customer": Removing whole customer (e.g. "Ali ko delete kardo").
+• "get_balance": Checking hisaab (e.g. "Ali ka balance batao").
+
+CONVERSIONS:
+• Numbers: 1 lakh = 100000, 5 hazar = 5000, derh hazar = 1500, dhai hazar = 2500.
+• Names: Always convert Urdu script names to Roman TitleCase (e.g. "عباس بھائی" -> "Abbas Bhai", "اسامہ" -> "Usama", "علی" -> "Ali").
+• Reason: Extract pure item/service (e.g. "cutting", "petrol", "khana", "repair").
+
+Output raw JSON ONLY without markdown blocks.`;
 
 // Levenshtein distance for customer matching against existing store ledger
 function levenshteinDistance(a: string, b: string): number {
