@@ -1,243 +1,193 @@
-# BolKhata (بول کھاتا / बोल खाता) — Voice-First Digital Ledger
+# BolKhata (बोल खाता / بول کھاتہ) — Voice-First AI Digital Ledger
 
-**BolKhata** is a voice-first digital ledger and shop management app for small shopkeepers. The shopkeeper **speaks** a transaction in Urdu/Hindi, the app transcribes it, extracts the intent with an LLM, and speaks a confirmation back — then the entry lands in a digital *khata* with running balances.
+**BolKhata** is an AI-powered, voice-first digital ledger and shop management app built for retail store owners, Kirana shops, and merchants across South Asia. The shopkeeper simply **speaks** a credit (*Udhaar / Gave*) or debit (*Jama / Got*) transaction in Urdu, Roman Urdu, Hindi, or English, and the app transcribes it, extracts structured intent with an LLM, verifies the party, and updates the digital *khata* with running balances. It also features daily cashbook management, financial reports, and automated polite WhatsApp payment reminders via Baileys.
 
 Built for the **Alibaba Cloud AI Hackathon Pakistan 2026** (Alkhidmat Foundation Pakistan / Bano Qabil ecosystem). Team: **Trojan**.
 
-> **Core value prop**: 1-tap voice entry, spoken confirmation in the shopkeeper's own language, modern minimalist UI, and AI-powered intent parsing.
+> **Core Value Proposition**: 1-tap voice entry, multi-tier STT/LLM failover, Supabase Auth & Multi-Tenant PostgreSQL sync, native Baileys WhatsApp Web reminder automation, and a custom atomic UI design system.
+
+---
 
 ## 🎯 Core Flow
 
 ```text
 🎙️  "Ahmed ne 500 ka saman udhaar liya"
          │
-         ├─ expo-audio records mic → m4a
+         ├─ expo-av records microphone → audio m4a/wav
          ▼
-   POST /voice/process  (multipart, field: audio)
+   POST /voice/process (multipart audio OR JSON text)
          │
-         ├─ Groq Whisper large-v3 ........ speech → text
-         ├─ Groq llama3-8b-8192 (JSON) ... text → {intent, customerName, amount, type}
-         ├─ DashScope qwen3-tts-flash .... confirmation → wav (base64)
+         ├─ STT Cascade: ElevenLabs Scribe → Groq Whisper Large v3 Turbo
+         ├─ LLM Brain: Google Gemini Flash Lite → DashScope Qwen Turbo → Groq Llama 3.3 70B
+         ├─ Intent Schema: { intent, person: "Ahmed", transaction: { direction: "gave", amount: 500 } }
+         ├─ Fuzzy Contact Matching: Levenshtein distance against existing customers
          ▼
-   App shows parsed entry + plays spoken confirmation
+   Interactive Confirmation Sheet in App
          │
-   Shopkeeper taps Confirm
+   Shopkeeper reviews & taps Confirm
          ▼
-   POST /transactions → Supabase, customer balance updated
+   Authoritative Ledger Update → Supabase Multi-Tenant PostgreSQL & Local Storage
+         ▼
+   WhatsApp Payment Reminder Dispatch (Instant 1-tap or Scheduled via Baileys)
 ```
+
+---
 
 ## 📂 Repository Structure (Monorepo)
 
 ```
 BolKhata/
-├── frontend/                       # React Native app — Expo SDK 57
-│   ├── App.tsx                     # Clerk gate, tab routing, splash cross-fade, pill dock
+├── frontend/                       # React Native application — Expo SDK 54
+│   ├── App.tsx                     # Main app root: Splash, Supabase Auth, Onboarding, Modals, Tab navigation
 │   ├── index.ts                    # registerRootComponent entry
 │   ├── app.json                    # Expo config: scheme `bolkhata`, audio permissions
-│   ├── babel.config.js             # lucide barrel-import rewrite (see Gotchas)
+│   ├── babel.config.js             # lucide barrel-import rewrite
+│   ├── eas.json                    # EAS Cloud build config for Android/iOS
 │   └── src/
-│       ├── components/             # Header, DashboardCards, CustomerCard, SplashScreen,
-│       │                           # TransactionModal, AddCustomerModal, CustomerDetailModal,
-│       │                           # VoiceAssistantModal, ApiConfigModal, VoiceLogo
-│       ├── screens/                # AuthScreen, CustomersScreen, CashbookScreen,
-│       │                           # ReportsScreen, SettingsScreen
-│       ├── services/               # api.ts (axios → Express), storage.ts (unused, see Gaps)
-│       ├── theme/                  # colors.ts, typography.ts (+ web Google Fonts injection)
-│       ├── types/                  # Party, Transaction, CashbookEntry, StoreProfile
-│       └── cache.ts                # Clerk token cache backed by expo-secure-store
-├── backend/                        # Express 5 API
-│   ├── src/
-│   │   ├── server.ts               # app bootstrap, route mounting, health check
-│   │   ├── routes/                 # auth, customer, transaction, voice, dashboard
-│   │   ├── controllers/            # matching controllers
-│   │   ├── middleware/             # auth.middleware.ts (unmounted), errorHandler.ts
-│   │   └── services/               # supabase.service.ts
-│   └── database/schema.sql         # Postgres DDL for Supabase
-├── docs/                           # Product, technical & execution documentation
-├── .agents/skills/                 # Vendored Clerk agent skills (setup, custom UI, testing, CLI…)
-├── CONTEXT.md                      # AI coding assistant context guide
-└── AGENTS.md                       # Agent workflow rules
+│       ├── components/             # Reusable modals & complex UI (AppBar, TabBar, CustomerLedgerPanel,
+│       │                           # VoiceAssistantModal, VoiceOrb, WhatsAppLinkModal, WaScheduleModal, etc.)
+│       ├── i18n/                   # Localized strings: Roman Urdu, Urdu script, English (copy.ts, translations.ts)
+│       ├── screens/                # AuthScreen, IntroScreen, WelcomeScreen, OnboardingWizardModal,
+│       │                           # HomeScreen, CustomersScreen, CashbookScreen, ReportsScreen, SettingsScreen
+│       ├── services/               # api.ts (Express connector), storage.ts (AsyncStorage + Supabase sync),
+│       │                           # supabase.ts (Supabase JS Client instance)
+│       ├── theme/                  # colors.ts, tokens.ts, typography.ts (Plus Jakarta Sans & Inter)
+│       ├── types/                  # Party, Transaction, CashbookEntry, StoreProfile, VoiceResult
+│       ├── ui/                     # Production-grade atomic UI system (Button, Card, Sheet, Money, etc.)
+│       └── utils/                  # Formatting helpers (currency, dates, phone numbers)
+│
+├── backend/                        # Express 5 Node.js & TypeScript API server
+│   ├── Dockerfile                  # Production container definition
+│   ├── Procfile                    # Railway / Heroku process declaration
+│   ├── railway.json                # Railway deployment config
+│   ├── database/
+│   │   └── schema_v2.sql           # Clean Supabase PostgreSQL Multi-Tenant schema with RLS & indexes
+│   └── src/
+│       ├── server.ts               # Express bootstrap, CORS, route mounting, graceful shutdown
+│       ├── routes/                 # /auth, /customers, /transactions, /voice, /dashboard, /wa
+│       ├── controllers/            # Controller business logic
+│       ├── middleware/             # auth.middleware.ts, errorHandler.ts, voiceLimit.middleware.ts
+│       └── services/               # supabase.service.ts, whatsapp.service.ts (Baileys socket & SSE QR)
+│
+├── docs/                           # Architectural, product & deployment documentation
+├── .agents/skills/                 # Agent skills (Supabase & Postgres best practices)
+└── CONTEXT.md                      # AI coding assistant context guide
 ```
+
+---
 
 ## 🛠️ Technology Stack
 
 | Layer | Technology |
 | :--- | :--- |
-| **Mobile / Web** | React Native `0.86.2` on **Expo SDK 57** |
-| **UI runtime** | React `19.2.3`, React Native Web `0.21.2`, `@expo/metro-runtime` |
-| **Language** | TypeScript strict — frontend `~6.0.3`, backend `^7.0.2` |
-| **Auth** | **Clerk** (`@clerk/expo ^4.5.2`) — email+password, Google & GitHub SSO |
-| **Token storage** | `expo-secure-store` (native); in-memory on web |
-| **Audio** | `expo-audio` — `useAudioRecorder` for capture, `createAudioPlayer` for TTS playback |
-| **Icons** | `lucide-react-native` |
-| **HTTP client** | `axios` |
-| **API** | Express `5.2.1`, `multer` (memory storage) for audio uploads |
-| **Database** | Supabase Postgres via `@supabase/supabase-js` |
-| **Speech-to-text** | Groq `whisper-large-v3` |
-| **Intent parsing** | Groq `llama3-8b-8192` (JSON response mode) |
-| **Text-to-speech** | Alibaba DashScope `qwen3-tts-flash` (international endpoint) |
-| **Backend dev loop** | `nodemon` + `tsx` |
-| **Typography** | Plus Jakarta Sans (headings & figures) + Inter (body & subtitles) |
+| **Mobile / Web** | React Native `0.81.5` on **Expo SDK 54** |
+| **UI Runtime** | React `19.1.0`, React Native Web `0.21.0`, `@expo/metro-runtime` |
+| **Language** | TypeScript strict — frontend `^5.3.3`, backend `^7.0.2` |
+| **Authentication** | **Supabase Auth** (`@supabase/supabase-js: ^2.112.3`) — Email/Password, Google OAuth (PKCE & Hash token flow) |
+| **Persistence** | `@react-native-async-storage/async-storage` (per-user scoped) + Supabase PostgreSQL |
+| **WhatsApp Engine** | **Baileys v7** (`@whiskeysockets/baileys: ^7.0.0-rc14`) — Direct WhatsApp Web socket connection & SSE QR streaming |
+| **Speech-to-Text** | Multi-tier failover: **ElevenLabs Scribe STT** (`scribe_v1`) $\rightarrow$ **Groq Whisper Large v3 Turbo** |
+| **LLM Brain Engine** | Multi-tier failover: **Google Gemini Flash Lite** $\rightarrow$ **Alibaba Cloud DashScope Qwen Turbo** $\rightarrow$ **Groq Llama 3.3 70B** |
+| **Text-to-Speech** | `expo-speech` (native) & ElevenLabs TTS |
+| **Typography** | **Plus Jakarta Sans** (headings, amounts & figures) + **Inter** (body & controls) |
+
+---
 
 ## ⚙️ Environment Variables
 
 ### `frontend/.env`
-
 ```env
 EXPO_PUBLIC_API_URL=http://localhost:3000
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
-CLERK_SECRET_KEY=sk_test_xxx
+EXPO_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
-
-`App.tsx` throws at startup if `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` is missing. Only `EXPO_PUBLIC_*` vars are inlined into the client bundle — and they are **baked in at bundle time**, so restart the dev server after editing.
 
 ### `backend/.env`
-
 ```env
 PORT=3000
-DATABASE_URL=
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-JWT_SECRET=
-GROQ_API_KEY=            # required — /voice/process 500s without it
-DASHSCOPE_API_KEY=       # optional — TTS is skipped (audioBase64: null) if absent
+SUPABASE_URL=https://<your-project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+GEMINI_API_KEY=AIza...
+DASHSCOPE_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
+ELEVENLABS_API_KEY=sk_...
+FRONTEND_URL=http://localhost:8081
 ```
 
-Both `.env` files are gitignored. Copy from the checked-in `.env.example` in each package.
+---
 
 ## 🚀 Getting Started
 
+### 1. Backend
 ```bash
-# 1. Backend
 cd backend
 npm install
-npm run dev                   # nodemon + tsx on :3000
-
-# 2. Frontend (separate terminal)
-cd frontend
-npm install
-npx expo start                # press w = web, a = Android, i = iOS
+npm run dev                   # nodemon + tsx on http://localhost:3000
 ```
 
-Health check: `curl http://localhost:3000/` → `{"status":"ok","message":"BolKhata API is running"}`
+Health check:
+```bash
+curl http://localhost:3000/health
+```
 
-### Frontend scripts
+### 2. Frontend (Separate Terminal)
+```bash
+cd frontend
+npm install
+npm run web                   # Start web development server (Port 8081)
+# OR
+npm run start                 # Start Expo Metro bundler for iOS/Android Expo Go
+```
 
-| Command | What it does |
-| :--- | :--- |
-| `npm start` | `expo start` — Metro dev server, interactive platform menu |
-| `npm run web` | `expo start --web` — browser on port 8081 |
-| `npm run android` | `expo run:android` — **native build**, needs Android SDK |
-| `npm run ios` | `expo run:ios` — **native build**, needs Xcode (macOS) |
-
-`expo-dev-client` is installed, so `npx expo start` targets a **development build**, not Expo Go. Build one once with `npm run android` / `npm run ios`; after that `npx expo start` attaches to it. Web needs no native build.
-
-### Backend scripts
-
-| Command | What it does |
-| :--- | :--- |
-| `npm run dev` | Watch `src/**/*.ts`, restart via `tsx` |
-| `npm run build` | `tsc` → `dist/` |
-| `npm start` | `node dist/server.js` (run `build` first) |
-| `npm test` | Not implemented — exits 1 |
+---
 
 ## 🔌 API Reference
 
-Base URL `http://localhost:3000`. **No endpoint currently requires authentication** — see Known Gaps.
+Base URL: `http://localhost:3000`
 
-| Method | Route | Notes |
+| Method | Route | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Health check |
-| `POST` | `/auth/signup` | `501 Not Implemented` |
-| `POST` | `/auth/login` | `501 Not Implemented` |
-| `GET` | `/auth/me` | `501 Not Implemented` |
-| `GET` | `/customers` | List customers |
-| `POST` | `/customers` | Create — `{ name, phone }` |
-| `GET` | `/customers/:id` | Fetch one |
-| `PUT` | `/customers/:id` | Update — `{ name, phone }` |
-| `DELETE` | `/customers/:id` | Delete, `204` |
-| `POST` | `/transactions` | `{ customer_id, type: 'CREDIT'\|'PAYMENT', amount, description }` → inserts + recomputes balance |
-| `GET` | `/transactions/customer/:id` | Customer's transactions, newest first |
-| `POST` | `/voice/process` | `multipart/form-data` field `audio`, **or** JSON `{ text }` → `{ intent, customerName, amount, description, type, originalText, audioBase64 }` |
-| `GET` | `/dashboard` | `{ totalUdhaar, dueToday }` |
+| `GET` | `/health` | Server health check and uptime status |
+| `POST` | `/voice/process` | Audio upload (`multipart/form-data`) or JSON text parsing |
+| `POST` | `/voice/tts` | Multilingual TTS speech generation |
+| `GET` | `/wa/link/:userId` | Server-Sent Events (SSE) stream for live QR code pairing |
+| `GET` | `/wa/status/:userId` | Get WhatsApp connection status |
+| `DELETE` | `/wa/link/:userId` | Unlink WhatsApp account and clear session |
+| `POST` | `/wa/remind` | Send instantaneous payment reminder text |
+| `POST` | `/wa/schedule` | Schedule a future reminder delivery |
+| `GET` | `/wa/schedule/:userId` | List pending scheduled reminders |
+| `DELETE` | `/wa/schedule/:userId/:scheduleId` | Cancel a scheduled reminder |
+| `GET` | `/customers` | List store customers & suppliers |
+| `POST` | `/customers` | Register customer/supplier with opening balance |
+| `GET` | `/transactions` | List transaction entries |
+| `POST` | `/transactions` | Create Gave / Got ledger entry |
+| `GET` | `/dashboard/summary` | Authoritative aggregated store totals |
 
-## 🗄️ Data Model
+---
 
-`backend/database/schema.sql` — run it in the Supabase SQL editor.
+## 🗄️ Database Model (Schema v2)
 
-| Table | Key columns |
-| :--- | :--- |
-| `users` | `id`, `email` (unique), `phone_number`, `name` |
-| `customers` | `id`, `user_id` → `users`, `name`, `phone`, `balance` |
-| `transactions` | `id`, `customer_id` → `customers`, `type` (`CREDIT`\|`PAYMENT`), `amount` (>0), `description`, `ai_metadata` (JSONB) |
-| `reminders` | `id`, `customer_id`, `amount_due`, `due_date`, `status` (`PENDING`\|`SENT`\|`CANCELLED`) |
+Run `backend/src/database/schema_v2.sql` in the Supabase SQL editor:
+- **`stores`**: Multi-tenant merchant profile, business category, account type.
+- **`customers`**: Store contacts with balance and type (`customer` / `supplier`).
+- **`transactions`**: Credit (`gave`) and debit (`got`) ledger entries with timestamps and notes.
+- **`cashbook`**: Daily cash in (`in`) and cash out (`out`) rokar entries.
+- **Row Level Security (RLS)** enabled across all tables.
 
-**Sign convention** (frontend `src/types/index.ts`): a customer's positive `currentBalance` means *you will collect* (udhaar / `gave`, crimson red); negative means *you will pay* (jama / `got`, emerald green). The backend maps `gave → CREDIT` and `got → PAYMENT`.
+---
 
-## ✨ App Features
-
-- **Home / Khata** — dashboard totals plus recent party list.
-- **Customers** — register customers & suppliers, search, filter, per-customer timeline with WhatsApp reminder actions.
-- **Cashbook** — daily shop cash-in / cash-out tracking.
-- **Reports** — business analytics with a PDF export preview.
-- **Voice Assistant** — record from the mic, or tap a sample phrase to run the text path; spoken confirmation before saving.
-- **Settings** — store profile, language & currency, Clerk sign-out.
-- **Backend Connector** — in-app modal to point the app at a different Express URL.
-
-## 🧪 Testing Login
-
-Clerk **development** instances treat any email containing the `+clerk_test` subaddress as a test address: no message is sent and the verification code is always `424242`. Fictional test phones `+1 (XXX) 555-0100` … `555-0199` work the same way.
-
-A pre-verified test account is already seeded on the dev instance:
-
-```
-Email:    admin+clerk_test@bolkhata.dev
-Password: TestPass123!
-```
-
-Enter those on the **Log In** tab — no OTP, no captcha. To make more accounts, sign up in-app with any `+clerk_test` address and enter `424242` when asked to verify.
-
-> Dev-instance only. Swapping to `pk_live_*` keys makes `+clerk_test` ordinary again and this account will not exist. Delete the seeded user before going to production.
-
-## ✅ Typecheck
+## 🧪 Typecheck & Build
 
 ```bash
-cd frontend && node node_modules/typescript/bin/tsc --noEmit
-cd backend  && npx tsc --noEmit
+# Typecheck frontend and backend
+cd frontend && npm run type-check
+cd backend  && npm run build
+
+# Build Android APK via EAS Cloud
+cd frontend && npm run build:apk
 ```
 
-Both are clean as of the current tree.
-
-## 📦 Build & Export
-
-```bash
-eas build --platform android --profile preview    # Android APK via EAS Cloud
-npx expo export -p web                           # Static web export
-cd backend && npm run build && npm start         # Compiled API
-```
-
-## 🧭 Known Gaps
-
-Honest state of the code — these are deliberate hackathon shortcuts, not hidden bugs.
-
-- **The API is unauthenticated.** `backend/src/middleware/auth.middleware.ts` exports `authenticate`, but no route mounts it. Anyone who can reach the port can read and write every record. Clerk currently gates only the client UI, and the app never sends an `Authorization` header.
-- **Tenancy is stubbed.** `customer`, `transaction`, and `dashboard` controllers hardcode `USER_ID = '00000000-0000-0000-0000-000000000000'`. All data belongs to one synthetic user, and the Clerk user ID is never propagated to the backend.
-- **`/auth/*` is dead.** All three handlers return `501`; Clerk owns auth client-side.
-- **Offline-first is not wired.** `frontend/src/services/storage.ts` (`StorageService`, AsyncStorage-backed) is no longer imported anywhere — `api.ts` replaced it. The app is currently network-dependent.
-- **Several `ApiService` methods are stubs.** `getTransactions` returns `[]`; `getCashbook` returns `[]`; `saveParties`, `saveTransactions`, `saveCashbook`, and `saveStoreProfile` are no-ops. Cashbook and transaction history do not persist.
-- **`dueToday` is hardcoded to `0`** in the dashboard controller.
-- **Reminders are UI-only.** The `reminders` table exists in the schema with no route, controller, or scheduler. WhatsApp voice reminders are not implemented end-to-end.
-- **No test suite.** `backend npm test` exits 1; the frontend has no test script.
-
-## ⚠️ Gotchas
-
-- **Windows terminal**: use `npx expo …`, not bare `expo`.
-- **Testing on a physical device**: `EXPO_PUBLIC_API_URL=http://localhost:3000` resolves to the *phone*, not your machine. Use your LAN IP (`http://192.168.x.x:3000`) and restart Metro — the value is baked in at bundle time. Android emulator uses `http://10.0.2.2:3000`.
-- **Peer dependencies**: `frontend/.npmrc` sets `legacy-peer-deps=true`.
-- **lucide icons**: Metro does not tree-shake the 1700-icon barrel, so `babel.config.js` rewrites each named import to `lucide-react-native/icons/<kebab-name>`. Deep `dist/esm/...` paths must **not** be used — package `exports` have been enforced since SDK 53 and would block them.
-- **Microphone**: Android permissions are declared in `app.json`; `AudioModule.requestRecordingPermissionsAsync()` must succeed before recording. Mic capture does not work in a plain web browser tab the way it does natively.
-- **TTS is optional**: without `DASHSCOPE_API_KEY` the backend logs a warning and returns `audioBase64: null` — parsing still works, just silently.
-- **Line endings**: the repo stores LF; git will warn about CRLF conversion on Windows checkouts.
+---
 
 ## 📄 License
 
