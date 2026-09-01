@@ -47,8 +47,6 @@ const APP_VERSION = '1.0.0';
 /**
  * Grouped settings for users.
  */
-const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
-
 export const SettingsScreen: React.FC<{
   storeProfile: StoreProfile;
   onUpdateStore: (updated: StoreProfile) => void;
@@ -68,7 +66,7 @@ export const SettingsScreen: React.FC<{
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
   useEffect(() => {
-    ApiService.checkWaStatus(WA_USER_ID)
+    ApiService.checkWaStatus()
       .then((s) => { setWaLinked(s.linked); setWaPhone(s.phone); })
       .catch(() => {});
   }, []);
@@ -296,7 +294,6 @@ export const SettingsScreen: React.FC<{
 
       <WhatsAppLinkModal
         visible={waModalOpen}
-        userId={WA_USER_ID}
         onClose={() => setWaModalOpen(false)}
         onLinked={(phone) => { setWaLinked(true); setWaPhone(phone); }}
         onUnlinked={() => { setWaLinked(false); setWaPhone(undefined); }}

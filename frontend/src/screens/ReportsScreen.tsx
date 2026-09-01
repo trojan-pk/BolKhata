@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Platform, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { CheckCircle2, Share2 } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { CheckCircle2, FileDown, Share2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
@@ -86,6 +88,74 @@ export const ReportsScreen: React.FC<{
     return lines.join('\n');
   };
 
+  const escapeHtml = (value: string): string =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /** The same statement, laid out for a printable A4 PDF via expo-print. */
+  const buildStatementHtml = () => {
+    const rows = (list: Party[]) =>
+      list
+        .map(
+          (p) =>
+            `<tr><td>${escapeHtml(p.name)}</td><td class="num">${formatMoney(
+              p.currentBalance,
+              currency
+            )}</td></tr>`
+        )
+        .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><style>
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1e293b; margin: 40px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: #64748b; font-size: 12px; margin-bottom: 24px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin: 24px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: #64748b; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding: 6px 4px; }
+  td { padding: 6px 4px; border-bottom: 1px solid #f1f5f9; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .net { margin-top: 28px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; display: flex; justify-content: space-between; }
+  .total { font-weight: 700; }
+</style></head>
+<body>
+  <h1>${escapeHtml(storeName)}</h1>
+  <div class="sub">Ledger statement · Generated ${formatDate(new Date().toISOString())}</div>
+  <h2>${escapeHtml(COPY.ledger.toCollect)} (${debtors.length}) — ${formatMoney(toCollect, currency)}</h2>
+  <table><tr><th>Party</th><th class="num">Balance</th></tr>${rows(debtors)}</table>
+  <h2>${escapeHtml(COPY.ledger.toPay)} (${creditors.length}) — ${formatMoney(toPay, currency)}</h2>
+  <table><tr><th>Party</th><th class="num">Balance</th></tr>${rows(creditors)}</table>
+  <div class="net"><span>${escapeHtml(COPY.ledger.netPosition)}</span><span class="total">${formatMoney(
+    toCollect - toPay,
+    currency
+  )}</span></div>
+</body>
+</html>`;
+  };
+
+  /** Renders the statement to a PDF file and opens the share sheet with it. */
+  const exportPdf = async () => {
+    if (Platform.OS === 'web') {
+      // expo-print can't produce a file on web — reuse the text share there.
+      await exportStatement();
+      return;
+    }
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html: buildStatementHtml() });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `${storeName} statement`,
+        });
+      } else {
+        toast(`PDF saved to ${uri}`);
+      }
+    } catch {
+      toast('Could not generate the PDF', 'error');
+    }
+  };
+
   const exportStatement = async () => {
     const statement = buildStatement();
 
@@ -141,13 +211,22 @@ export const ReportsScreen: React.FC<{
         title={COPY.reports.title}
         subtitle={COPY.reports.subtitle}
         action={
-          <Button
-            label={COPY.reports.export}
-            icon={Share2}
-            variant="secondary"
-            size="sm"
-            onPress={exportStatement}
-          />
+          <View style={styles.headerActions}>
+            <Button
+              label="PDF"
+              icon={FileDown}
+              variant="secondary"
+              size="sm"
+              onPress={exportPdf}
+            />
+            <Button
+              label={COPY.reports.export}
+              icon={Share2}
+              variant="secondary"
+              size="sm"
+              onPress={exportStatement}
+            />
+          </View>
         }
       />
 
@@ -343,6 +422,10 @@ const LegendRow: React.FC<{
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: SPACE.sm,
   },
   scroll: {
     flex: 1,

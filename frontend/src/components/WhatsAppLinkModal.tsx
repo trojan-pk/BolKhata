@@ -13,13 +13,12 @@ import { Link2Off } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Button, Press } from '../ui';
-import { getApiBaseUrl } from '../services/api';
+import { ApiService } from '../services/api';
 
 type WaStatus = 'idle' | 'connecting' | 'linked' | 'error';
 
 interface Props {
   visible: boolean;
-  userId: string;
   onClose: () => void;
   onLinked?: (phone: string) => void;
   onUnlinked?: () => void;
@@ -27,7 +26,6 @@ interface Props {
 
 export const WhatsAppLinkModal: React.FC<Props> = ({
   visible,
-  userId,
   onClose,
   onLinked,
   onUnlinked,
@@ -37,90 +35,167 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   const [phone, setPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use 'any' for EventSource — it's a Web API not typed in React Native's lib
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const esRef = useRef<any | null>(null);
-  // Track status in a ref so the onerror closure always reads the latest value
+  const pollTimerRef = useRef<any | null>(null);
   const statusRef = useRef<WaStatus>('idle');
+  const mountedRef = useRef<boolean>(true);
 
   function updateStatus(s: WaStatus) {
     statusRef.current = s;
     setStatus(s);
   }
 
-  // ─── start SSE stream when modal opens ─────────────────────────────────────
+  // ─── start pairing when modal opens ────────────────────────────────────────
   useEffect(() => {
+    mountedRef.current = true;
     if (!visible) {
       cleanup();
       return;
     }
     startLinking();
-    return cleanup;
+    return () => {
+      mountedRef.current = false;
+      cleanup();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, userId]);
+  }, [visible]);
 
   function cleanup() {
     if (esRef.current) {
-      esRef.current.close();
+      try { esRef.current.close(); } catch { /* ignore */ }
       esRef.current = null;
+    }
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
     }
   }
 
-  function startLinking() {
+  /**
+   * Universal pairing engine:
+   * 1. Fetches current QR immediately via REST (`GET /wa/qr`).
+   * 2. Sets up a 2-second background poll for seamless mobile & web reliability.
+   * 3. Opens an SSE stream if native `EventSource` is available in the environment.
+   */
+  async function startLinking(forceRefresh = false) {
+    cleanup();
     updateStatus('connecting');
     setQrBase64(null);
     setError(null);
 
-    const url = `${getApiBaseUrl()}/wa/link/${userId}`;
-    // EventSource is a Web API — available in Expo web & React Native via
-    // the runtime polyfill; cast via 'any' to avoid missing global typings
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const es: any = new (globalThis as any).EventSource(url);
-    esRef.current = es;
-
-    es.addEventListener('qr', (e: { data: string }) => {
-      const data = JSON.parse(e.data) as { qr: string };
-      setQrBase64(data.qr);
-      updateStatus('connecting');
-    });
-
-    es.addEventListener('connected', (e: { data: string }) => {
-      const data = JSON.parse(e.data) as { phone?: string };
-      setPhone(data.phone ?? null);
-      updateStatus('linked');
-      es.close();
-      if (onLinked && data.phone) onLinked(data.phone);
-    });
-
-    es.addEventListener('error', (e: { data?: string }) => {
+    // If explicit refresh requested, tell backend to restart Baileys pairing
+    if (forceRefresh) {
       try {
-        const data = JSON.parse(e.data ?? '{}') as { error?: string };
-        setError(data.error ?? 'Connection failed');
+        await ApiService.refreshWaQr();
       } catch {
-        setError('Connection failed');
+        // Non-blocking, continue with fetch
       }
-      updateStatus('error');
-      es.close();
-    });
+    }
 
-    es.onerror = () => {
-      // SSE closes naturally after 'connected' — only treat as error if not yet linked
-      if (statusRef.current !== 'linked') {
-        setError('Lost connection to server');
-        updateStatus('error');
+    // 1. Immediate fetch of latest QR / status
+    try {
+      const initial = await ApiService.getWaQr();
+      if (!mountedRef.current) return;
+      if (initial.status === 'linked' && initial.phone) {
+        setPhone(initial.phone);
+        updateStatus('linked');
+        if (onLinked) onLinked(initial.phone);
+        return;
       }
-    };
+      if (initial.qr) {
+        setQrBase64(initial.qr);
+      }
+    } catch (e) {
+      console.warn('[WhatsAppLink] Initial QR query notice:', e);
+    }
+
+    // 2. Continuous Polling Fallback (ensures React Native mobile works 100%)
+    pollTimerRef.current = setInterval(async () => {
+      if (!mountedRef.current || statusRef.current === 'linked') {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        return;
+      }
+      try {
+        const res = await ApiService.getWaQr();
+        if (!mountedRef.current) return;
+        if (res.status === 'linked') {
+          if (res.phone) setPhone(res.phone);
+          updateStatus('linked');
+          cleanup();
+          if (onLinked && res.phone) onLinked(res.phone);
+          return;
+        }
+        if (res.qr && res.qr !== qrBase64) {
+          setQrBase64(res.qr);
+        }
+      } catch {
+        // Non-blocking poll retry
+      }
+    }, 2000);
+
+    // 3. Web SSE Stream (when browser EventSource is present)
+    try {
+      const isEventSourceAvailable =
+        typeof window !== 'undefined' &&
+        typeof (window as any).EventSource === 'function';
+
+      if (isEventSourceAvailable) {
+        const url = await ApiService.waLinkStreamUrl();
+        if (!mountedRef.current) return;
+
+        const es: any = new (window as any).EventSource(url);
+        esRef.current = es;
+
+        es.addEventListener('qr', (e: { data: string }) => {
+          if (!mountedRef.current) return;
+          try {
+            const data = JSON.parse(e.data) as { qr: string };
+            if (data.qr) {
+              setQrBase64(data.qr);
+              updateStatus('connecting');
+            }
+          } catch { /* ignore */ }
+        });
+
+        es.addEventListener('connected', (e: { data: string }) => {
+          if (!mountedRef.current) return;
+          try {
+            const data = JSON.parse(e.data) as { phone?: string };
+            setPhone(data.phone ?? null);
+            updateStatus('linked');
+            cleanup();
+            if (onLinked && data.phone) onLinked(data.phone);
+          } catch { /* ignore */ }
+        });
+
+        es.addEventListener('error', (e: { data?: string }) => {
+          if (!mountedRef.current) return;
+          if (statusRef.current !== 'linked') {
+            try {
+              const data = JSON.parse(e.data ?? '{}') as { error?: string };
+              if (data.error) setError(data.error);
+            } catch { /* non-fatal error */ }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[WhatsAppLink] SSE stream notice (polling active):', e);
+    }
+  }
+
+  async function handleRefresh() {
+    await startLinking(true);
   }
 
   async function handleUnlink() {
     try {
-      await fetch(`${getApiBaseUrl()}/wa/link/${userId}`, { method: 'DELETE' });
+      await ApiService.unlinkWa();
       updateStatus('idle');
       setPhone(null);
       setQrBase64(null);
       if (onUnlinked) onUnlinked();
-    } catch {
-      setError('Failed to unlink');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to unlink');
     }
   }
 
@@ -213,7 +288,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
                   label="Refresh QR Code"
                   variant="secondary"
                   size="sm"
-                  onPress={startLinking}
+                  onPress={handleRefresh}
                   style={styles.refreshBtn}
                 />
               </View>
@@ -234,7 +309,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
               label="Try Again"
               variant="secondary"
               size="sm"
-              onPress={startLinking}
+              onPress={handleRefresh}
               style={styles.retryBtn}
             />
           </View>

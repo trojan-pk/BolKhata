@@ -50,7 +50,15 @@ export interface StoreProfile {
 }
 
 export interface VoiceCommandParseResult {
-  intent: 'create_transaction' | 'get_balance' | 'get_history' | 'search_person' | 'unknown';
+  intent:
+    | 'create_transaction'
+    | 'update_transaction'
+    | 'delete_transaction'
+    | 'delete_customer'
+    | 'get_balance'
+    | 'get_history'
+    | 'search_person'
+    | 'unknown';
   person: {
     name: string;
     matched_person_id?: string | null;

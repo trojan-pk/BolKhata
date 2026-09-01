@@ -16,7 +16,6 @@ import { WaMarkdownPreview } from './WaMarkdownPreview';
 
 interface Props {
   visible: boolean;
-  userId: string;
   customer: {
     id: string;
     name: string;
@@ -57,7 +56,6 @@ export function getTimeRemainingText(targetIso: string): string {
 
 export const WaScheduleModal: React.FC<Props> = ({
   visible,
-  userId,
   customer,
   storeName = 'BolKhata Store',
   onClose,
@@ -154,13 +152,20 @@ export const WaScheduleModal: React.FC<Props> = ({
   };
 
   const handleSchedule = async () => {
+    // A WhatsApp message needs somewhere to go — the server rejects a
+    // schedule without a phone number.
+    if (!customer.phone.trim()) {
+      toast('Add a phone number for this customer first', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const scheduledAt = calculateTargetIso();
-      const result = await ApiService.scheduleWaReminder(userId, {
+      const result = await ApiService.scheduleWaReminder({
         customerId: customer.id,
         name: customer.name,
-        phone: customer.phone,
+        phone: customer.phone.trim(),
         balance: customer.balance,
         scheduledAt,
         message: activeTemplate,

@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Party, Transaction, CashbookEntry, StoreProfile } from '../types';
 import { supabase } from './supabase';
+import { isUuid, uuid } from '../utils/uuid';
+import { normalizeLegacyIds } from '../utils/ledger';
 
 const KEYS = {
   STORE_PROFILE: 'bolkhata_store_profile_v2',
@@ -18,6 +20,9 @@ const KEYS = {
 const userKey = (baseKey: string, userId?: string) =>
   userId ? `${baseKey}_${userId}` : baseKey;
 
+/** PostgREST rejects oversized payloads — keep upsert batches modest. */
+const UPSERT_CHUNK = 400;
+
 export const INITIAL_STORE_PROFILE: StoreProfile = {
   name: 'My Store',
   ownerName: 'Shopkeeper',
@@ -34,6 +39,63 @@ export const INITIAL_STORE_PROFILE: StoreProfile = {
 export const INITIAL_PARTIES: Party[] = [];
 export const INITIAL_TRANSACTIONS: Transaction[] = [];
 export const INITIAL_CASHBOOK: CashbookEntry[] = [];
+
+/* ------------------------------------------------------------- internals -- */
+
+/** Upserts rows sequentially in chunks; logs (never throws) on failure. */
+async function upsertChunked(table: string, rows: Record<string, unknown>[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const { error } = await supabase.from(table).upsert(rows.slice(i, i + UPSERT_CHUNK));
+    if (error) {
+      console.warn(`[Storage] Cloud upsert failed (${table}):`, error.message);
+      return;
+    }
+  }
+}
+
+async function readLocal<T>(key: string, fallback: T): Promise<T> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeLocal(key: string, value: unknown): Promise<void> {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn('[Storage] Local write error:', e);
+  }
+}
+
+/**
+ * Reads the user's local parties/transactions/cashbook, repairs legacy
+ * non-UUID ids (cloud PKs are UUIDs), and persists the repaired arrays so the
+ * new ids stick across launches.
+ */
+async function readLocalLedger(userId?: string): Promise<{
+  parties: Party[];
+  transactions: Transaction[];
+  cashbook: CashbookEntry[];
+}> {
+  const [parties, transactions, cashbook] = await Promise.all([
+    readLocal<Party[]>(userKey(KEYS.PARTIES, userId), []),
+    readLocal<Transaction[]>(userKey(KEYS.TRANSACTIONS, userId), []),
+    readLocal<CashbookEntry[]>(userKey(KEYS.CASHBOOK, userId), []),
+  ]);
+
+  const repaired = normalizeLegacyIds(parties, transactions, cashbook);
+  if (repaired.changed) {
+    await Promise.all([
+      writeLocal(userKey(KEYS.PARTIES, userId), repaired.parties),
+      writeLocal(userKey(KEYS.TRANSACTIONS, userId), repaired.transactions),
+      writeLocal(userKey(KEYS.CASHBOOK, userId), repaired.cashbook),
+    ]);
+  }
+  return repaired;
+}
 
 export const StorageService = {
   // ---------------------------------------------------------------- First run
@@ -88,8 +150,14 @@ export const StorageService = {
             businessCategory: data.business_category || 'General Store',
             isOnboarded: !!data.is_onboarded,
           };
-          await AsyncStorage.setItem(userKey(KEYS.STORE_PROFILE, userId), JSON.stringify(profile));
+          await AsyncStorage.setItem(
+            userKey(KEYS.STORE_PROFILE, userId),
+            JSON.stringify(profile)
+          );
           return profile;
+        }
+        if (error) {
+          console.warn('[Storage] Cloud profile fetch error:', error.message);
         }
       } catch (e) {
         console.warn('[Storage] Cloud profile fetch error:', e);
@@ -97,27 +165,17 @@ export const StorageService = {
     }
 
     // 2. Fallback to local AsyncStorage
-    try {
-      const local = await AsyncStorage.getItem(userKey(KEYS.STORE_PROFILE, userId));
-      if (local) return JSON.parse(local);
-    } catch (e) {
-      // Ignore
-    }
-    return INITIAL_STORE_PROFILE;
+    return readLocal<StoreProfile>(userKey(KEYS.STORE_PROFILE, userId), INITIAL_STORE_PROFILE);
   },
 
   saveStoreProfile: async (profile: StoreProfile, userId?: string): Promise<void> => {
     // Save to local cache
-    try {
-      await AsyncStorage.setItem(userKey(KEYS.STORE_PROFILE, userId), JSON.stringify(profile));
-    } catch (e) {
-      console.error('Error caching store profile locally', e);
-    }
+    await writeLocal(userKey(KEYS.STORE_PROFILE, userId), profile);
 
-    // Sync to Supabase cloud
+    // Sync to Supabase cloud (one row per user)
     if (userId) {
       try {
-        await supabase.from('stores').upsert(
+        const { error } = await supabase.from('stores').upsert(
           {
             user_id: userId,
             name: profile.name,
@@ -132,6 +190,9 @@ export const StorageService = {
           },
           { onConflict: 'user_id' }
         );
+        if (error) {
+          console.warn('[Storage] Cloud profile save error:', error.message);
+        }
       } catch (e) {
         console.warn('[Storage] Cloud profile save error:', e);
       }
@@ -152,59 +213,57 @@ export const StorageService = {
           const parties: Party[] = data.map((c: any) => ({
             id: c.id,
             name: c.name,
-            mobile: c.mobile || c.phone || '',
+            mobile: c.phone || '',
             address: c.address || '',
             type: c.type || 'customer',
             currentBalance: Number(c.balance) || 0,
             lastUpdated: (c.updated_at || c.created_at || '').split('T')[0],
           }));
-          await AsyncStorage.setItem(userKey(KEYS.PARTIES, userId), JSON.stringify(parties));
+          await writeLocal(userKey(KEYS.PARTIES, userId), parties);
           return parties;
+        }
+        if (error) {
+          console.warn('[Storage] Cloud parties fetch error:', error.message);
         }
       } catch (e) {
         console.warn('[Storage] Cloud parties fetch error:', e);
       }
     }
 
-    try {
-      const local = await AsyncStorage.getItem(userKey(KEYS.PARTIES, userId));
-      return local ? JSON.parse(local) : [];
-    } catch (e) {
-      return [];
-    }
+    const { parties } = await readLocalLedger(userId);
+    return parties;
   },
 
   saveParties: async (parties: Party[], userId?: string): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(userKey(KEYS.PARTIES, userId), JSON.stringify(parties));
-    } catch (e) {
-      console.error('Error saving parties locally', e);
-    }
+    await writeLocal(userKey(KEYS.PARTIES, userId), parties);
 
     if (userId && parties.length > 0) {
-      try {
-        const rows = parties.map((p) => ({
-          id: p.id,
-          user_id: userId,
-          name: p.name,
-          mobile: p.mobile,
-          phone: p.mobile,
-          address: p.address,
-          type: p.type,
-          balance: p.currentBalance,
-          updated_at: new Date().toISOString(),
-        }));
-        await supabase.from('customers').upsert(rows);
-      } catch (e) {
-        console.warn('[Storage] Cloud parties save error:', e);
-      }
+      const rows = parties.map((p) => ({
+        id: p.id,
+        user_id: userId,
+        name: p.name,
+        phone: p.mobile,
+        address: p.address,
+        type: p.type,
+        balance: p.currentBalance,
+        updated_at: new Date().toISOString(),
+      }));
+      await upsertChunked('customers', rows);
     }
   },
 
   deleteParty: async (partyId: string, userId?: string): Promise<void> => {
     if (userId) {
       try {
-        await supabase.from('customers').delete().eq('id', partyId).eq('user_id', userId);
+        // transactions rows cascade on delete at the database level.
+        const { error } = await supabase
+          .from('customers')
+          .delete()
+          .eq('id', partyId)
+          .eq('user_id', userId);
+        if (error) {
+          console.warn('[Storage] Cloud party delete error:', error.message);
+        }
       } catch (e) {
         console.warn('[Storage] Cloud party delete error:', e);
       }
@@ -224,7 +283,7 @@ export const StorageService = {
         if (!error && data) {
           const txns: Transaction[] = data.map((t: any) => ({
             id: t.id,
-            partyId: t.party_id,
+            partyId: t.customer_id,
             partyName: t.party_name || '',
             type: t.type,
             amount: Number(t.amount) || 0,
@@ -234,55 +293,58 @@ export const StorageService = {
             source: t.source || 'manual',
             createdAt: new Date(t.created_at).getTime(),
           }));
-          await AsyncStorage.setItem(userKey(KEYS.TRANSACTIONS, userId), JSON.stringify(txns));
+          await writeLocal(userKey(KEYS.TRANSACTIONS, userId), txns);
           return txns;
+        }
+        if (error) {
+          console.warn('[Storage] Cloud transactions fetch error:', error.message);
         }
       } catch (e) {
         console.warn('[Storage] Cloud transactions fetch error:', e);
       }
     }
 
-    try {
-      const local = await AsyncStorage.getItem(userKey(KEYS.TRANSACTIONS, userId));
-      return local ? JSON.parse(local) : [];
-    } catch (e) {
-      return [];
-    }
+    const { transactions } = await readLocalLedger(userId);
+    return transactions;
   },
 
+  /**
+   * Call after `saveParties` — entries reference customers by UUID, so the
+   * parents must land first or the foreign key rejects the batch.
+   */
   saveTransactions: async (transactions: Transaction[], userId?: string): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(userKey(KEYS.TRANSACTIONS, userId), JSON.stringify(transactions));
-    } catch (e) {
-      console.error('Error saving transactions locally', e);
-    }
+    await writeLocal(userKey(KEYS.TRANSACTIONS, userId), transactions);
 
     if (userId && transactions.length > 0) {
-      try {
-        const rows = transactions.map((t) => ({
-          id: t.id,
-          user_id: userId,
-          party_id: t.partyId,
-          party_name: t.partyName,
-          type: t.type,
-          amount: t.amount,
-          date: t.date,
-          note: t.note,
-          payment_mode: t.paymentMode,
-          source: t.source,
-          created_at: new Date(t.createdAt).toISOString(),
-        }));
-        await supabase.from('transactions').upsert(rows);
-      } catch (e) {
-        console.warn('[Storage] Cloud transactions save error:', e);
-      }
+      const rows = transactions.map((t) => ({
+        id: t.id,
+        user_id: userId,
+        customer_id: t.partyId,
+        party_name: t.partyName,
+        type: t.type,
+        amount: t.amount,
+        note: t.note ?? '',
+        payment_mode: t.paymentMode || 'cash',
+        date: t.date,
+        source: t.source || 'manual',
+        created_at: new Date(t.createdAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      await upsertChunked('transactions', rows);
     }
   },
 
   deleteTransaction: async (txnId: string, userId?: string): Promise<void> => {
     if (userId) {
       try {
-        await supabase.from('transactions').delete().eq('id', txnId).eq('user_id', userId);
+        const { error } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('id', txnId)
+          .eq('user_id', userId);
+        if (error) {
+          console.warn('[Storage] Cloud transaction delete error:', error.message);
+        }
       } catch (e) {
         console.warn('[Storage] Cloud transaction delete error:', e);
       }
@@ -309,55 +371,86 @@ export const StorageService = {
             date: c.date || new Date().toISOString().split('T')[0],
             createdAt: new Date(c.created_at).getTime(),
           }));
-          await AsyncStorage.setItem(userKey(KEYS.CASHBOOK, userId), JSON.stringify(cash));
+          await writeLocal(userKey(KEYS.CASHBOOK, userId), cash);
           return cash;
+        }
+        if (error) {
+          console.warn('[Storage] Cloud cashbook fetch error:', error.message);
         }
       } catch (e) {
         console.warn('[Storage] Cloud cashbook fetch error:', e);
       }
     }
 
-    try {
-      const local = await AsyncStorage.getItem(userKey(KEYS.CASHBOOK, userId));
-      return local ? JSON.parse(local) : [];
-    } catch (e) {
-      return [];
-    }
+    const { cashbook } = await readLocalLedger(userId);
+    return cashbook;
   },
 
   saveCashbook: async (cashbook: CashbookEntry[], userId?: string): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(userKey(KEYS.CASHBOOK, userId), JSON.stringify(cashbook));
-    } catch (e) {
-      console.error('Error saving cashbook locally', e);
-    }
+    await writeLocal(userKey(KEYS.CASHBOOK, userId), cashbook);
 
     if (userId && cashbook.length > 0) {
-      try {
-        const rows = cashbook.map((c) => ({
-          id: c.id,
-          user_id: userId,
-          type: c.type,
-          amount: c.amount,
-          category: c.category,
-          note: c.note,
-          date: c.date,
-          created_at: new Date(c.createdAt).toISOString(),
-        }));
-        await supabase.from('cashbook').upsert(rows);
-      } catch (e) {
-        console.warn('[Storage] Cloud cashbook save error:', e);
-      }
+      const rows = cashbook.map((c) => ({
+        id: c.id,
+        user_id: userId,
+        type: c.type,
+        amount: c.amount,
+        category: c.category,
+        note: c.note ?? '',
+        date: c.date,
+        created_at: new Date(c.createdAt).toISOString(),
+      }));
+      await upsertChunked('cashbook', rows);
     }
   },
 
   deleteCashbookEntry: async (id: string, userId?: string): Promise<void> => {
     if (userId) {
       try {
-        await supabase.from('cashbook').delete().eq('id', id).eq('user_id', userId);
+        const { error } = await supabase
+          .from('cashbook')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+        if (error) {
+          console.warn('[Storage] Cloud cashbook delete error:', error.message);
+        }
       } catch (e) {
         console.warn('[Storage] Cloud cashbook delete error:', e);
       }
+    }
+  },
+
+  // ------------------------------------------------------------- one-off sync
+  /**
+   * First-sign-in repair: if the user has local ledger data but the cloud
+   * tables are empty (e.g. rows previously rejected by the old schema
+   * mismatch), push the local data up — in FK order (customers → entries).
+   * Cloud rows are never overwritten, only added when the table is empty.
+   */
+  migrateLocalToCloud: async (userId: string): Promise<void> => {
+    try {
+      const { parties, transactions, cashbook } = await readLocalLedger(userId);
+      if (parties.length === 0 && transactions.length === 0 && cashbook.length === 0) return;
+
+      const [{ count: customerCount }, { count: txnCount }, { count: cashCount }] =
+        await Promise.all([
+          supabase.from('customers').select('id', { count: 'exact', head: true }),
+          supabase.from('transactions').select('id', { count: 'exact', head: true }),
+          supabase.from('cashbook').select('id', { count: 'exact', head: true }),
+        ]);
+
+      if ((customerCount ?? 0) === 0 && parties.length > 0) {
+        await StorageService.saveParties(parties, userId);
+      }
+      if ((txnCount ?? 0) === 0 && transactions.length > 0) {
+        await StorageService.saveTransactions(transactions, userId);
+      }
+      if ((cashCount ?? 0) === 0 && cashbook.length > 0) {
+        await StorageService.saveCashbook(cashbook, userId);
+      }
+    } catch (e) {
+      console.warn('[Storage] Local→cloud migration error:', e);
     }
   },
 
@@ -372,7 +465,13 @@ export const StorageService = {
       ];
       await AsyncStorage.multiRemove(keys);
     } catch (e) {
-      console.error('Error clearing user storage', e);
+      console.warn('[Storage] Error clearing user storage:', e);
     }
   },
 };
+
+/** Generates a fresh UUID id for a locally-created row (exported for callers). */
+export const newId = (): string => uuid();
+
+/** True when an id already satisfies the cloud schema's UUID keys. */
+export const isValidCloudId = (id: string | undefined): boolean => isUuid(id);

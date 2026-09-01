@@ -77,6 +77,8 @@ export const CustomerLedgerPanel: React.FC<{
   transactions: Transaction[];
   currency?: string;
   storeName?: string;
+  /** Signed-in Supabase user — WhatsApp features key off the auth session. */
+  userId?: string;
   onClose: () => void;
   onAddGave: () => void;
   onAddGot: () => void;
@@ -89,6 +91,7 @@ export const CustomerLedgerPanel: React.FC<{
   transactions,
   currency = 'Rs',
   storeName = 'BolKhata',
+  userId,
   onClose,
   onAddGave,
   onAddGot,
@@ -104,7 +107,6 @@ export const CustomerLedgerPanel: React.FC<{
   const progress = useRef(new Animated.Value(0)).current;
 
   // WhatsApp backend, schedule & cooldown state
-  const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
   const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
   const [waLinked, setWaLinked] = useState(false);
   const [lastReminderAt, setLastReminderAt] = useState<string | null>(null);
@@ -114,11 +116,11 @@ export const CustomerLedgerPanel: React.FC<{
   const [pendingSchedule, setPendingSchedule] = useState<any | null>(null);
 
   const fetchSchedules = () => {
-    if (!party?.id) return;
-    ApiService.getScheduledWaReminders(WA_USER_ID)
+    if (!party?.id || !userId) return;
+    ApiService.getScheduledWaReminders()
       .then((list) => {
         const found = list.find(
-          (s: any) => s.customerId === party.id && s.status === 'PENDING'
+          (s) => s.customerId === party.id && s.status === 'PENDING'
         );
         setPendingSchedule(found || null);
       })
@@ -126,11 +128,12 @@ export const CustomerLedgerPanel: React.FC<{
   };
 
   useEffect(() => {
-    ApiService.checkWaStatus(WA_USER_ID)
+    if (!userId) return;
+    ApiService.checkWaStatus()
       .then((s) => setWaLinked(s.linked))
       .catch(() => {});
     fetchSchedules();
-  }, [party?.id]);
+  }, [party?.id, userId]);
 
   // Check 1-hour cooldown for active party
   useEffect(() => {
@@ -242,12 +245,13 @@ export const CustomerLedgerPanel: React.FC<{
       toast('Link your WhatsApp in Settings first', 'error');
       return;
     }
-    if (!party?.id || cooldownSecs > 0) return;
+    if (!party?.id || cooldownSecs > 0 || !userId) return;
 
     setSendingReminder(true);
     try {
       const activeTemplate = await getActiveTemplateText();
-      const result = await ApiService.sendWaReminder(WA_USER_ID, {
+      // Failures throw from the API client with the server's message.
+      await ApiService.sendWaReminder({
         id: party.id,
         phone: party.mobile,
         name: party.name,
@@ -255,17 +259,13 @@ export const CustomerLedgerPanel: React.FC<{
         message: activeTemplate,
         storeName: storeName,
       });
-      if (result.success) {
-        const now = Date.now();
-        await AsyncStorage.setItem(`@bolkhata_wa_last_sent_${party.id}`, now.toString());
-        setLastReminderAt(new Date(now).toISOString());
-        setCooldownSecs(3600); // 1-hour cooldown
-        toast('Reminder sent via WhatsApp ✓');
-      } else {
-        toast(result.error ?? 'Failed to send reminder', 'error');
-      }
-    } catch {
-      toast('Could not reach server', 'error');
+      const now = Date.now();
+      await AsyncStorage.setItem(`@bolkhata_wa_last_sent_${party.id}`, now.toString());
+      setLastReminderAt(new Date(now).toISOString());
+      setCooldownSecs(3600); // 1-hour cooldown
+      toast('Reminder sent via WhatsApp ✓');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not send reminder', 'error');
     } finally {
       setSendingReminder(false);
     }
@@ -485,8 +485,12 @@ export const CustomerLedgerPanel: React.FC<{
               </View>
               <Press
                 onPress={async () => {
-                  await ApiService.cancelScheduledWaReminder(WA_USER_ID, pendingSchedule.id);
-                  toast('Schedule cancelled');
+                  try {
+                    await ApiService.cancelScheduledWaReminder(pendingSchedule.id);
+                    toast('Schedule cancelled');
+                  } catch {
+                    toast('Could not cancel schedule', 'error');
+                  }
                   fetchSchedules();
                 }}
                 style={styles.cancelSchBtn}
@@ -563,7 +567,6 @@ export const CustomerLedgerPanel: React.FC<{
 
       <WaScheduleModal
         visible={scheduleModalOpen}
-        userId={WA_USER_ID}
         customer={
           party
             ? {

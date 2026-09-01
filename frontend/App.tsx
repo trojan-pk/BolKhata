@@ -46,35 +46,8 @@ import { OnboardingWizardModal } from './src/screens/OnboardingWizardModal';
 import { supabase } from './src/services/supabase';
 import { Session } from '@supabase/supabase-js';
 import { todayISO } from './src/utils/format';
-
-/* -------------------------------------------------------------- ledger math -- */
-
-/**
- * A party's balance is always the sum of its entries — including the opening
- * balance, which is stored as a real transaction rather than a loose number.
- * That's what lets edits and deletions recompute correctly instead of silently
- * dropping whatever the account started with.
- */
-function balanceFor(transactions: Transaction[], partyId: string): number {
-  return transactions
-    .filter((t) => t.partyId === partyId)
-    .reduce((sum, t) => sum + (t.type === 'gave' ? t.amount : -t.amount), 0);
-}
-
-function withRecalculatedBalance(
-  parties: Party[],
-  transactions: Transaction[],
-  partyId: string,
-  date = todayISO()
-): Party[] {
-  const balance = balanceFor(transactions, partyId);
-  return parties.map((p) =>
-    p.id === partyId ? { ...p, currentBalance: balance, lastUpdated: date } : p
-  );
-}
-
-const uid = (prefix: string) =>
-  `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+import { withRecalculatedBalance } from './src/utils/ledger';
+import { uuid } from './src/utils/uuid';
 
 /* --------------------------------------------------------------------- root -- */
 
@@ -184,6 +157,11 @@ function BolKhata() {
   const loadUserData = useCallback(async (uid?: string) => {
     setLoading(true);
     try {
+      // First sign-in: push a local-only ledger up to the (empty) cloud
+      // tables so it isn't stranded when the cloud copy takes over.
+      if (uid) {
+        await StorageService.migrateLocalToCloud(uid);
+      }
       const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
         StorageService.getStoreProfile(uid),
         StorageService.getParties(uid),
@@ -292,10 +270,10 @@ function BolKhata() {
     async (nextParties: Party[], nextTxns: Transaction[]) => {
       setParties(nextParties);
       setTransactions(nextTxns);
-      await Promise.all([
-        StorageService.saveParties(nextParties, userId),
-        StorageService.saveTransactions(nextTxns, userId),
-      ]);
+      // Sequential by design: transactions reference customers by UUID, so
+      // the parents must land in the cloud before the entries do.
+      await StorageService.saveParties(nextParties, userId);
+      await StorageService.saveTransactions(nextTxns, userId);
     },
     [userId]
   );
@@ -321,7 +299,7 @@ function BolKhata() {
       openingBalance: number;
     }) => {
       const party: Party = {
-        id: uid('p'),
+        id: uuid(),
         name: data.name,
         mobile: data.mobile,
         address: data.address,
@@ -336,7 +314,7 @@ function BolKhata() {
       // and shows up in the statement where it can be audited.
       if (data.openingBalance !== 0) {
         const opening: Transaction = {
-          id: uid('t'),
+          id: uuid(),
           partyId: party.id,
           partyName: party.name,
           type: data.openingBalance > 0 ? 'gave' : 'got',
@@ -375,7 +353,7 @@ function BolKhata() {
       if (!party) return;
 
       const txn: Transaction = {
-        id: uid('t'),
+        id: uuid(),
         partyId: party.id,
         partyName: party.name,
         type: composer.type,
@@ -403,7 +381,7 @@ function BolKhata() {
     if (!selectedParty || selectedParty.currentBalance === 0) return;
 
     const settlement: Transaction = {
-      id: uid('t'),
+      id: uuid(),
       partyId: selectedParty.id,
       partyName: selectedParty.name,
       type: selectedParty.currentBalance > 0 ? 'got' : 'gave',
@@ -445,7 +423,7 @@ function BolKhata() {
       const party: Party =
         existing ??
         {
-          id: uid('p'),
+          id: uuid(),
           name: result.partyName.trim(),
           mobile: '',
           address: '',
@@ -455,7 +433,7 @@ function BolKhata() {
         };
 
       const txn: Transaction = {
-        id: uid('t'),
+        id: uuid(),
         partyId: party.id,
         partyName: party.name,
         type: result.type,
@@ -526,7 +504,7 @@ function BolKhata() {
       note: string;
     }) => {
       const record: CashbookEntry = {
-        id: uid('c'),
+        id: uuid(),
         ...entry,
         date: todayISO(),
         createdAt: Date.now(),
@@ -755,6 +733,7 @@ function BolKhata() {
         transactions={transactions}
         currency={storeProfile.currency}
         storeName={storeProfile.name}
+        userId={userId}
         onClose={() => setSelectedParty(null)}
         onAddGave={() =>
           selectedParty &&

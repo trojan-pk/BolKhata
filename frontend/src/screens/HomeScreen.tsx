@@ -9,7 +9,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Sparkles } from 'lucide-react-native';
-import { Audio } from 'expo-av';
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, MOTION, SPACE, TYPE } from '../theme/tokens';
@@ -72,10 +77,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const promptFade = useRef(new Animated.Value(1)).current;
 
   /* ------------------------------------------------------- capture refs -- */
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const webRecorderRef = useRef<MediaRecorder | null>(null);
   const webChunksRef = useRef<Blob[]>([]);
   const webStreamRef = useRef<MediaStream | null>(null);
-  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
   const capturingRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -142,9 +147,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         sessionTimerRef.current = null;
       }
       releaseWebStream();
+      if (Platform.OS !== 'web' && audioRecorder.isRecording) {
+        audioRecorder.stop().catch(() => {});
+      }
       if (message) toast(message, 'error');
     },
-    [toast]
+    [audioRecorder, toast]
   );
 
   const startCapture = useCallback(
@@ -180,28 +188,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           return;
         }
 
-        const permission = await Audio.requestPermissionsAsync();
+        const permission = await requestRecordingPermissionsAsync();
         if (!permission.granted) {
           abortCapture(COPY.voice.micDenied);
           return;
         }
 
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
         });
 
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        await recording.startAsync();
-        nativeRecordingRef.current = recording;
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
       } catch (error) {
         abortCapture(COPY.voice.micDenied);
       }
     },
-    [abortCapture]
+    [abortCapture, audioRecorder]
   );
 
   const sendForParsing = useCallback(
@@ -275,15 +279,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return;
       }
 
-      const recording = nativeRecordingRef.current;
-      if (!recording) {
-        setOrbState('idle');
-        return;
-      }
-
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      nativeRecordingRef.current = null;
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
       if (!uri) {
         setOrbState('idle');
@@ -302,7 +299,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setOrbState('idle');
       toast(COPY.voice.failed, 'error');
     }
-  }, [sendForParsing, toast]);
+  }, [audioRecorder, sendForParsing, toast]);
 
   useEffect(() => {
     stopRef.current = stopCaptureAndParse;
