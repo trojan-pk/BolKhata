@@ -8,11 +8,11 @@
 - **Supabase Anon Key Only**: The mobile client only possesses the public `EXPO_PUBLIC_SUPABASE_ANON_KEY` and passes user JWT tokens in the `Authorization: Bearer <token>` header to the Express backend.
 
 ### 2. Multi-Tenant Database Isolation
-- All tables (`stores`, `customers`, `transactions`, `cashbook`) contain `user_id` and `store_id` columns.
-- PostgreSQL Row Level Security (RLS) is enabled on all tables in Schema v2 to prevent cross-tenant data leakage.
+- All tables (`stores`, `customers`, `transactions`, `cashbook`, `voice_usage`) contain `user_id` columns with foreign keys and cascading rules.
+- PostgreSQL Row Level Security (RLS) is strictly enforced on all tables in Schema v3 (`auth.uid() = user_id`) to prevent cross-tenant data leakage. `transactions.user_id` is derived from the owning customer via database trigger `trg_transactions_derive_user`, and customer balances are recalculated deterministically via trigger `trg_transactions_recalc_balance`.
 
 ### 3. Voice Rate Limiting & Abuse Prevention
-- In-memory rate limiting middleware (`voiceLimit.middleware.ts`) limits voice processing requests per IP / user to prevent API quota exhaustion.
+- Atomic database-backed daily voice quota enforced via `increment_voice_usage` RPC with in-memory fallback middleware (`voiceLimit.middleware.ts`) to prevent API abuse and quota exhaustion.
 
 ---
 
@@ -38,7 +38,7 @@
 │  ✅ Phase 1: Architecture & UI Component System (Tokens, Typography)   │
 │  ✅ Phase 2: Multi-Tier Voice AI Engine (ElevenLabs/Groq/Gemini/Qwen) │
 │  ✅ Phase 3: Baileys WhatsApp Web Engine (SSE QR, Reminders, Schedule) │
-│  ✅ Phase 4: Supabase Schema v2 Multi-Tenant DB with RLS & Auth       │
+│  ✅ Phase 4: Supabase Schema v3 Multi-Tenant DB with RLS & Auth       │
 │  ✅ Phase 5: Grahak Ledger, Cashbook Rokar, Reports & PDF Previews     │
 │  ⏳ Phase 6 (Future): Offline Sync Queue & Conflict Resolution         │
 │  ⏳ Phase 7 (Future): OCR Camera Receipt & Handwritten Note Scanner    │

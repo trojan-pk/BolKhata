@@ -84,19 +84,23 @@ BolKhata features an intelligent voice pipeline designed specifically for South 
 
 ## 3. Baileys WhatsApp Automation Suite
 
-BolKhata includes a native WhatsApp Web engine powered by `@whiskeysockets/baileys`:
+BolKhata includes a native WhatsApp Web engine powered by `@whiskeysockets/baileys` (`baileys@7.0.0-rc14`):
 
 ```text
 Expo Client (Settings / Customer Panel)
        │
-       ├─ [GET /wa/link/:userId] (SSE Stream) ──> Baileys QR Code Generation
-       ├─ [GET /wa/status/:userId] ──────────────> Connection Health Check
-       ├─ [POST /wa/remind] ─────────────────────> Direct 1-Tap Text Message Dispatch
-       └─ [POST /wa/schedule] ───────────────────> Background Scheduled Job Registration
+       ├─ [POST /wa/link/ticket] ───────────────> Mint Single-Use Pairing Ticket (60s TTL)
+       ├─ [GET /wa/link/:userId?ticket=…] ──────> SSE Stream for Live QR Pairing (15s Heartbeats)
+       ├─ [GET /wa/status] ─────────────────────> Connection State Check (Bearer Auth)
+       ├─ [DELETE /wa/link] ────────────────────> Disconnect & Wipe Session Directory
+       ├─ [POST /wa/remind] ────────────────────> Direct 1-Tap Text Message Dispatch
+       ├─ [POST /wa/schedule] ──────────────────> Background Scheduled Job Registration
+       ├─ [GET /wa/schedule] ───────────────────> List Pending Scheduled Reminders
+       └─ [DELETE /wa/schedule/:scheduleId] ────> Cancel Scheduled Reminder
 ```
 
-### 1. Server-Sent Events (SSE) QR Pairing
-Merchants open **Settings $\rightarrow$ Link WhatsApp** or click the WhatsApp icon. The backend opens an SSE channel, generates a live QR matrix, and streams base64 QR images to `WhatsAppLinkModal`. Once scanned, the state instantly shifts to `Connected`.
+### 1. Single-Use Ticket & Server-Sent Events (SSE) QR Pairing
+Merchants open **Settings $\rightarrow$ Link WhatsApp** or click the WhatsApp icon in `CustomerLedgerPanel`. The client first authenticates via JWT and calls `POST /wa/link/ticket` to mint a single-use, 60-second SSE pairing ticket. The frontend `WhatsAppLinkModal` then opens an EventSource/fetch stream to `GET /wa/link/:userId?ticket=<ticket>`. The backend validates and spends the ticket, handles duplicate socket cleanup, emits 15-second SSE heartbeats (`event: ping`), generates a live QR matrix, and streams base64 QR images (`event: qr`) to the modal. Once scanned, Baileys transitions to `open` state and streams `event: connected` with the phone number, instantly shifting the UI to `Connected`. Connection health is checked via `GET /wa/status` using the merchant's Bearer JWT.
 
 ### 2. Live Reminder Templating
 The app supports customizable templates with dynamic variables:

@@ -22,8 +22,9 @@ Welcome! This document provides complete architectural, functional, and technica
 | **Web Engine** | **React Native Web** | Web support via `react-dom: 19.1.0`, `@expo/metro-runtime: ~6.1.2`, `react-native-web: ^0.21.0` |
 | **Authentication** | **Supabase Auth** | `@supabase/supabase-js: ^2.112.3`, Email/Password & Google OAuth, PKCE & hash token exchanges |
 | **Persistence** | **AsyncStorage + Cloud** | `@react-native-async-storage/async-storage: 2.2.0` with per-user scoping & Supabase PostgreSQL cloud sync |
-| **Audio & Media** | `expo-av`, `expo-speech` | High-fidelity voice recording, waveform visualization, and native speech synthesis |
-| **Icons** | `lucide-react-native`, `react-icons` | Consistent vector iconography |
+| **Audio & Media** | `expo-audio`, `expo-speech` | High-fidelity voice recording, waveform visualization, and native speech synthesis |
+| **PDF & Sharing** | `expo-print`, `expo-sharing` | Ledger statement PDF export via HTML render + native share sheet |
+| **Icons** | `lucide-react-native` | Consistent vector iconography |
 | **Typography** | **Google Fonts** | **Plus Jakarta Sans** (Headings, Numerics & Amounts) + **Inter** (Body, Subtitles & Controls) |
 | **Design System** | Custom Atomic UI Library (`src/ui`) | `Avatar`, `Button`, `Card`, `Chip`, `CrossFade`, `DrawnCheck`, `EmptyState`, `Feedback`, `Field`, `Headers`, `Money`, `Press`, `Row`, `Segmented`, `Sheet`, `Skeleton` |
 | **Internationalization** | Multi-lingual (`src/i18n`) | Roman Urdu (`roman_ur`), Urdu Script (`ur`), English (`en`) |
@@ -32,11 +33,12 @@ Welcome! This document provides complete architectural, functional, and technica
 | Technology | Specification | Details |
 | :--- | :--- | :--- |
 | **Runtime & Server** | **Node.js** + **Express 5.2.1** | TypeScript (`tsx`, `typescript: ^7.0.2`), CORS, JSON parser |
-| **Database** | **Supabase PostgreSQL** | Schema v2 multi-tenant relational structure, foreign keys, cascade rules, UUIDs, performance indexes, and Row Level Security (RLS) |
-| **WhatsApp Engine** | **Baileys v7** (`@hapi/boom`, `qr-image`) | Direct WhatsApp Web socket connection, QR code streaming via Server-Sent Events (SSE), automated message dispatch, scheduling, and chat history |
-| **Speech-to-Text (STT)** | 3-Tier Multi-Provider Failover | **Tier 1**: ElevenLabs Scribe STT (`scribe_v1`)<br>**Tier 2**: Groq Whisper Large v3 Turbo (`whisper-large-v3-turbo`)<br>**Tier 3**: Local / direct text payload |
-| **LLM Brain Engine** | 3-Tier Multi-Model Failover | **Tier 1**: Google Gemini Flash Lite (`gemini-flash-lite-latest`)<br>**Tier 2**: Alibaba Cloud DashScope Qwen Turbo (`qwen-turbo`)<br>**Tier 3**: Groq Llama 3.3 70B (`llama-3.3-70b-versatile`) |
-| **Validation & Safety** | `zod`, `multer`, Rate Limiting | In-memory voice request rate limiter, file buffer validation, structured JSON parsing, and Levenshtein fuzzy party name matcher |
+| **Database** | **Supabase PostgreSQL** | Schema v3 (single source of truth: `backend/supabase/migrations/`): per-user tenancy with enforced RLS (`auth.uid() = user_id`), trigger-derived `transactions.user_id`, trigger-recomputed `customers.balance`, and the `increment_voice_usage` RPC |
+| **WhatsApp Engine** | **Baileys v7** (`@hapi/boom`, `qr-image`) | Direct WhatsApp Web socket connection, single-use SSE pairing tickets (60s TTL) with 15s heartbeats, duplicate-socket guard, scheduler with retry/backoff, and chat history |
+| **Speech-to-Text (STT)** | 3-Tier Multi-Provider Failover | **Tier 1**: ElevenLabs Scribe STT (`scribe_v1`)<br>**Tier 2**: Groq Whisper Large v3 Turbo (`whisper-large-v3-turbo`, language auto-detect)<br>**Tier 3**: Local / direct text payload — every tier wrapped in `AbortSignal` timeouts |
+| **LLM Brain Engine** | 3-Tier Multi-Model Failover | **Tier 1**: Google Gemini Flash Lite (`gemini-flash-lite-latest`)<br>**Tier 2**: Alibaba Cloud DashScope Qwen Turbo (`qwen-turbo`)<br>**Tier 3**: Groq Llama 3.3 70B (`llama-3.3-70b-versatile`) — every tier wrapped in `AbortSignal` timeouts |
+| **Validation & Safety** | `zod`, `multer`, Rate Limiting | Zod request validation on every mutating route, PII-safe logging (VOICE_DEBUG gated), DB-backed daily voice quota via `increment_voice_usage` RPC with in-memory fallback, and phonetic + Levenshtein fuzzy party name matching (`src/utils/matching.ts`) |
+| **Testing** | **Vitest** | Unit tests for backend matching utils and frontend ledger/uuid utils (`npm test` in both workspaces) |
 
 ---
 
@@ -59,9 +61,10 @@ BolKhata/
 │   ├── app.json                # Expo project configuration
 │   ├── package.json            # Frontend dependencies & npm scripts
 │   ├── tsconfig.json           # TypeScript configuration
+│   ├── eslint.config.js        # ESLint flat config (eslint-config-expo)
 │   ├── eas.json                # EAS Build configuration for Android/iOS
 │   └── src/
-│       ├── components/         # Reusable feature modals & complex components
+│       ├── components/     # Reusable feature modals & complex components
 │       │   ├── AddCustomerModal.tsx     # Register customer or supplier with opening balance
 │       │   ├── ApiConfigModal.tsx       # Express API connector configuration modal
 │       │   ├── AppBar.tsx               # Store header with active profile and settings trigger
@@ -110,7 +113,11 @@ BolKhata/
 │       ├── ui/                 # Production-grade atomic UI component system
 │       │   └── [Avatar, Button, Card, Chip, CrossFade, DrawnCheck, EmptyState, Feedback, Field, Headers, Money, Press, Row, Segmented, Sheet, Skeleton, icon, index].tsx
 │       └── utils/              # Utility helpers
-│           └── format.ts                # Currency, phone, and date formatters
+│           ├── format.ts               # Currency, phone, and date formatters
+│           ├── ledger.ts               # Ledger math (balanceFor, withRecalculatedBalance) + legacy-id repair
+│           ├── ledger.test.ts          # Vitest unit tests
+│           ├── uuid.ts                 # Dependency-free UUID v4 generator + isUuid check
+│           └── uuid.test.ts            # Vitest unit tests
 │
 └── backend/                    # Express Node.js & TypeScript API server
     ├── Dockerfile              # Production container build definition
@@ -118,24 +125,23 @@ BolKhata/
     ├── railway.json            # Railway deployment configuration
     ├── package.json            # Backend dependencies & npm scripts
     ├── tsconfig.json           # TypeScript configuration
+    ├── supabase/
+    │   └── migrations/
+    │       └── 20260901000000_unified_schema_v3.sql  # Single source of truth: tables, RLS, triggers, RPCs
     └── src/
         ├── server.ts           # Express application setup, CORS, routes & graceful shutdown
         ├── controllers/        # Business logic controllers
-        │   ├── auth.controller.ts       # Authentication controller
         │   ├── customer.controller.ts   # Customer CRUD & balance recalculation
         │   ├── dashboard.controller.ts  # Authoritative dashboard totals aggregation
         │   ├── transaction.controller.ts# Transaction creation & ledger integrity
         │   ├── voice.controller.ts      # Multi-provider STT & LLM intent parsing
         │   └── whatsapp.controller.ts   # Baileys WhatsApp linking, reminders & scheduling
-        ├── database/           # SQL schema definitions
-        │   ├── schema.sql               # Legacy schema definition
-        │   └── schema_v2.sql            # Clean production multi-tenant schema with RLS & indexes
         ├── middleware/         # Express middleware
         │   ├── auth.middleware.ts       # Supabase JWT token verification
         │   ├── errorHandler.ts          # Centralized error handler
-        │   └── voiceLimit.middleware.ts # Voice endpoint rate limiting
+        │   ├── validate.middleware.ts   # Zod request body validation
+        │   └── voiceLimit.middleware.ts # DB-backed daily voice quota rate limiting
         ├── routes/             # Express route declarations
-        │   ├── auth.routes.ts           # `/auth/*`
         │   ├── customer.routes.ts       # `/customers/*`
         │   ├── dashboard.routes.ts      # `/dashboard/*`
         │   ├── transaction.routes.ts    # `/transactions/*`
@@ -144,7 +150,13 @@ BolKhata/
         ├── services/           # External service connectors
         │   ├── supabase.service.ts      # Supabase client connector
         │   └── whatsapp.service.ts      # Baileys WhatsApp connection, SSE QR streamer, and scheduler
-        └── types/              # Backend TypeScript types
+        ├── types/              # Backend TypeScript types
+        │   └── qr-image.d.ts            # Type declaration for the qr-image module
+        ├── utils/              # Shared helpers
+        │   ├── matching.ts             # Phonetic alias + Levenshtein fuzzy party matching
+        │   └── matching.test.ts        # Vitest unit tests
+        └── validators/          # Request validation schemas
+            └── index.ts                # Zod schemas for all mutating endpoints
 ```
 
 ---
@@ -179,6 +191,12 @@ npm run start
 # Run TypeScript Validation
 npm run type-check
 
+# Run ESLint (flat config, eslint-config-expo)
+npm run lint
+
+# Run Vitest Unit Tests
+npm test
+
 # Build Static Web Bundle
 npm run build
 
@@ -195,6 +213,9 @@ npm run dev
 # Build Backend TypeScript to dist/
 npm run build
 
+# Run Vitest Unit Tests
+npm test
+
 # Start Production Server
 npm run start
 ```
@@ -205,6 +226,9 @@ npm run start
 
 1. **Monorepo Commands**: Always ensure you are inside either `frontend/` or `backend/` before running npm commands.
 2. **Deterministic Ledger Math**: Never allow the LLM to directly calculate account balances or mutate the database. The LLM extracts intent and parameters; backend / local ledger services calculate balances authoritatively.
-3. **Fuzzy Customer Matching**: Voice statements like *"Ali ko 500 diye"* are matched against existing customers using Levenshtein distance before prompting to create a new customer.
-4. **WhatsApp Session Storage**: WhatsApp Web sessions are managed on the backend using Baileys inside `.baileys_auth_*` directories and must never be exposed to the client.
-5. **Multi-Tenant Scoping**: All Supabase database tables (`stores`, `customers`, `transactions`, `cashbook`) contain `user_id` and `store_id` columns with RLS enabled.
+3. **Fuzzy Customer Matching**: Voice statements like *"Ali ko 500 diye"* are matched against existing customers using phonetic aliases (osama→usama, ahmad→ahmed), honorific stripping ("Usama Bhai" → "usama"), and Levenshtein distance before prompting to create a new customer.
+4. **WhatsApp Session Storage**: WhatsApp Web sessions are managed on the backend inside `backend/wa/<userId>/` directories (git-ignored) and must never be exposed to the client.
+5. **Multi-Tenant Scoping**: All Supabase tables (`stores`, `customers`, `transactions`, `cashbook`, `voice_usage`) carry `user_id` with RLS enforced per operation. `transactions.user_id` is derived from the owning customer by trigger, and `customers.balance` is recomputed by trigger — never write these directly.
+6. **Every Backend Route Requires a Supabase JWT**: identity always comes from the verified token (`req.user.id`), never from URL params or request bodies. The one exception is the SSE pairing stream, which uses a single-use 60-second ticket minted via `POST /wa/link/ticket`.
+7. **IDs Are UUIDs**: cloud primary keys are UUIDs; the frontend generates UUID v4 for locally-created rows (`src/utils/uuid.ts`) and repairs legacy non-UUID ids on load (`normalizeLegacyIds`).
+8. **Baileys Fork**: `baileys@7.0.0-rc14` with the personal-fork libsignal override in `resolutions`/`overrides` is intentional — do not "upgrade" it away.

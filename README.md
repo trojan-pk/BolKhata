@@ -13,7 +13,7 @@ Built for the **Alibaba Cloud AI Hackathon Pakistan 2026** (Alkhidmat Foundation
 ```text
 🎙️  "Ahmed ne 500 ka saman udhaar liya"
          │
-         ├─ expo-av records microphone → audio m4a/wav
+         ├─ expo-audio records microphone → audio m4a/wav
          ▼
    POST /voice/process (multipart audio OR JSON text)
          │
@@ -54,19 +54,24 @@ BolKhata/
 │       ├── theme/                  # colors.ts, tokens.ts, typography.ts (Plus Jakarta Sans & Inter)
 │       ├── types/                  # Party, Transaction, CashbookEntry, StoreProfile, VoiceResult
 │       ├── ui/                     # Production-grade atomic UI system (Button, Card, Sheet, Money, etc.)
-│       └── utils/                  # Formatting helpers (currency, dates, phone numbers)
+│       └── utils/                  # format.ts (currency/date/phone), ledger.ts (ledger math +
+│                                   # legacy-id repair), uuid.ts (UUID v4) + Vitest unit tests
 │
 ├── backend/                        # Express 5 Node.js & TypeScript API server
 │   ├── Dockerfile                  # Production container definition
 │   ├── Procfile                    # Railway / Heroku process declaration
 │   ├── railway.json                # Railway deployment config
-│   ├── database/
-│   │   └── schema_v2.sql           # Clean Supabase PostgreSQL Multi-Tenant schema with RLS & indexes
+│   ├── supabase/
+│   │   └── migrations/
+│   │       └── 20260901000000_unified_schema_v3.sql   # Single source of truth: tables, RLS,
+│   │                                                 # triggers, RPCs (supersedes legacy schema files)
 │   └── src/
-│       ├── server.ts               # Express bootstrap, CORS, route mounting, graceful shutdown
-│       ├── routes/                 # /auth, /customers, /transactions, /voice, /dashboard, /wa
+│       ├── server.ts               # Express bootstrap, CORS allowlist, route mounting, graceful shutdown
+│       ├── routes/                 # /customers, /transactions, /voice, /dashboard, /wa
 │       ├── controllers/            # Controller business logic
-│       ├── middleware/             # auth.middleware.ts, errorHandler.ts, voiceLimit.middleware.ts
+│       ├── middleware/             # auth, validate (Zod), errorHandler, voiceLimit (DB-backed quota)
+│       ├── utils/                  # matching.ts (phonetic + Levenshtein fuzzy matching) + tests
+│       ├── validators/             # Zod request schemas for every mutating endpoint
 │       └── services/               # supabase.service.ts, whatsapp.service.ts (Baileys socket & SSE QR)
 │
 ├── docs/                           # Architectural, product & deployment documentation
@@ -86,8 +91,8 @@ BolKhata/
 | **Authentication** | **Supabase Auth** (`@supabase/supabase-js: ^2.112.3`) — Email/Password, Google OAuth (PKCE & Hash token flow) |
 | **Persistence** | `@react-native-async-storage/async-storage` (per-user scoped) + Supabase PostgreSQL |
 | **WhatsApp Engine** | **Baileys v7** (`@whiskeysockets/baileys: ^7.0.0-rc14`) — Direct WhatsApp Web socket connection & SSE QR streaming |
-| **Speech-to-Text** | Multi-tier failover: **ElevenLabs Scribe STT** (`scribe_v1`) $\rightarrow$ **Groq Whisper Large v3 Turbo** |
-| **LLM Brain Engine** | Multi-tier failover: **Google Gemini Flash Lite** $\rightarrow$ **Alibaba Cloud DashScope Qwen Turbo** $\rightarrow$ **Groq Llama 3.3 70B** |
+| **Speech-to-Text** | Multi-tier failover: **ElevenLabs Scribe STT** (`scribe_v1`) → **Groq Whisper Large v3 Turbo** |
+| **LLM Brain Engine** | Multi-tier failover: **Google Gemini Flash Lite** → **Alibaba Cloud DashScope Qwen Turbo** → **Groq Llama 3.3 70B** |
 | **Text-to-Speech** | `expo-speech` (native) & ElevenLabs TTS |
 | **Typography** | **Plus Jakarta Sans** (headings, amounts & figures) + **Inter** (body & controls) |
 
@@ -145,43 +150,60 @@ npm run start                 # Start Expo Metro bundler for iOS/Android Expo Go
 
 Base URL: `http://localhost:3000`
 
+Every route below (except `/health` and the SSE stream) requires an
+`Authorization: Bearer <Supabase JWT>` header; identity is always taken from the
+verified token, never from URL params or request bodies.
+
 | Method | Route | Description |
 | :--- | :--- | :--- |
 | `GET` | `/health` | Server health check and uptime status |
-| `POST` | `/voice/process` | Audio upload (`multipart/form-data`) or JSON text parsing |
+| `POST` | `/voice/process` | Audio upload (`multipart/form-data`) or JSON text parsing (daily quota enforced) |
 | `POST` | `/voice/tts` | Multilingual TTS speech generation |
-| `GET` | `/wa/link/:userId` | Server-Sent Events (SSE) stream for live QR code pairing |
-| `GET` | `/wa/status/:userId` | Get WhatsApp connection status |
-| `DELETE` | `/wa/link/:userId` | Unlink WhatsApp account and clear session |
+| `POST` | `/wa/link/ticket` | Mint a single-use, 60-second SSE pairing ticket |
+| `GET` | `/wa/link/:userId?ticket=…` | SSE stream for live QR code pairing (spends the ticket) |
+| `GET` | `/wa/status` | WhatsApp connection status for the signed-in merchant |
+| `DELETE` | `/wa/link` | Unlink WhatsApp account and clear session |
 | `POST` | `/wa/remind` | Send instantaneous payment reminder text |
 | `POST` | `/wa/schedule` | Schedule a future reminder delivery |
-| `GET` | `/wa/schedule/:userId` | List pending scheduled reminders |
-| `DELETE` | `/wa/schedule/:userId/:scheduleId` | Cancel a scheduled reminder |
+| `GET` | `/wa/schedule` | List pending scheduled reminders |
+| `DELETE` | `/wa/schedule/:scheduleId` | Cancel a scheduled reminder |
+| `GET` | `/wa/history/:jid` | Fetch WhatsApp chat history for a contact JID |
 | `GET` | `/customers` | List store customers & suppliers |
 | `POST` | `/customers` | Register customer/supplier with opening balance |
-| `GET` | `/transactions` | List transaction entries |
+| `GET` `PUT` `DELETE` | `/customers/:id` | Fetch, update, or delete a customer |
+| `GET` | `/transactions` | List transaction entries (query-validated) |
 | `POST` | `/transactions` | Create Gave / Got ledger entry |
-| `GET` | `/dashboard/summary` | Authoritative aggregated store totals |
+| `GET` | `/transactions/customer/:id` | List entries for one customer |
+| `PUT` `DELETE` | `/transactions/:id` | Update or delete a ledger entry |
+| `GET` | `/dashboard` | Authoritative aggregated store totals |
 
 ---
 
-## 🗄️ Database Model (Schema v2)
+## 🗄️ Database Model (Schema v3)
 
-Run `backend/src/database/schema_v2.sql` in the Supabase SQL editor:
+Run `backend/supabase/migrations/20260901000000_unified_schema_v3.sql` in the Supabase SQL editor (single source of truth — it migrates legacy rows and drops the old permissive policies):
 - **`stores`**: Multi-tenant merchant profile, business category, account type.
-- **`customers`**: Store contacts with balance and type (`customer` / `supplier`).
-- **`transactions`**: Credit (`gave`) and debit (`got`) ledger entries with timestamps and notes.
+- **`customers`**: Store contacts with type (`customer` / `supplier`); `balance` is recomputed by the `recalc_customer_balance` trigger — never written directly.
+- **`transactions`**: Credit (`gave`) and debit (`got`) ledger entries; `user_id` is derived from the owning customer by the `derive_transaction_user_id` trigger.
 - **`cashbook`**: Daily cash in (`in`) and cash out (`out`) rokar entries.
-- **Row Level Security (RLS)** enabled across all tables.
+- **`voice_usage`**: Per-user daily voice quota, incremented through the `increment_voice_usage` RPC.
+- **Row Level Security (RLS)** enforced on every table (`auth.uid() = user_id`).
 
 ---
 
-## 🧪 Typecheck & Build
+## 🧪 Typecheck, Tests & Build
 
 ```bash
 # Typecheck frontend and backend
 cd frontend && npm run type-check
-cd backend  && npm run build
+cd backend  && npm run type-check
+
+# Lint (frontend — eslint-config-expo flat config)
+cd frontend && npm run lint
+
+# Unit tests (Vitest) in both workspaces
+cd frontend && npm test
+cd backend  && npm test
 
 # Build Android APK via EAS Cloud
 cd frontend && npm run build:apk

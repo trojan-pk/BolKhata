@@ -2,7 +2,7 @@
 
 ## 1. Complete Backend REST & SSE API Catalog
 
-All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or production URL).
+All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or production URL). Every endpoint below — except `/health`, `/`, and the SSE pairing stream — requires an `Authorization: Bearer <Supabase JWT>` header; the merchant's identity always comes from the verified token, never from URL params or request bodies. Mutating routes validate their payloads with Zod before the controller runs.
 
 ### Health & Root
 | Method | Endpoint | Description |
@@ -13,20 +13,21 @@ All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or produ
 ### Voice AI Engine
 | Method | Endpoint | Description | Request Payload |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/voice/process` | Audio upload or raw text parsing | `multipart/form-data` with `file` (audio) or `application/json` `{ text, people, current_date }` |
+| `POST` | `/voice/process` | Audio upload or raw text parsing (daily quota enforced via `increment_voice_usage` RPC) | `multipart/form-data` with `audio` (file) or `application/json` `{ text, people, current_date }` |
 | `POST` | `/voice/tts` | Generate multilingual speech audio | `application/json` `{ text, voiceId }` |
 
 ### WhatsApp Automation Suite (Baileys Engine)
 | Method | Endpoint | Description | Details |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/wa/link/:userId` | Server-Sent Events (SSE) stream for live QR pairing | Event `qr`: `{ qrBase64 }`<br>Event `connected`: `{ phone }` |
-| `GET` | `/wa/status/:userId` | Check WhatsApp Web connection state | Response `{ linked: boolean, phone?: string }` |
-| `DELETE` | `/wa/link/:userId` | Unlink account and wipe `.baileys_auth_*` directory | Response `{ success: true }` |
-| `POST` | `/wa/remind` | Send instantaneous payment reminder text | `{ userId, customerId, phone, name, balance, message, storeName }` |
-| `POST` | `/wa/schedule` | Register a future scheduled reminder | `{ userId, customerId, phone, name, balance, scheduledAt, message, storeName }` |
-| `GET` | `/wa/schedule/:userId` | List all pending scheduled reminders | Returns array of scheduled reminders |
-| `DELETE` | `/wa/schedule/:userId/:scheduleId` | Cancel a scheduled reminder | Response `{ success: true }` |
-| `GET` | `/wa/history/:userId/:jid` | Retrieve message history for a specific customer JID | Returns chat history log |
+| `POST` | `/wa/link/ticket` | Mint a single-use, 60-second SSE pairing ticket | Response `{ ticket, userId, expiresInMs }` |
+| `GET` | `/wa/link/:userId?ticket=…` | SSE stream for live QR pairing (spends the ticket) | Event `qr`: `{ qrBase64 }`<br>Event `connected`: `{ phone }` |
+| `GET` | `/wa/status` | Check WhatsApp Web connection state | Response `{ linked: boolean, phone?: string }` |
+| `DELETE` | `/wa/link` | Unlink account and wipe the `wa/<userId>/` session directory | Response `{ success: true }` |
+| `POST` | `/wa/remind` | Send instantaneous payment reminder text | `{ customerId, phone, name, balance, message, storeName, countryCode }` → `{ success, phone, message, sentAt }` |
+| `POST` | `/wa/schedule` | Register a future scheduled reminder | `{ customerId, phone, name, balance, scheduledAt, message, storeName, countryCode }` → `{ success, schedule }` |
+| `GET` | `/wa/schedule` | List all pending scheduled reminders | Returns array of scheduled reminders |
+| `DELETE` | `/wa/schedule/:scheduleId` | Cancel a scheduled reminder | Response `{ success: true }` |
+| `GET` | `/wa/history/:jid` | Retrieve message history for a specific customer JID | Returns chat history log |
 
 ### Customer & Party Management
 | Method | Endpoint | Description |
@@ -40,7 +41,8 @@ All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or produ
 ### Transactions & Ledger
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/transactions` | List recent transactions (filterable by customer ID) |
+| `GET` | `/transactions` | List transactions (query-validated: `?customer_id=&limit=`) |
+| `GET` | `/transactions/customer/:id` | List all entries for one customer |
 | `POST` | `/transactions` | Create Gave / Got transaction entry |
 | `PUT` | `/transactions/:id` | Edit transaction note, amount, or payment mode |
 | `DELETE` | `/transactions/:id` | Delete transaction and recalculate customer balance |
@@ -48,11 +50,16 @@ All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or produ
 ### Dashboard & Analytics
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/dashboard/summary` | Authoritative totals: Net balance, total receivable, total payable |
+| `GET` | `/dashboard` | Authoritative totals: Net balance, total receivable, total payable |
 
 ---
 
 ## 2. Testing Strategy & Test Matrix
+
+### Automated Unit Tests (Vitest)
+- **Backend** (`cd backend && npm test`): phonetic + Levenshtein fuzzy party matching (`src/utils/matching.test.ts`).
+- **Frontend** (`cd frontend && npm test`): ledger math and legacy-id repair (`src/utils/ledger.test.ts`), UUID v4 generation (`src/utils/uuid.test.ts`).
+- CI (`.github/workflows/ci.yml`) runs type-check + tests (backend) and lint + type-check + tests (frontend) on every push and pull request.
 
 ### Critical Financial Paths
 - **Gave Transaction**: Customer balance increases by transaction amount.
