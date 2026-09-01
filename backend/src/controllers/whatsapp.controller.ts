@@ -1,8 +1,12 @@
+import { randomUUID } from 'crypto'
 import { Request, Response, NextFunction } from 'express'
 import { supabase } from '../services/supabase.service'
 import {
     startSession,
     getSessionStatus,
+    getLatestQr,
+    restartSession,
+    removeListener,
     sendTextMessage,
     removeSession,
     getHistory,
@@ -10,17 +14,96 @@ import {
     getScheduledReminders,
     cancelScheduledReminder,
 } from '../services/whatsapp.service'
+import { requireUserId } from '../middleware/auth.middleware'
 
-// Stub user — same as rest of app for now
-const USER_ID = '00000000-0000-0000-0000-000000000000'
+/**
+ * WhatsApp automation endpoints.
+ *
+ * Identity always comes from the verified Supabase JWT (`req.user.id`) —
+ * never from the URL or body — so one merchant can't reach another's session,
+ * history, or reminders.
+ *
+ * The pairing flow supports both:
+ * 1. REST polling via `GET /wa/qr` and `POST /wa/qr/refresh` (authenticated).
+ * 2. Real-time SSE streaming via single-use ticket `POST /wa/link/ticket`
+ *    followed by `GET /wa/link/:userId?ticket=…`.
+ */
+
+const TICKET_TTL_MS = 60_000
+
+const linkTickets = new Map<string, { userId: string; expiresAt: number }>()
+
+function createLinkTicket(userId: string): string {
+    const ticket = randomUUID()
+    linkTickets.set(ticket, { userId, expiresAt: Date.now() + TICKET_TTL_MS })
+    // Opportunistic sweep of expired tickets.
+    const now = Date.now()
+    for (const [t, v] of linkTickets) if (v.expiresAt < now) linkTickets.delete(t)
+    return ticket
+}
+
+/** Consumes a ticket if valid for the given user; single-use by design. */
+function consumeLinkTicket(ticket: string | undefined, userId: string): boolean {
+    if (!ticket) return false
+    const entry = linkTickets.get(ticket)
+    linkTickets.delete(ticket)
+    return !!entry && entry.userId === userId && entry.expiresAt > Date.now()
+}
 
 // Helper: Express params can be string | string[] — always resolve to string
 const param = (v: string | string[]): string => (Array.isArray(v) ? v[0] : v)
 
-// ─── GET /wa/link/:userId — SSE stream: qr | connected | error ───────────────
+// ─── GET /wa/qr — get latest QR code or connection status (authenticated) ───
+
+export const getQr = (req: Request, res: Response): void => {
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
+    res.json(getLatestQr(userId))
+}
+
+// ─── POST /wa/qr/refresh — wipe stale state and restart pairing fresh ───────
+
+export const refreshQr = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const userId = requireUserId(req, res)
+        if (!userId) return
+        await restartSession(userId)
+        res.json({ success: true, status: 'connecting' })
+    } catch (err) {
+        next(err)
+    }
+}
+
+// ─── POST /wa/link/ticket — mint a one-time SSE pairing ticket ────────────────
+
+export const createTicket = (req: Request, res: Response): void => {
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
+    const ticket = createLinkTicket(userId)
+    res.status(201).json({ ticket, userId, expiresInMs: TICKET_TTL_MS })
+}
+
+// ─── GET /wa/link/:userId?ticket=… — SSE stream: qr | connected | error ───────
 
 export const linkQr = async (req: Request, res: Response): Promise<void> => {
-    const userId = param(req.params.userId) ?? USER_ID
+    const userId = param(req.params.userId)
+    const ticket = param((req.query.ticket as string | string[]) ?? '')
+
+    // The URL user must match the authenticated ticket holder.
+    if (!consumeLinkTicket(ticket, userId)) {
+        res.status(401).json({ error: 'Invalid or expired pairing ticket' })
+        return
+    }
 
     // SSE headers
     res.setHeader('Content-Type', 'text/event-stream')
@@ -34,31 +117,47 @@ export const linkQr = async (req: Request, res: Response): Promise<void> => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     }
 
+    // Heartbeat so proxies (Railway et al.) don't reap an idle stream while
+    // the shopkeeper walks to their phone to scan.
+    const heartbeat = setInterval(() => {
+        if (!res.writableEnded) res.write(`: ping\n\n`)
+    }, 15_000)
+
+    const finish = () => {
+        clearInterval(heartbeat)
+        removeListener(userId, send)
+        if (!res.writableEnded) res.end()
+    }
+
     // If already linked, immediately confirm
     const current = getSessionStatus(userId)
     if (current.linked) {
         send('connected', { phone: current.phone })
-        res.end()
+        finish()
         return
     }
 
-    startSession(userId, send, () => {
+    req.on('close', () => {
+        clearInterval(heartbeat)
+        removeListener(userId, send)
         if (!res.writableEnded) res.end()
     })
 
-    req.on('close', () => {
-        if (!res.writableEnded) res.end()
-    })
+    await startSession(userId, send, finish)
 }
 
-// ─── GET /wa/status/:userId ───────────────────────────────────────────────────
+// ─── GET /wa/status — connection state for the calling user ──────────────────
 
 export const getStatus = (req: Request, res: Response): void => {
-    const userId = param(req.params.userId) ?? USER_ID
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
     res.json(getSessionStatus(userId))
 }
 
-// ─── DELETE /wa/link/:userId ─────────────────────────────────────────────────
+// ─── DELETE /wa/link — unlink and wipe the calling user's session ────────────
 
 export const unlink = async (
     req: Request,
@@ -66,14 +165,16 @@ export const unlink = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        await removeSession(param(req.params.userId) ?? USER_ID)
+        const userId = requireUserId(req, res)
+        if (!userId) return
+        await removeSession(userId)
         res.json({ success: true })
     } catch (err) {
         next(err)
     }
 }
 
-// ─── POST /wa/remind ─────────────────────────────────────────────────────────
+// ─── POST /wa/remind — one-tap reminder for the calling user ─────────────────
 
 export const sendReminder = async (
     req: Request,
@@ -81,40 +182,36 @@ export const sendReminder = async (
     next: NextFunction
 ): Promise<void> => {
     try {
+        const userId = requireUserId(req, res)
+        if (!userId) return
+
         const {
-            userId = USER_ID,
             customerId,
             phone: bodyPhone,
             name: bodyName,
             balance: bodyBalance,
             message: bodyMessage,
             storeName = 'BolKhata Store',
-        } = req.body as {
-            userId?: string
-            customerId?: string
-            phone?: string
-            name?: string
-            balance?: number
-            message?: string
-            storeName?: string
-        }
+            countryCode = '92',
+        } = req.body
 
         let phone = bodyPhone
         let name = bodyName
         let balance = bodyBalance
 
-        // Fallback to Supabase if details are missing
+        // Fallback to Supabase if details are missing — scoped to this user.
         if ((!phone || !name || balance === undefined) && customerId) {
             const { data: customer } = await supabase
                 .from('customers')
-                .select('*')
+                .select('name, phone, balance')
                 .eq('id', customerId)
+                .eq('user_id', userId)
                 .single()
 
             if (customer) {
                 phone = phone || customer.phone
                 name = name || customer.name
-                balance = balance !== undefined ? balance : customer.balance
+                balance = balance !== undefined ? balance : Number(customer.balance)
             }
         }
 
@@ -147,19 +244,7 @@ export const sendReminder = async (
             .replace(/{amount}/g, balance.toLocaleString())
             .replace(/{store_name}/g, storeName)
 
-        await sendTextMessage(userId, phone, text)
-
-        // Try inserting into Supabase reminders table (ignore errors if customerId is mock/local ID)
-        if (customerId) {
-            try {
-                await supabase.from('reminders').insert({
-                    customer_id: customerId,
-                    amount_due: balance,
-                    due_date: new Date().toISOString().split('T')[0],
-                    status: 'SENT',
-                })
-            } catch { /* ignore non-UUID customerId errors */ }
-        }
+        await sendTextMessage(userId, phone, text, countryCode)
 
         res.json({
             success: true,
@@ -175,8 +260,13 @@ export const sendReminder = async (
 // ─── POST /wa/schedule — schedule a reminder ─────────────────────────────────
 
 export const createSchedule = (req: Request, res: Response): void => {
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
+
     const {
-        userId = USER_ID,
         customerId,
         phone,
         name,
@@ -184,16 +274,8 @@ export const createSchedule = (req: Request, res: Response): void => {
         scheduledAt,
         message,
         storeName,
-    } = req.body as {
-        userId?: string
-        customerId: string
-        phone: string
-        name: string
-        balance: number
-        scheduledAt: string
-        message?: string
-        storeName?: string
-    }
+        countryCode,
+    } = req.body
 
     if (!customerId || !phone || !scheduledAt) {
         res.status(400).json({ error: 'customerId, phone, and scheduledAt are required' })
@@ -210,25 +292,34 @@ export const createSchedule = (req: Request, res: Response): void => {
         scheduledAt,
         message,
         storeName,
+        countryCode,
         status: 'PENDING',
         createdAt: new Date().toISOString(),
+        attempts: 0,
     })
 
     res.status(201).json({ success: true, schedule: item })
 }
 
-// ─── GET /wa/schedule/:userId — list schedules ───────────────────────────────
+// ─── GET /wa/schedule — list the calling user's schedules ─────────────────────
 
 export const getSchedules = (req: Request, res: Response): void => {
-    const userId = param(req.params.userId) ?? USER_ID
-    const list = getScheduledReminders(userId)
-    res.json(list)
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
+    res.json(getScheduledReminders(userId))
 }
 
-// ─── DELETE /wa/schedule/:userId/:scheduleId — cancel a schedule ────────────
+// ─── DELETE /wa/schedule/:scheduleId — cancel a schedule ─────────────────────
 
 export const deleteSchedule = (req: Request, res: Response): void => {
-    const userId = param(req.params.userId) ?? USER_ID
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
     const scheduleId = param(req.params.scheduleId)
     const success = cancelScheduledReminder(userId, scheduleId)
     if (!success) {
@@ -238,10 +329,14 @@ export const deleteSchedule = (req: Request, res: Response): void => {
     res.json({ success: true })
 }
 
-// ─── GET /wa/history/:userId/:jid ────────────────────────────────────────────
+// ─── GET /wa/history/:jid — chat history for the calling user ────────────────
 
 export const getChatHistory = (req: Request, res: Response): void => {
-    const userId = param(req.params.userId) ?? USER_ID
+    const userId = req.user?.id
+    if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+    }
     const jid = decodeURIComponent(param(req.params.jid))
     res.json(getHistory(userId, jid))
 }

@@ -1,12 +1,27 @@
 import { Router } from 'express';
-import { getCustomers, createCustomer, getCustomerById, updateCustomer, deleteCustomer } from '../controllers/customer.controller';
+import { authenticate } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validate.middleware';
+import {
+  createCustomerSchema,
+  updateCustomerSchema,
+  idParamsSchema,
+} from '../validators';
+import {
+  getCustomers,
+  createCustomer,
+  getCustomerById,
+  updateCustomer,
+  deleteCustomer,
+} from '../controllers/customer.controller';
 
 const router = Router();
 
+router.use(authenticate);
+
 router.get('/', getCustomers);
-router.post('/', createCustomer);
-router.get('/:id', getCustomerById);
-router.put('/:id', updateCustomer);
-router.delete('/:id', deleteCustomer);
+router.post('/', validate({ body: createCustomerSchema }), createCustomer);
+router.get('/:id', validate({ params: idParamsSchema }), getCustomerById);
+router.put('/:id', validate({ params: idParamsSchema, body: updateCustomerSchema }), updateCustomer);
+router.delete('/:id', validate({ params: idParamsSchema }), deleteCustomer);
 
 export default router;

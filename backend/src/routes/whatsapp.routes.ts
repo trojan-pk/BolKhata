@@ -1,35 +1,56 @@
-import { Router } from 'express'
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validate.middleware';
 import {
-    linkQr,
-    getStatus,
-    unlink,
-    sendReminder,
-    getChatHistory,
-    createSchedule,
-    getSchedules,
-    deleteSchedule,
-} from '../controllers/whatsapp.controller'
+  waRemindSchema,
+  waScheduleSchema,
+  waHistoryParamsSchema,
+  waScheduleIdParamsSchema,
+} from '../validators';
+import {
+  linkQr,
+  createTicket,
+  getQr,
+  refreshQr,
+  getStatus,
+  unlink,
+  sendReminder,
+  getChatHistory,
+  createSchedule,
+  getSchedules,
+  deleteSchedule,
+} from '../controllers/whatsapp.controller';
 
 const router = Router()
 
-// SSE stream — browser EventSource opens this to get QR image
+// ─── authenticated JSON endpoints (identity from the Supabase JWT) ──────────
+
+router.get('/status', authenticate, getStatus)
+router.get('/qr', authenticate, getQr)
+router.post('/qr/refresh', authenticate, refreshQr)
+router.delete('/link', authenticate, unlink)
+router.post('/remind', authenticate, validate({ body: waRemindSchema }), sendReminder)
+router.post('/schedule', authenticate, validate({ body: waScheduleSchema }), createSchedule)
+router.get('/schedule', authenticate, getSchedules)
+router.delete(
+    '/schedule/:scheduleId',
+    authenticate,
+    validate({ params: waScheduleIdParamsSchema }),
+    deleteSchedule
+)
+router.get(
+    '/history/:jid',
+    authenticate,
+    validate({ params: waHistoryParamsSchema }),
+    getChatHistory
+)
+
+// ─── SSE pairing: ticket minted with auth header, spent on the stream ───────
+
+// Single-use, 60s ticket for EventSource (which cannot send headers).
+router.post('/link/ticket', authenticate, createTicket)
+
+// SSE stream — browser EventSource opens this with the ticket to get QR images
 router.get('/link/:userId', linkQr)
-
-// Linked status
-router.get('/status/:userId', getStatus)
-
-// Unlink + wipe session folder
-router.delete('/link/:userId', unlink)
-
-// Send payment reminder text via linked WA account
-router.post('/remind', sendReminder)
-
-// Schedule a reminder
-router.post('/schedule', createSchedule)
-router.get('/schedule/:userId', getSchedules)
-router.delete('/schedule/:userId/:scheduleId', deleteSchedule)
-
-// Stored message history for a JID
-router.get('/history/:userId/:jid', getChatHistory)
 
 export default router
