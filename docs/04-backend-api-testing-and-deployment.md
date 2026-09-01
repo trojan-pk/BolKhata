@@ -1,184 +1,105 @@
-# BolKhata Backend, API, Testing, and Deployment
+# BolKhata Backend API, Testing, and Deployment
 
-## 21. Backend Structure
+## 1. Complete Backend REST & SSE API Catalog
 
-Suggested structure:
+All endpoints run on Express 5.2.1 at base URL `http://localhost:3000` (or production URL).
 
-```text
-backend/
-│
-├── src/
-│   ├── controllers/
-│   │   ├── auth.controller.ts
-│   │   ├── customer.controller.ts
-│   │   ├── transaction.controller.ts
-│   │   └── voice.controller.ts
-│   │
-│   ├── routes/
-│   │   ├── auth.routes.ts
-│   │   ├── customer.routes.ts
-│   │   ├── transaction.routes.ts
-│   │   └── voice.routes.ts
-│   │
-│   ├── services/
-│   │   ├── ai.service.ts
-│   │   ├── speech.service.ts
-│   │   ├── tts.service.ts
-│   │   └── whatsapp.service.ts       # Baileys WhatsApp integration
-│   │
-│   ├── services/voice/
-│   │   ├── voice.service.ts
-│   │   ├── providers/
-│   │   │   ├── groq.ts
-│   │   │   ├── deepgram.ts
-│   │   │   ├── alibaba.ts
-│   │   │   └── gemini.ts
-│   │   └── router.ts
-│   │
-│   ├── models/
-│   │   ├── user.model.ts
-│   │   ├── customer.model.ts
-│   │   └── transaction.model.ts
-│   │
-│   ├── middleware/
-│   │   └── auth.middleware.ts
-│   │
-│   └── server.ts
-│
-└── package.json
+### Health & Root
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Server uptime, health status, and UTC timestamp |
+| `GET` | `/` | API version banner or redirect to web frontend |
+
+### Voice AI Engine
+| Method | Endpoint | Description | Request Payload |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/voice/process` | Audio upload or raw text parsing | `multipart/form-data` with `file` (audio) or `application/json` `{ text, people, current_date }` |
+| `POST` | `/voice/tts` | Generate multilingual speech audio | `application/json` `{ text, voiceId }` |
+
+### WhatsApp Automation Suite (Baileys Engine)
+| Method | Endpoint | Description | Details |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/wa/link/:userId` | Server-Sent Events (SSE) stream for live QR pairing | Event `qr`: `{ qrBase64 }`<br>Event `connected`: `{ phone }` |
+| `GET` | `/wa/status/:userId` | Check WhatsApp Web connection state | Response `{ linked: boolean, phone?: string }` |
+| `DELETE` | `/wa/link/:userId` | Unlink account and wipe `.baileys_auth_*` directory | Response `{ success: true }` |
+| `POST` | `/wa/remind` | Send instantaneous payment reminder text | `{ userId, customerId, phone, name, balance, message, storeName }` |
+| `POST` | `/wa/schedule` | Register a future scheduled reminder | `{ userId, customerId, phone, name, balance, scheduledAt, message, storeName }` |
+| `GET` | `/wa/schedule/:userId` | List all pending scheduled reminders | Returns array of scheduled reminders |
+| `DELETE` | `/wa/schedule/:userId/:scheduleId` | Cancel a scheduled reminder | Response `{ success: true }` |
+| `GET` | `/wa/history/:userId/:jid` | Retrieve message history for a specific customer JID | Returns chat history log |
+
+### Customer & Party Management
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/customers` | List all customers/suppliers for store with current balances |
+| `POST` | `/customers` | Create new customer or supplier with opening balance |
+| `GET` | `/customers/:id` | Get customer details and outstanding balance |
+| `PUT` | `/customers/:id` | Update customer profile details |
+| `DELETE` | `/customers/:id` | Delete customer and cascade delete all transactions |
+
+### Transactions & Ledger
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/transactions` | List recent transactions (filterable by customer ID) |
+| `POST` | `/transactions` | Create Gave / Got transaction entry |
+| `PUT` | `/transactions/:id` | Edit transaction note, amount, or payment mode |
+| `DELETE` | `/transactions/:id` | Delete transaction and recalculate customer balance |
+
+### Dashboard & Analytics
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/dashboard/summary` | Authoritative totals: Net balance, total receivable, total payable |
+
+---
+
+## 2. Testing Strategy & Test Matrix
+
+### Critical Financial Paths
+- **Gave Transaction**: Customer balance increases by transaction amount.
+- **Got Transaction**: Customer balance decreases by transaction amount.
+- **Opening Balance**: Correctly recorded as initial transaction; persists across retroactive edits and recalculations.
+- **Settlement**: Creates balancing transaction to bring balance exactly to 0.
+- **Deletion**: Deleting a middle transaction recalculates current balance accurately without side effects.
+
+### Voice Engine Edge Cases
+- **Colloquial Numerics**: Verify "5 hazar", "derh lakh", "dhai sau" parse to 5000, 150000, 250.
+- **Fuzzy Name Matching**: Ensure "Abid Bhai" matches existing contact "Abid" with high confidence.
+- **Ambiguous Statements**: Prompts for confirmation rather than guessing.
+- **Provider Failover**: When ElevenLabs returns 429/500, Groq Whisper Turbo executes automatically within <1.2s.
+
+---
+
+## 3. Production Deployment Guide
+
+### Backend Docker Deployment (`/backend/Dockerfile`)
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
 ```
 
-Supabase provides the PostgreSQL database, Auth, Row Level Security, and optional Storage. Express remains responsible for business logic and the Voice Service provider abstraction.
+### Railway Deployment (`/backend/railway.json`)
+- Configure Environment Variables on Railway:
+  - `PORT=3000`
+  - `SUPABASE_URL=https://<project-ref>.supabase.co`
+  - `SUPABASE_SERVICE_ROLE_KEY=eyJ...`
+  - `GEMINI_API_KEY=AIza...`
+  - `DASHSCOPE_API_KEY=sk-...`
+  - `GROQ_API_KEY=gsk_...`
+  - `ELEVENLABS_API_KEY=sk_...`
+  - `FRONTEND_URL=https://bolkhata.app`
 
-### WhatsApp Integration
+### Frontend Mobile Build (EAS Cloud APK)
+```bash
+cd frontend
+# Log in to EAS
+npx eas-cli login
 
-Use **Baileys** in the backend for WhatsApp messaging and reminder delivery. Keep the integration inside `whatsapp.service.ts`; the Expo app communicates only with the authenticated Express API.
-
-```text
-Express API
-      ↓
-whatsapp.service.ts
-      ↓
-Baileys
-      ↓
-WhatsApp
+# Build standalone Android APK preview
+npm run build:apk
 ```
-
-WhatsApp session credentials and related secrets must remain on the backend and must never be bundled into the mobile app.
-
-## 22. Suggested API Endpoints
-
-### Authentication
-
-```text
-POST /auth/signup
-POST /auth/login
-GET  /auth/me
-```
-
-### Customers
-
-```text
-GET    /customers
-POST   /customers
-GET    /customers/:id
-PUT    /customers/:id
-DELETE /customers/:id
-```
-
-### Transactions
-
-```text
-POST /transactions
-GET  /customers/:id/transactions
-```
-
-### Voice
-
-```text
-POST /voice/process
-```
-
-### Dashboard
-
-```text
-GET /dashboard
-```
-
-### Reminders
-
-```text
-GET  /reminders
-POST /reminders/send
-```
-
-## 23. Testing Strategy
-
-With 8 days, don't chase excessive coverage.
-
-Focus on critical paths.
-
-### Backend
-
-Test:
-
-- `POST /auth`
-- `POST /voice/process`
-- `POST /transactions`
-- `GET /customers`
-- `GET /customers/:id/khata`
-- `POST /reminders`
-
-### Critical financial tests
-
-- 500 credit
-- 500 payment
-- multiple transactions
-- unknown customer
-- duplicate transaction
-- invalid amount
-- zero amount
-- negative amount
-- STT failure
-- LLM failure
-- WhatsApp failure
-
-### Mobile
-
-Test:
-
-- Login
-- Dashboard
-- Voice recording
-- Microphone permission
-- Transaction confirmation
-- Customer Khata
-- Reminder
-
-Also perform extensive real-device testing.
-
-## 24. Deployment
-
-Potential architecture:
-
-```text
-Expo Mobile App
-      ↓
-Node.js + Express Backend
-      ↓
-Supabase
-      (PostgreSQL + Auth)
-```
-
-Backend can be deployed on:
-
-- Railway
-- Render
-- Another managed platform
-
-Mobile can be built as:
-
-- Android APK
-- Android AAB
-
-For hackathon demo, an APK installed on a real Android phone is sufficient if the rules allow it.

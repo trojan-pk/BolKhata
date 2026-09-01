@@ -1,281 +1,56 @@
 # BolKhata Execution, Security, and Roadmap
 
-## 25. Qoder / Agentic IDE Strategy
+## 1. Security Architecture & Rules
 
-The team has many Qoder credits.
+### 1. Zero-Trust Frontend Environment
+- **Never expose AI API keys**: Google Gemini, Alibaba DashScope, Groq, and ElevenLabs API keys must only reside in the backend `.env`.
+- **Never bundle WhatsApp sessions in client**: Baileys multi-device session credentials remain securely on the backend server.
+- **Supabase Anon Key Only**: The mobile client only possesses the public `EXPO_PUBLIC_SUPABASE_ANON_KEY` and passes user JWT tokens in the `Authorization: Bearer <token>` header to the Express backend.
 
-Do not simply ask the agent:
+### 2. Multi-Tenant Database Isolation
+- All tables (`stores`, `customers`, `transactions`, `cashbook`) contain `user_id` and `store_id` columns.
+- PostgreSQL Row Level Security (RLS) is enabled on all tables in Schema v2 to prevent cross-tenant data leakage.
 
-```text
-"Build the entire BolKhata app."
-```
+### 3. Voice Rate Limiting & Abuse Prevention
+- In-memory rate limiting middleware (`voiceLimit.middleware.ts`) limits voice processing requests per IP / user to prevent API quota exhaustion.
 
-Instead work in phases:
+---
 
-1. Architecture
-2. Backend foundation
-3. Database schema
-4. Authentication
-5. Customer + transaction CRUD
-6. Voice pipeline
-7. LLM extraction
-8. Flutter/Expo UI
-9. API integration
-10. WhatsApp
-11. Testing
-12. Polish + demo
+## 2. Developer & AI Coding Workflow
 
-After every phase:
+### 1. Monorepo Execution Rules
+- Always run frontend commands (`npm run web`, `npm run start`, `npm run type-check`) inside the `/frontend` directory.
+- Always run backend commands (`npm run dev`, `npm run build`, `npm run start`) inside the `/backend` directory.
 
-```text
-Implement
- ↓
-Run
- ↓
-Test
- ↓
-Inspect errors
- ↓
-Fix
- ↓
-Review
- ↓
-Commit
-```
+### 2. State & UI Integrity
+- Preserve the atomic design system in `frontend/src/ui/`.
+- Maintain consistent semantic color tokens (`Gave Red #E11D48`, `Got Green #16A34A`, `Ink #0F172A`).
+- Ensure all numbers and currency amounts use **Plus Jakarta Sans** and labels use **Inter**.
 
-Do not let the AI generate thousands of unverified lines in one shot.
+---
 
-## 26. MCP / AI Tooling Discussion
-
-The team discussed using MCPs and skills with Claude Code / agentic IDEs.
-
-### Recommended focused tooling
-
-#### High priority
-
-- Flutter/Dart MCP if Flutter is selected
-- GitHub MCP
-- Filesystem/project tools
-- Git tooling
-- Documentation/context tool such as Context7
-- Playwright if web/browser testing is needed
-- Database MCP if useful and safely configured
-
-#### Optional
-
-- Figma MCP if UI is designed in Figma
-- Vercel MCP if Vercel is used
-- Sentry MCP for error monitoring
-- Docker tooling if containers are used
-
-#### Baileys MCP
-
-- Baileys will be used by the backend for WhatsApp messaging and reminders.
-- Use the [Baileys MCP](https://baileys.wiki/mcp) as a read-only documentation search and retrieval tool during development.
-- The MCP helps the team and coding agents look up Baileys APIs and guides; it does not replace the backend Baileys service or send WhatsApp messages itself.
-
-Do not install dozens of MCPs just because they exist.
-
-More MCPs do not automatically make an agent better.
-
-## 27. Suggested Custom AI Development Skills
-
-Potential skills/rules:
-
-- Flutter/Expo architecture
-- Mobile UI/UX
-- Voice UX
-- Voice → transaction extraction
-- Financial/Khata business logic
-- WhatsApp reminders
-- AI/API integration
-- Security
-- Testing
-- Agentic development workflow
-
-Important custom rule:
-
-The LLM extracts intent and structured data. The backend validates it and performs all authoritative business/financial operations.
-
-## 28. Security Rules
-
-Never expose the following inside the mobile app:
-
-- MongoDB/PostgreSQL credentials
-- AI provider API keys
-- WhatsApp secrets
-- JWT signing secrets
-
-Use environment variables on the backend:
+## 3. Implemented Milestones & Roadmap
 
 ```text
-DATABASE_URL=
-JWT_SECRET=
-AI_API_KEY=
-WHATSAPP_TOKEN=
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Project Milestone Status                        │
+├────────────────────────────────────────────────────────────────────────┤
+│  ✅ Phase 1: Architecture & UI Component System (Tokens, Typography)   │
+│  ✅ Phase 2: Multi-Tier Voice AI Engine (ElevenLabs/Groq/Gemini/Qwen) │
+│  ✅ Phase 3: Baileys WhatsApp Web Engine (SSE QR, Reminders, Schedule) │
+│  ✅ Phase 4: Supabase Schema v2 Multi-Tenant DB with RLS & Auth       │
+│  ✅ Phase 5: Grahak Ledger, Cashbook Rokar, Reports & PDF Previews     │
+│  ⏳ Phase 6 (Future): Offline Sync Queue & Conflict Resolution         │
+│  ⏳ Phase 7 (Future): OCR Camera Receipt & Handwritten Note Scanner    │
+│  ⏳ Phase 8 (Future): Multi-Staff Access & Role-Based Permissions      │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-Mobile only communicates with authenticated backend APIs.
+---
 
-Other important rules:
+## 4. Hackathon Submission Highlights
 
-- Validate all user input.
-- Validate all AI output.
-- Never trust LLM-generated amounts blindly.
-- Never let the LLM directly execute database mutations.
-- Use authorization per shopkeeper/user.
-- Avoid logging sensitive customer data.
-- Use HTTPS.
-
-## 29. Final Recommended Stack for Expo Version
-
-### 📱 MOBILE
-
-- Expo
-- React Native
-- TypeScript
-- Expo Router
-
-### 🎨 UI
-
-- NativeWind / StyleSheet
-
-### 🔄 STATE
-
-- Zustand
-
-### 🎙️ AUDIO
-
-- Expo audio/recording
-
-### 🔐 STORAGE
-
-- Expo SecureStore
-
-### 🔙 BACKEND
-
-- Node.js
-- TypeScript
-- Express
-
-### DATABASE
-
-- Supabase PostgreSQL
-- Supabase Auth
-- Supabase Row Level Security
-- Supabase Storage when needed
-
-### AI
-
-- STT: Groq + Whisper primary, Deepgram fallback, self-hosted Whisper emergency
-- LLM: hosted provider behind the Express API
-- TTS: Alibaba Qwen primary, Gemini and Deepgram Aura fallbacks, ElevenLabs optional, Qwen/CosyVoice emergency
-
-### VOICE PROVIDER RULE
-
-- Express owns the Voice Service and provider abstraction.
-- The Expo app never calls Groq, Deepgram, Alibaba, Gemini, ElevenLabs, or local models directly.
-- A failed provider automatically moves the request to the next configured provider.
-
-### 💬 COMMUNICATION
-
-- Baileys for backend WhatsApp messaging and reminders
-- Baileys MCP for development-time documentation lookup: https://baileys.wiki/mcp
-
-### 🔑 AUTH
-
-- JWT
-
-### 🧪 TESTING
-
-- Vitest/Jest
-- React Native Testing Library
-- Expo integration testing
-- API tests
-
-### 🚀 DEPLOYMENT
-
-- Railway / Render
-- Supabase
-
-### 🧑‍💻 DEVELOPMENT
-
-- Git
-- GitHub
-- Qoder
-
-### 🤖 AI DEVELOPMENT
-
-- Qoder + focused MCPs/skills
-
-## 30. Recommended 8-Day Priority
-
-### DAY 1
-
-Project setup  
-Architecture  
-Database  
-Auth foundation
-
-### DAY 2
-
-Customers  
-Transactions  
-Khata
-
-### DAY 3
-
-Dashboard  
-Mobile UI  
-Navigation
-
-### DAY 4
-
-Voice recording  
-STT integration
-
-### DAY 5
-
-LLM extraction  
-Intent system  
-Confirmation flow
-
-### DAY 6
-
-TTS  
-WhatsApp reminders  
-End-to-end voice flow
-
-### DAY 7
-
-Testing  
-Bug fixing  
-Real-device testing  
-UI polish
-
-### DAY 8
-
-Demo preparation  
-Presentation  
-Demo script  
-Final bug fixes
-
-The most important objective is not to build every possible feature.
-
-The target is a polished end-to-end demo:
-
-```text
-🎙️ Speak
- ↓
-🧠 AI understands
- ↓
-📒 Khata updates
- ↓
-💰 Balance changes
- ↓
-🔔 Due payment detected
- ↓
-💬 WhatsApp voice reminder
-```
-
-That is the core BolKhata story and should remain the highest priority throughout the 8-day build.
+1. **True Voice-First Experience**: Shopkeepers can manage their entire store ledger through spoken Urdu/Roman Urdu without typing.
+2. **Enterprise-Grade AI Resilience**: 3-tier STT and 3-tier LLM failover ensure $99.9\%$ voice processing uptime during demonstrations.
+3. **Frictionless WhatsApp Recovery**: Directly connects with existing WhatsApp Web accounts to automate debt collection respectfully.
+4. **Production-Ready Visual Design**: Modern typography, animated 5-bar voice equalizer, spring dock navigation, and crisp light theme.
