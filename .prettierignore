@@ -1,0 +1,7 @@
+node_modules
+dist
+.expo
+web-build
+package-lock.json
+backend/wa
+*.md
