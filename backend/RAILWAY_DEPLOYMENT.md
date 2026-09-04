@@ -45,7 +45,7 @@ This guide walks you through deploying the **BolKhata Express + TypeScript Backe
 6. **Verify Deployment**:
    - Open your browser or run:
      ```bash
-     curl https://your-railway-domain.up.railway.app/health
+     curl https://bolkhata-production-6447.up.railway.app/health
      ```
    - Expected response:
      ```json
@@ -67,12 +67,12 @@ If you prefer using the command line:
    ```bash
    railway login
    cd backend
-   railway init
+   railway link
    ```
 
 3. **Set Variables & Deploy**:
    ```bash
-   railway up
+   railway up --service BolKhata
    ```
 
 4. **Add Domain**:
@@ -84,9 +84,9 @@ If you prefer using the command line:
 
 ## 📱 Updating the Frontend
 
-After getting your Railway public URL (e.g. `https://bolkhata-backend.up.railway.app`), update your frontend configuration:
+After getting your Railway public URL (`https://bolkhata-production-6447.up.railway.app`), update your frontend configuration:
 
 In `frontend/.env.local`:
 ```env
-EXPO_PUBLIC_API_URL=https://your-railway-domain.up.railway.app
+EXPO_PUBLIC_API_URL=https://bolkhata-production-6447.up.railway.app
 ```

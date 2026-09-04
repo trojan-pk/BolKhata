@@ -36,7 +36,7 @@ RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit
 # Copy compiled JavaScript from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Expose port (Railway overrides PORT dynamically)
+# Expose port (runtime overrides PORT dynamically)
 EXPOSE 3000
 
 # Start Express API server
