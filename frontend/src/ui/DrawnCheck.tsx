@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { COLORS } from '../theme/colors';
@@ -27,9 +27,9 @@ export const DrawnCheck: React.FC<DrawnCheckProps> = ({
   onDone,
 }) => {
   /** Ring scale-in. Native-driven — it's a transform. */
-  const ring = useRef(new Animated.Value(0)).current;
+  const [ring] = useState(() => new Animated.Value(0));
   /** Tick draw. Not native-driven: SVG prop. */
-  const draw = useRef(new Animated.Value(0)).current;
+  const [draw] = useState(() => new Animated.Value(0));
 
   const stroke = Math.max(2.5, size * 0.055);
   const radius = (size - stroke) / 2;

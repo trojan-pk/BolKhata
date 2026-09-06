@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -51,12 +51,7 @@ import {
   useFeedback,
 } from '../ui';
 import { EntryRow } from './EntryRow';
-import {
-  formatMoney,
-  formatPhone,
-  groupByDate,
-  normalisePhone,
-} from '../utils/format';
+import { formatMoney, formatPhone, groupByDate, normalisePhone } from '../utils/format';
 import { ApiService } from '../services/api';
 import { getActiveTemplateText } from '../services/reminderTemplates';
 import { WaScheduleModal, getTimeRemainingText } from './WaScheduleModal';
@@ -104,7 +99,7 @@ export const CustomerLedgerPanel: React.FC<{
   const { width } = useWindowDimensions();
 
   const [mounted, setMounted] = useState(visible);
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   // WhatsApp backend, schedule & cooldown state
   const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
@@ -120,7 +115,7 @@ export const CustomerLedgerPanel: React.FC<{
     ApiService.getScheduledWaReminders()
       .then((list) => {
         const found = list.find(
-          (s) => s.customerId === party.id && s.status === 'PENDING'
+          (s) => s.customerId === party.id && s.status === 'PENDING',
         );
         setPendingSchedule(found || null);
       })
@@ -207,7 +202,7 @@ export const CustomerLedgerPanel: React.FC<{
 
     // Walk oldest → newest to accumulate the balance, then present newest first.
     const chronological = [...own].sort(
-      (a, b) => (a.createdAt || 0) - (b.createdAt || 0)
+      (a, b) => (a.createdAt || 0) - (b.createdAt || 0),
     );
     let running = 0;
     const stamped = chronological.map((txn) => {
@@ -229,14 +224,14 @@ export const CustomerLedgerPanel: React.FC<{
   const statusLabel = settled
     ? COPY.ledger.allSquare
     : toCollect
-    ? COPY.ledger.toCollect
-    : COPY.ledger.toPay;
+      ? COPY.ledger.toCollect
+      : COPY.ledger.toPay;
 
   /* --------------------------------------------------------------- actions -- */
 
   const call = () => {
     Linking.openURL(`tel:${phone}`).catch(() =>
-      toast('Could not open the dialler', 'error')
+      toast('Could not open the dialler', 'error'),
     );
   };
 
@@ -374,13 +369,8 @@ export const CustomerLedgerPanel: React.FC<{
           >
             <View style={styles.balanceHeader}>
               <View style={styles.labelGroup}>
-                <Text style={[TYPE.overline, styles.balanceLabel]}>
-                  {statusLabel}
-                </Text>
-                <Badge
-                  label={COPY.party.entriesCount(entries.length)}
-                  tone="neutral"
-                />
+                <Text style={[TYPE.overline, styles.balanceLabel]}>{statusLabel}</Text>
+                <Badge label={COPY.party.entriesCount(entries.length)} tone="neutral" />
               </View>
 
               {!settled ? (
@@ -420,11 +410,7 @@ export const CustomerLedgerPanel: React.FC<{
                 <WhatsAppIcon
                   size={20}
                   color={
-                    cooldownSecs > 0
-                      ? '#128C7E'
-                      : waLinked
-                      ? '#FFFFFF'
-                      : COLORS.textMuted
+                    cooldownSecs > 0 ? '#128C7E' : waLinked ? '#FFFFFF' : COLORS.textMuted
                   }
                 />
                 <Text
@@ -437,10 +423,10 @@ export const CustomerLedgerPanel: React.FC<{
                   {sendingReminder
                     ? 'Sending…'
                     : cooldownSecs > 0
-                    ? `Remind in ${Math.floor(cooldownSecs / 60)}m ${cooldownSecs % 60 < 10 ? '0' : ''}${cooldownSecs % 60}s`
-                    : waLinked
-                    ? 'Send WA Reminder'
-                    : 'Link WA in Settings'}
+                      ? `Remind in ${Math.floor(cooldownSecs / 60)}m ${cooldownSecs % 60 < 10 ? '0' : ''}${cooldownSecs % 60}s`
+                      : waLinked
+                        ? 'Send WA Reminder'
+                        : 'Link WA in Settings'}
                 </Text>
                 {cooldownSecs > 0 ? (
                   <View style={styles.cooldownBadge}>

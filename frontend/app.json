@@ -30,7 +30,11 @@
           "microphonePermission": "Allow BolKhata to access your microphone for recording voice khata entries.",
           "recordAudioAndroid": true
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "web": {
       "favicon": "./assets/BKS-01-01.png"
@@ -39,9 +43,6 @@
       "eas": {
         "projectId": "cd3ffee2-5ef1-4389-b293-e8c2b6ff3556"
       }
-    },
-    "plugins": [
-      "expo-audio"
-    ]
+    }
   }
 }

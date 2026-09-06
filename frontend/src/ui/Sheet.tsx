@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -18,14 +18,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
-import {
-  ELEV,
-  MAX_CONTENT_WIDTH,
-  MOTION,
-  RADIUS,
-  SPACE,
-  TYPE,
-} from '../theme/tokens';
+import { ELEV, MAX_CONTENT_WIDTH, MOTION, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { IconButton } from './Button';
 
 interface SheetProps {
@@ -75,7 +68,7 @@ export const Sheet: React.FC<SheetProps> = ({
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [panelHeight, setPanelHeight] = useState(0);
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   const scrollMaxHeight = Math.round(windowHeight * maxHeightRatio);
 
@@ -126,8 +119,9 @@ export const Sheet: React.FC<SheetProps> = ({
     },
   ];
 
-  const titleBlock = header ?? (
-    title || subtitle ? (
+  const titleBlock =
+    header ??
+    (title || subtitle ? (
       <View style={styles.titleRow}>
         <View style={styles.titleText}>
           {title ? (
@@ -145,8 +139,7 @@ export const Sheet: React.FC<SheetProps> = ({
           <IconButton icon={X} onPress={onClose} accessibilityLabel="Close" />
         ) : null}
       </View>
-    ) : null
-  );
+    ) : null);
 
   const body = scrollable ? (
     <ScrollView
@@ -200,7 +193,10 @@ export const Sheet: React.FC<SheetProps> = ({
             style={[
               styles.panel,
               variant === 'bottom'
-                ? [styles.panelBottom, { paddingBottom: Math.max(insets.bottom, SPACE.lg) }]
+                ? [
+                    styles.panelBottom,
+                    { paddingBottom: Math.max(insets.bottom, SPACE.lg) },
+                  ]
                 : styles.panelCenter,
               ELEV.overlay,
               {

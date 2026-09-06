@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '../theme/colors';
@@ -23,11 +23,8 @@ interface SetupCelebrationProps {
  * beat belongs to the boundary between the wizard and the ledger, so it's owned
  * by whoever renders both.
  */
-export const SetupCelebration: React.FC<SetupCelebrationProps> = ({
-  name,
-  onDone,
-}) => {
-  const fade = useRef(new Animated.Value(0)).current;
+export const SetupCelebration: React.FC<SetupCelebrationProps> = ({ name, onDone }) => {
+  const [fade] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState(false);
 
   useEffect(() => {
@@ -59,9 +56,7 @@ export const SetupCelebration: React.FC<SetupCelebrationProps> = ({
   }, [drawn, fade]);
 
   return (
-    <Animated.View
-      style={[StyleSheet.absoluteFill, styles.stage, { opacity: fade }]}
-    >
+    <Animated.View style={[StyleSheet.absoluteFill, styles.stage, { opacity: fade }]}>
       <DrawnCheck size={76} onDone={() => setDrawn(true)} />
 
       <Enter

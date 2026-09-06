@@ -54,7 +54,7 @@ export const CrossFade: React.FC<CrossFadeProps> = ({
   const rendered = useRef<Layer | null>(null);
 
   /** 0 → outgoing fully visible, 1 → incoming fully visible. */
-  const progress = useRef(new Animated.Value(1)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   /*
    * Declared before the recorder below, so within a single commit this runs

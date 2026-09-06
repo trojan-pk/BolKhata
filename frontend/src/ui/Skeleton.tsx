@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE } from '../theme/tokens';
@@ -14,7 +14,7 @@ export const Skeleton: React.FC<{
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }> = ({ width = '100%', height = 14, radius = RADIUS.xs, style }) => {
-  const pulse = useRef(new Animated.Value(0.4)).current;
+  const [pulse] = useState(() => new Animated.Value(0.4));
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -31,7 +31,7 @@ export const Skeleton: React.FC<{
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     loop.start();
     return () => loop.stop();

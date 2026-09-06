@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 
 interface VoiceLogoProps {
@@ -15,11 +15,11 @@ export const VoiceLogo: React.FC<VoiceLogoProps> = ({
   multiColor = false,
 }) => {
   // Symmetrical voice wave animators (Center -> Mid -> Outer)
-  const scaleCenter = useRef(new Animated.Value(1)).current;
-  const scaleMidLeft = useRef(new Animated.Value(1)).current;
-  const scaleMidRight = useRef(new Animated.Value(1)).current;
-  const scaleOuterLeft = useRef(new Animated.Value(1)).current;
-  const scaleOuterRight = useRef(new Animated.Value(1)).current;
+  const [scaleCenter] = useState(() => new Animated.Value(1));
+  const [scaleMidLeft] = useState(() => new Animated.Value(1));
+  const [scaleMidRight] = useState(() => new Animated.Value(1));
+  const [scaleOuterLeft] = useState(() => new Animated.Value(1));
+  const [scaleOuterRight] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     if (!animated) {
@@ -39,7 +39,7 @@ export const VoiceLogo: React.FC<VoiceLogoProps> = ({
         minScale: number,
         maxScale: number,
         speed: number,
-        delay: number
+        delay: number,
       ) => {
         return Animated.loop(
           Animated.sequence([
@@ -62,7 +62,7 @@ export const VoiceLogo: React.FC<VoiceLogoProps> = ({
               easing: Easing.bezier(0.4, 0.0, 0.2, 1),
               useNativeDriver: true,
             }),
-          ])
+          ]),
         );
       };
 
@@ -90,8 +90,8 @@ export const VoiceLogo: React.FC<VoiceLogoProps> = ({
   const gap = Math.max(4, Math.round(effectiveSize * 0.09));
   const borderRadius = 2.5; // Exact subtle radius from reference image
 
-  const outerHeight = Math.round(effectiveSize * 1.0);  // 100%
-  const midHeight = Math.round(effectiveSize * 0.72);   // 72%
+  const outerHeight = Math.round(effectiveSize * 1.0); // 100%
+  const midHeight = Math.round(effectiveSize * 0.72); // 72%
   const centerHeight = Math.round(effectiveSize * 0.38); // 38%
 
   // Google Colors Palette

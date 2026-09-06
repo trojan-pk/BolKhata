@@ -83,7 +83,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   onDeleteTransaction,
   onDeleteParty,
 }) => {
-  const [activeIntent, setActiveIntent] = useState<VoiceActionIntent>('create_transaction');
+  const [activeIntent, setActiveIntent] =
+    useState<VoiceActionIntent>('create_transaction');
   const [transcript, setTranscript] = useState('');
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -92,7 +93,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [date, setDate] = useState(todayISO());
 
   // Special intent targets
-  const [balanceOf, setBalanceOf] = useState<{ name: string; balance: number } | null>(null);
+  const [balanceOf, setBalanceOf] = useState<{ name: string; balance: number } | null>(
+    null,
+  );
   const [targetTxnToUpdate, setTargetTxnToUpdate] = useState<Transaction | null>(null);
   const [targetTxnToDelete, setTargetTxnToDelete] = useState<Transaction | null>(null);
   const [targetPartyToDelete, setTargetPartyToDelete] = useState<Party | null>(null);
@@ -102,11 +105,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
   const matchParty = (needle: string) => {
     if (!needle) return undefined;
-    const cleanNeedle = String(needle || '').toLowerCase().trim();
+    const cleanNeedle = String(needle || '')
+      .toLowerCase()
+      .trim();
     if (!cleanNeedle) return undefined;
     return parties.find((p) => {
       if (!p || !p.name) return false;
-      const a = String(p.name || '').toLowerCase().trim();
+      const a = String(p.name || '')
+        .toLowerCase()
+        .trim();
       return a.includes(cleanNeedle) || cleanNeedle.includes(a);
     });
   };
@@ -114,8 +121,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   /** Speaks text back in English via Web Speech / Expo Speech. */
   const speakText = (text: string) => {
     const locale = 'en-US';
+    console.log(
+      `🔊 [VoiceAssistant] speakText: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}" (${text.length} chars, locale=${locale}, platform=${Platform.OS})`,
+    );
     try {
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.speechSynthesis) {
+      if (
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        window.speechSynthesis
+      ) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = locale;
@@ -123,20 +137,37 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         const voice = window.speechSynthesis
           .getVoices()
           .find((v) => v.lang?.startsWith('en'));
-        if (voice) utterance.voice = voice;
+        if (voice) {
+          utterance.voice = voice;
+          console.log(`🔊 [VoiceAssistant] Web: using voice "${voice.name}"`);
+        }
+        utterance.onend = () => console.log(`✅ [VoiceAssistant] Web: speech finished`);
+        utterance.onerror = (e) =>
+          console.warn(`⚠️ [VoiceAssistant] Web: speech error: ${e.error}`);
         window.speechSynthesis.speak(utterance);
+        console.log(`✅ [VoiceAssistant] Web: speechSynthesis.speak() called`);
         return;
       }
       Speech.stop();
       Speech.speak(text, { language: locale, rate: 1.0 });
-    } catch {
-      // Speech is a convenience, non-blocking
+      console.log(`✅ [VoiceAssistant] Native: Speech.speak() called`);
+    } catch (e: any) {
+      console.warn(`⚠️ [VoiceAssistant] speakText EXCEPTION: ${e?.message || e}`);
     }
   };
 
   /** Normalizes voice result and resolves the target transaction / party. */
   const absorb = (data: any) => {
     if (!data) return;
+    console.log(`\n🎙️ [VoiceAssistant] ═══ absorb() ═══`);
+    console.log(`🎙️ [VoiceAssistant] intent: ${data.intent || 'create_transaction'}`);
+    console.log(`🎙️ [VoiceAssistant] originalText: "${data.originalText || ''}"`);
+    console.log(
+      `🎙️ [VoiceAssistant] person: ${data.person?.name || data.customerName || data.partyName || '(none)'}`,
+    );
+    console.log(
+      `🎙️ [VoiceAssistant] amount: ${data.amount || data.transaction?.amount || 0}`,
+    );
     setError(null);
     setMessage(null);
     setTranscript(data.originalText || '');
@@ -208,7 +239,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       setTargetTxnToUpdate(target);
 
-      const newAmount = Number(data.changes?.amount) || Number(data.transaction?.amount) || target.amount;
+      const newAmount =
+        Number(data.changes?.amount) || Number(data.transaction?.amount) || target.amount;
       const newType: TransactionType =
         data.changes?.direction || data.transaction?.direction || target.type;
       const newReason =
@@ -223,7 +255,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setDate(target.date || todayISO());
 
       speakText(
-        `Update ${matchedP.name}'s entry from ${target.amount} to ${newAmount} rupees? Press save to confirm.`
+        `Update ${matchedP.name}'s entry from ${target.amount} to ${newAmount} rupees? Press save to confirm.`,
       );
       return;
     }
@@ -260,7 +292,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       setTargetTxnToDelete(target);
       setName(matchedP.name);
-      speakText(`Delete ${matchedP.name}'s ${target.amount} rupees entry? Press confirm to delete.`);
+      speakText(
+        `Delete ${matchedP.name}'s ${target.amount} rupees entry? Press confirm to delete.`,
+      );
       return;
     }
 
@@ -290,7 +324,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       speakText(
         `${direction === 'gave' ? 'Gave' : 'Received'} ${value} rupees ${
           direction === 'gave' ? 'to' : 'from'
-        } ${person}${why ? ` for ${why}` : ''}. Press save to record.`
+        } ${person}${why ? ` for ${why}` : ''}. Press save to record.`,
       );
     }
   };
@@ -482,7 +516,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       {/* 1. BALANCE QUERY VIEW */}
       {isBalanceQuery && balanceOf ? (
         <Card
-          tone={balanceOf.balance > 0 ? 'credit' : balanceOf.balance < 0 ? 'debit' : 'muted'}
+          tone={
+            balanceOf.balance > 0 ? 'credit' : balanceOf.balance < 0 ? 'debit' : 'muted'
+          }
           padding={SPACE.xl}
           style={styles.balanceCard}
         >
@@ -491,14 +527,16 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             value={balanceOf.balance}
             currency={currency}
             size="title1"
-            tone={balanceOf.balance > 0 ? 'credit' : balanceOf.balance < 0 ? 'debit' : 'muted'}
+            tone={
+              balanceOf.balance > 0 ? 'credit' : balanceOf.balance < 0 ? 'debit' : 'muted'
+            }
           />
           <Text style={[TYPE.caption, styles.balanceCaption]}>
             {balanceOf.balance > 0
               ? COPY.ledger.toCollect
               : balanceOf.balance < 0
-              ? COPY.ledger.toPay
-              : COPY.ledger.allSquare}
+                ? COPY.ledger.toPay
+                : COPY.ledger.allSquare}
           </Text>
         </Card>
       ) : null}
@@ -544,7 +582,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             {targetPartyToDelete.name}
           </Text>
           <Text style={[TYPE.bodySm, { color: COLORS.textSecondary, marginTop: 6 }]}>
-            All ledger entries and balance records for this customer will be permanently deleted.
+            All ledger entries and balance records for this customer will be permanently
+            deleted.
           </Text>
         </Card>
       ) : null}
@@ -563,8 +602,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                 tone={targetTxnToUpdate.type === 'gave' ? 'debit' : 'credit'}
               />
               <ArrowRight size={14} color={COLORS.textMuted} />
-              <Text style={[TYPE.title3, { color: type === 'gave' ? COLORS.debit : COLORS.credit }]}>
-                {currency} {parseAmount(amount) > 0 ? Number(amount).toLocaleString() : '0'}
+              <Text
+                style={[
+                  TYPE.title3,
+                  { color: type === 'gave' ? COLORS.debit : COLORS.credit },
+                ]}
+              >
+                {currency}{' '}
+                {parseAmount(amount) > 0 ? Number(amount).toLocaleString() : '0'}
               </Text>
               <Badge
                 label={type === 'gave' ? 'Gave' : 'Got'}

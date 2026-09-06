@@ -15,6 +15,7 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from 'expo-audio';
+import * as FileSystem from 'expo-file-system';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { GUTTER, MOTION, SPACE, TYPE } from '../theme/tokens';
@@ -23,14 +24,7 @@ import { ApiService } from '../services/api';
 import { BalanceCard } from '../components/BalanceCard';
 import { EntryRow } from '../components/EntryRow';
 import { OrbState, VoiceOrb } from '../components/VoiceOrb';
-import {
-  Badge,
-  EmptyState,
-  Enter,
-  SectionHeader,
-  SkeletonRow,
-  useFeedback,
-} from '../ui';
+import { Badge, EmptyState, Enter, SectionHeader, SkeletonRow, useFeedback } from '../ui';
 import { todayISO } from '../utils/format';
 
 const MAX_SESSION_MS = 30000;
@@ -74,7 +68,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [captureMode, setCaptureMode] = useState<'hold' | 'tap' | null>(null);
   const [promptIndex, setPromptIndex] = useState(0);
   const [feedExpanded, setFeedExpanded] = useState(false);
-  const promptFade = useRef(new Animated.Value(1)).current;
+  const [promptFade] = useState(() => new Animated.Value(1));
 
   /* ------------------------------------------------------- capture refs -- */
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -114,7 +108,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       ]).start();
       setTimeout(
         () => setPromptIndex((prev) => (prev + 1) % COPY.home.examples.length),
-        MOTION.fast
+        MOTION.fast,
       );
     }, 4200);
     return () => clearInterval(interval);
@@ -124,7 +118,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     () => () => {
       if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
     },
-    []
+    [],
   );
 
   /* ------------------------------------------------------------- capture -- */
@@ -138,6 +132,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const abortCapture = useCallback(
     (message?: string) => {
+      console.log(`⚠️ [HomeScreen] abortCapture called. message: ${message || '(none)'}`);
       capturingRef.current = false;
       captureModeRef.current = null;
       setOrbState('idle');
@@ -152,7 +147,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
       if (message) toast(message, 'error');
     },
-    [audioRecorder, toast]
+    [audioRecorder, toast],
   );
 
   const startCapture = useCallback(
@@ -160,12 +155,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       if (capturingRef.current) return;
 
       try {
+        console.log(`\n🎙️ [HomeScreen] ═══ startCapture (${mode}) ═══`);
+        console.log(`🎙️ [HomeScreen] Platform: ${Platform.OS}`);
         capturingRef.current = true;
         captureModeRef.current = mode;
         setCaptureMode(mode);
         setOrbState('recording');
 
         sessionTimerRef.current = setTimeout(() => {
+          console.log(`⚠️ [HomeScreen] 30s auto-stop timer fired`);
           if (capturingRef.current) stopRef.current();
         }, MAX_SESSION_MS);
 
@@ -173,10 +171,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const media =
             typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
           if (!media?.getUserMedia) {
+            console.error(`❌ [HomeScreen] Web: navigator.mediaDevices unavailable`);
             abortCapture(COPY.voice.micUnavailable);
             return;
           }
+          console.log(`🎙️ [HomeScreen] Web: requesting getUserMedia...`);
           const stream = await media.getUserMedia({ audio: true });
+          console.log(
+            `🎙️ [HomeScreen] Web: got stream with ${stream.getTracks().length} tracks`,
+          );
           webStreamRef.current = stream;
           webChunksRef.current = [];
           const recorder = new MediaRecorder(stream);
@@ -185,14 +188,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             if (event.data.size > 0) webChunksRef.current.push(event.data);
           };
           recorder.start();
+          console.log(`✅ [HomeScreen] Web: MediaRecorder started`);
           return;
         }
 
+        console.log(`🎙️ [HomeScreen] Native: requesting recording permissions...`);
         const permission = await requestRecordingPermissionsAsync();
         if (!permission.granted) {
+          console.error(`❌ [HomeScreen] Native: recording permission denied`);
           abortCapture(COPY.voice.micDenied);
           return;
         }
+        console.log(`🎙️ [HomeScreen] Native: permissions granted`);
 
         await setAudioModeAsync({
           allowsRecording: true,
@@ -201,42 +208,56 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         await audioRecorder.prepareToRecordAsync();
         audioRecorder.record();
-      } catch (error) {
+        console.log(`✅ [HomeScreen] Native: audioRecorder.record() started`);
+      } catch (error: any) {
+        console.error(
+          `❌ [HomeScreen] startCapture EXCEPTION: ${error?.message || error}`,
+        );
         abortCapture(COPY.voice.micDenied);
       }
     },
-    [abortCapture, audioRecorder]
+    [abortCapture, audioRecorder],
   );
 
   const sendForParsing = useCallback(
     async (body: FormData) => {
       body.append(
         'people',
-        JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name })))
+        JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name }))),
       );
       body.append('current_date', todayISO());
 
+      console.log(
+        `🎙️ [HomeScreen] sendForParsing: ${parties.length} people, date=${todayISO()}`,
+      );
+
       try {
         const result = await ApiService.processVoice(body);
+        console.log(
+          `✅ [HomeScreen] Voice result received: intent=${result?.intent}, person=${result?.person?.name || (result as any)?.customerName}`,
+        );
         if (result) {
           onVoiceResultParsed(result);
         } else {
           toast(COPY.voice.failed, 'error');
           onOpenVoiceReview();
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.error(`❌ [HomeScreen] Voice parsing FAILED: ${error?.message || error}`);
         toast(COPY.voice.failed, 'error');
         onOpenVoiceReview();
       } finally {
         setOrbState('idle');
       }
     },
-    [parties, onVoiceResultParsed, onOpenVoiceReview, toast]
+    [parties, onVoiceResultParsed, onOpenVoiceReview, toast],
   );
 
   const stopCaptureAndParse = useCallback(async () => {
     if (!capturingRef.current) return;
     capturingRef.current = false;
+
+    console.log(`\n⏹️ [HomeScreen] ═══ stopCaptureAndParse ═══`);
 
     if (sessionTimerRef.current) {
       clearTimeout(sessionTimerRef.current);
@@ -251,21 +272,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       if (Platform.OS === 'web') {
         const recorder = webRecorderRef.current;
         if (!recorder) {
+          console.warn(`⚠️ [HomeScreen] Web: no recorder to stop`);
           setOrbState('idle');
           return;
         }
 
         recorder.onstop = async () => {
           releaseWebStream();
+          const totalBlobSize = webChunksRef.current.reduce((acc, b) => acc + b.size, 0);
+          console.log(
+            `🎙️ [HomeScreen] Web: recording stopped. ${webChunksRef.current.length} chunks, total ${totalBlobSize} bytes`,
+          );
 
           if (webChunksRef.current.length === 0) {
+            console.warn(`⚠️ [HomeScreen] Web: no audio chunks captured`);
             setOrbState('idle');
             toast(COPY.voice.tooShort, 'error');
             return;
           }
 
           const blob = new Blob(webChunksRef.current, { type: 'audio/webm' });
+          console.log(
+            `🎙️ [HomeScreen] Web: final blob size ${blob.size} bytes, type=${blob.type}`,
+          );
+
           if (blob.size < 500) {
+            console.warn(
+              `⚠️ [HomeScreen] Web: blob too small (${blob.size} bytes < 500)`,
+            );
             setOrbState('idle');
             toast(COPY.voice.tooShort, 'error');
             return;
@@ -275,31 +309,78 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           body.append('audio', blob, 'entry.webm');
           await sendForParsing(body);
         };
+        console.log(`⏹️ [HomeScreen] Web: calling recorder.stop()...`);
         recorder.stop();
         return;
       }
 
+      console.log(`⏹️ [HomeScreen] Native: calling audioRecorder.stop()...`);
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
+      console.log(`🎙️ [HomeScreen] Native: recording URI: ${uri || '(null)'}`);
 
       if (!uri) {
+        console.warn(`⚠️ [HomeScreen] Native: no URI from recorder`);
         setOrbState('idle');
         toast(COPY.voice.tooShort, 'error');
         return;
       }
 
-      const body = new FormData();
-      body.append('audio', {
-        uri,
-        name: 'entry.m4a',
-        type: 'audio/m4a',
-      } as any);
-      await sendForParsing(body);
-    } catch (error) {
+      // Read the audio file as base64 and send via JSON POST.
+      // React Native 0.81 FormData file upload is broken on Android
+      // ("Unsupported FormDataPart implementation"), and BlobManager
+      // rejects Uint8Array — so we bypass both with a plain JSON body.
+      console.log(`🎙️ [HomeScreen] Native: reading audio file as base64...`);
+      const base64Data = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const fileSize = fileInfo.exists ? fileInfo.size : 0;
+      console.log(
+        `🎙️ [HomeScreen] Native: audio base64=${base64Data.length} chars, file=${fileSize} bytes`,
+      );
+
+      console.log(
+        `🎙️ [HomeScreen] Native: sending audio as JSON (${parties.length} people, date=${todayISO()})...`,
+      );
+      try {
+        const result = await ApiService.processVoice({
+          audioBase64: base64Data,
+          audioType: 'audio/m4a',
+          people: parties.map((p) => ({ id: p.id, name: p.name })),
+          current_date: todayISO(),
+        });
+        console.log(
+          `✅ [HomeScreen] Voice result received: intent=${result?.intent}, person=${result?.person?.name || (result as any)?.customerName}`,
+        );
+        if (result) {
+          onVoiceResultParsed(result);
+        } else {
+          toast(COPY.voice.failed, 'error');
+          onOpenVoiceReview();
+        }
+      } catch (error: any) {
+        console.error(`❌ [HomeScreen] Voice parsing FAILED: ${error?.message || error}`);
+        toast(COPY.voice.failed, 'error');
+        onOpenVoiceReview();
+      }
+      setOrbState('idle');
+    } catch (error: any) {
+      console.error(
+        `❌ [HomeScreen] stopCaptureAndParse EXCEPTION: ${error?.message || error}`,
+      );
+      if (error?.stack) console.error(`   ↳ stack: ${error.stack.slice(0, 300)}`);
       setOrbState('idle');
       toast(COPY.voice.failed, 'error');
     }
-  }, [audioRecorder, sendForParsing, toast]);
+  }, [
+    audioRecorder,
+    sendForParsing,
+    parties,
+    onVoiceResultParsed,
+    onOpenVoiceReview,
+    toast,
+  ]);
 
   useEffect(() => {
     stopRef.current = stopCaptureAndParse;
@@ -333,19 +414,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     orbState === 'processing'
       ? COPY.home.voiceThinking
       : orbState === 'recording'
-      ? captureMode === 'tap'
-        ? COPY.home.voiceRecording
-        : COPY.home.voiceListening
-      : COPY.home.voiceIdle;
+        ? captureMode === 'tap'
+          ? COPY.home.voiceRecording
+          : COPY.home.voiceListening
+        : COPY.home.voiceIdle;
 
   const stageLine =
     orbState === 'processing'
       ? COPY.home.hintThinking
       : orbState === 'recording'
-      ? captureMode === 'tap'
-        ? COPY.home.hintTap
-        : COPY.home.hintHold
-      : `“${COPY.home.examples[promptIndex]}”`;
+        ? captureMode === 'tap'
+          ? COPY.home.hintTap
+          : COPY.home.hintHold
+        : `“${COPY.home.examples[promptIndex]}”`;
 
   const FEED_PREVIEW = 5;
   const recent = feedExpanded
@@ -387,9 +468,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {orbState === 'idle' ? (
           <View style={styles.stageFooter}>
             <Badge label="Urdu or English" tone="accent" />
-            <Text style={[TYPE.caption, styles.stageHint]}>
-              {COPY.home.hintIdle}
-            </Text>
+            <Text style={[TYPE.caption, styles.stageHint]}>{COPY.home.hintIdle}</Text>
           </View>
         ) : (
           <View style={styles.stageFooter} />

@@ -1,12 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Easing,
-} from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { FONTS } from '../theme/typography';
 import { VoiceLogo } from './VoiceLogo';
 
@@ -19,17 +12,19 @@ interface SplashScreenProps {
 const LETTERS = ['B', 'o', 'l', 'K', 'h', 'a', 't', 'a'];
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
-  const logoFade = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.85)).current;
+  const [logoFade] = useState(() => new Animated.Value(0));
+  const [logoScale] = useState(() => new Animated.Value(0.85));
 
   // Animation values for each letter
-  const letterAnims = useRef(
-    LETTERS.map(() => ({
-      opacity: new Animated.Value(0),
-      translateY: new Animated.Value(12),
-      scale: new Animated.Value(0.8),
-    }))
-  ).current;
+  const letterAnims = useMemo(
+    () =>
+      LETTERS.map(() => ({
+        opacity: new Animated.Value(0),
+        translateY: new Animated.Value(12),
+        scale: new Animated.Value(0.8),
+      })),
+    [],
+  );
 
   useEffect(() => {
     // 1. Logo fades and gently scales in
@@ -49,26 +44,31 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     ]).start();
 
     // 2. Staggered letter-by-letter text reveal after logo appears
-    const letterStaggerAnimations = letterAnims.map((anim) =>
-      Animated.parallel([
-        Animated.timing(anim.opacity, {
-          toValue: 1,
-          duration: 350,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim.translateY, {
-          toValue: 0,
-          duration: 350,
-          easing: Easing.out(Easing.back(1.5)),
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim.scale, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-      ])
+    const letterStaggerAnimations = letterAnims.map(
+      (anim: {
+        opacity: Animated.Value;
+        translateY: Animated.Value;
+        scale: Animated.Value;
+      }) =>
+        Animated.parallel([
+          Animated.timing(anim.opacity, {
+            toValue: 1,
+            duration: 350,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim.translateY, {
+            toValue: 0,
+            duration: 350,
+            easing: Easing.out(Easing.back(1.5)),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim.scale, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }),
+        ]),
     );
 
     const revealTimer = setTimeout(() => {
@@ -84,14 +84,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       clearTimeout(revealTimer);
       clearTimeout(finishTimer);
     };
-  }, []);
+  }, [letterAnims, logoFade, logoScale, onFinish]);
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      activeOpacity={1}
-      onPress={onFinish}
-    >
+    <TouchableOpacity style={styles.container} activeOpacity={1} onPress={onFinish}>
       <View style={styles.content}>
         {/* Animated 5-Bar Black Voice Logo */}
         <Animated.View

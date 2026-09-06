@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -78,14 +78,19 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
       return;
     }
     if (!ownerName.trim()) {
-      toast(accountType === 'commercial' ? 'Please enter the Owner/Manager name.' : 'Please enter your Name.');
+      toast(
+        accountType === 'commercial'
+          ? 'Please enter the Owner/Manager name.'
+          : 'Please enter your Name.',
+      );
       return;
     }
 
     setSaving(true);
     try {
       const profile: StoreProfile = {
-        name: accountType === 'commercial' ? storeName.trim() : `${ownerName.trim()}'s Khata`,
+        name:
+          accountType === 'commercial' ? storeName.trim() : `${ownerName.trim()}'s Khata`,
         ownerName: ownerName.trim(),
         mobile: phone.trim(),
         currency,
@@ -116,7 +121,10 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Header Progress */}
           <View style={styles.header}>
             <View style={styles.badgePill}>
@@ -127,14 +135,16 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
             {/* Only the wording changes between steps, so only it cross-fades. */}
             <CrossFade phase={`h${step}`} distance={14} style={styles.headings}>
               <Text style={styles.headingTitle}>
-                {step === 1 ? 'How will you use BolKhata?' : 'Personalize Your Experience'}
+                {step === 1
+                  ? 'How will you use BolKhata?'
+                  : 'Personalize Your Experience'}
               </Text>
               <Text style={styles.headingSubtitle}>
                 {step === 1
                   ? 'Select your purpose to tailor ledger categories, reminders, and features.'
                   : accountType === 'commercial'
-                  ? 'Enter your business details to generate branded WhatsApp receipts.'
-                  : 'Enter your name to track personal debts, loans, and daily expenses.'}
+                    ? 'Enter your business details to generate branded WhatsApp receipts.'
+                    : 'Enter your name to track personal debts, loans, and daily expenses.'}
               </Text>
             </CrossFade>
 
@@ -201,7 +211,11 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                         Shop / Business Name <Text style={styles.requiredStar}>*</Text>
                       </Text>
                       <View style={styles.inputBox}>
-                        <Store size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                        <Store
+                          size={18}
+                          color={COLORS.textMuted}
+                          style={styles.inputIcon}
+                        />
                         <TextInput
                           style={styles.textInput}
                           placeholder="e.g. Al-Madina Superstore"
@@ -217,7 +231,11 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                         Owner / Manager Name <Text style={styles.requiredStar}>*</Text>
                       </Text>
                       <View style={styles.inputBox}>
-                        <User size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                        <User
+                          size={18}
+                          color={COLORS.textMuted}
+                          style={styles.inputIcon}
+                        />
                         <TextInput
                           style={styles.textInput}
                           placeholder="e.g. Haji Aslam"
@@ -248,7 +266,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                             <Text
                               style={[
                                 styles.categoryChipText,
-                                businessCategory === cat && styles.categoryChipTextSelected,
+                                businessCategory === cat &&
+                                  styles.categoryChipTextSelected,
                               ]}
                             >
                               {cat}
@@ -360,7 +379,7 @@ const DOT = 10;
 const SLOT = 24;
 
 const StepBar: React.FC<{ step: 1 | 2 }> = ({ step }) => {
-  const progress = useRef(new Animated.Value(step === 2 ? 1 : 0)).current;
+  const [progress] = useState(() => new Animated.Value(step === 2 ? 1 : 0));
 
   useEffect(() => {
     Animated.timing(progress, {
@@ -551,7 +570,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stepLineFill: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: COLORS.ink,
   },
   stepOneCards: {

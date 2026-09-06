@@ -1,11 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import {
-  Animated,
-  Easing,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { COLORS } from '../theme/colors';
 import { NO_OUTLINE } from '../theme/tokens';
@@ -60,14 +54,14 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
   /* ------------------------------------------------------------ animators -- */
   /** Drains the ring across the capture window. Not native-driven: SVG prop. */
-  const drain = useRef(new Animated.Value(0)).current;
+  const [drain] = useState(() => new Animated.Value(0));
   /** Continuous rotation for the processing arc. */
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
   /** Outward halo breathing while recording. */
-  const halo1 = useRef(new Animated.Value(0)).current;
-  const halo2 = useRef(new Animated.Value(0)).current;
+  const [halo1] = useState(() => new Animated.Value(0));
+  const [halo2] = useState(() => new Animated.Value(0));
   /** Gentle scale so the orb feels responsive the instant capture begins. */
-  const lift = useRef(new Animated.Value(0)).current;
+  const [lift] = useState(() => new Animated.Value(0));
 
   // Ring drain — restarts from full on each new recording.
   useEffect(() => {
@@ -99,7 +93,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
         duration: 1000,
         easing: Easing.linear,
         useNativeDriver: true,
-      })
+      }),
     );
     loop.start();
     return () => loop.stop();
@@ -135,7 +129,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
             duration: 0,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
 
     const loops = [wave(halo1, 0), wave(halo2, 900)];
@@ -212,8 +206,8 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           isRecording
             ? 'Recording. Release or tap to finish'
             : isProcessing
-            ? 'Understanding your entry'
-            : 'Hold to speak a ledger entry'
+              ? 'Understanding your entry'
+              : 'Hold to speak a ledger entry'
         }
         accessibilityState={{ busy: isProcessing, disabled }}
         style={[styles.touch, { width: size, height: size }, NO_OUTLINE]}

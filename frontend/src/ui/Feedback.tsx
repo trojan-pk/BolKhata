@@ -78,7 +78,7 @@ const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
   onDismiss,
 }) => {
   const insets = useSafeAreaInsets();
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
   const { icon: Icon, tint } = TOAST_TONES[request.tone || 'info'];
 
   useEffect(() => {

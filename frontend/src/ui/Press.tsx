@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -32,7 +32,7 @@ export const Press: React.FC<PressProps> = ({
   children,
   ...rest
 }) => {
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   const animate = useCallback(
     (to: number) => {
@@ -43,7 +43,7 @@ export const Press: React.FC<PressProps> = ({
         useNativeDriver: true,
       }).start();
     },
-    [progress]
+    [progress],
   );
 
   const animatedStyle = {
@@ -108,13 +108,7 @@ export const Press: React.FC<PressProps> = ({
       style={[NO_OUTLINE, outerLayout]}
       {...rest}
     >
-      <Animated.View
-        style={[
-          innerStyle,
-          animatedStyle,
-          disabled && { opacity: 0.45 },
-        ]}
-      >
+      <Animated.View style={[innerStyle, animatedStyle, disabled && { opacity: 0.45 }]}>
         {children}
       </Animated.View>
     </Pressable>
@@ -155,17 +149,20 @@ export const Enter: React.FC<{
   style,
   children,
 }) => {
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(progress, {
-        toValue: 1,
-        duration,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }, delay + Math.min(index, maxSteps) * stagger);
+    const timer = setTimeout(
+      () => {
+        Animated.timing(progress, {
+          toValue: 1,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+      },
+      delay + Math.min(index, maxSteps) * stagger,
+    );
     return () => clearTimeout(timer);
   }, [index, progress, stagger, duration, delay, maxSteps]);
 

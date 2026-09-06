@@ -14,14 +14,7 @@ import { Cloud, Mic, Send } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COLORS } from '../theme/colors';
-import {
-  GUTTER,
-  MAX_CONTENT_WIDTH,
-  MOTION,
-  RADIUS,
-  SPACE,
-  TYPE,
-} from '../theme/tokens';
+import { GUTTER, MAX_CONTENT_WIDTH, MOTION, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { COPY } from '../i18n/copy';
 import { Button, Enter, LinkButton, Press } from '../ui';
 import { IconComponent } from '../ui/icon';
@@ -55,7 +48,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onDone }) => {
   const widthRef = useRef(0);
   const [index, setIndex] = useState(0);
 
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const [scrollX] = useState(() => new Animated.Value(0));
 
   const slides = COPY.onboarding.slides;
   const isLast = index === slides.length - 1;
@@ -78,6 +71,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onDone }) => {
     () =>
       Animated.event<NativeScrollEvent>(
         [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+        // eslint-disable-next-line react-hooks/refs -- Animated.Value is a stable node, not a render-time ref read
         {
           // The rest of the app native-drives everything. Scroll-linked
           // interpolation is the one case react-native-web handles differently,
@@ -89,18 +83,13 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onDone }) => {
             const next = Math.round(e.nativeEvent.contentOffset.x / w);
             setIndex((current) => (current === next ? current : next));
           },
-        }
+        },
       ),
-    [scrollX]
+    [scrollX],
   );
 
   return (
-    <View
-      style={[
-        styles.root,
-        { paddingTop: insets.top, paddingBottom: insets.bottom },
-      ]}
-    >
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.shell}>
         {/* Skip stops existing on the last slide, where the primary button
             already says what happens next. */}
@@ -264,9 +253,7 @@ const Dot: React.FC<{
       style={styles.dotSlot}
     >
       <View style={styles.dotTrack} />
-      <Animated.View
-        style={[styles.dotPill, { opacity, transform: [{ scaleX }] }]}
-      />
+      <Animated.View style={[styles.dotPill, { opacity, transform: [{ scaleX }] }]} />
     </Press>
   );
 };

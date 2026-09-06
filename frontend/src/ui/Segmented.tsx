@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animated,
   LayoutChangeEvent,
@@ -40,9 +40,9 @@ export function Segmented<T extends string>({
   const [trackWidth, setTrackWidth] = useState(0);
   const activeIndex = Math.max(
     0,
-    segments.findIndex((s) => s.value === value)
+    segments.findIndex((s) => s.value === value),
   );
-  const position = useRef(new Animated.Value(activeIndex)).current;
+  const [position] = useState(() => new Animated.Value(activeIndex));
 
   useEffect(() => {
     Animated.spring(position, {
@@ -51,12 +51,10 @@ export function Segmented<T extends string>({
     }).start();
   }, [activeIndex, position]);
 
-  const onLayout = (e: LayoutChangeEvent) =>
-    setTrackWidth(e.nativeEvent.layout.width);
+  const onLayout = (e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width);
 
   const padding = 3;
-  const segmentWidth =
-    trackWidth > 0 ? (trackWidth - padding * 2) / segments.length : 0;
+  const segmentWidth = trackWidth > 0 ? (trackWidth - padding * 2) / segments.length : 0;
 
   // `interpolate` needs at least two stops, so a single-segment control (which
   // shouldn't happen, but shouldn't crash either) gets a static range.
@@ -73,10 +71,10 @@ export function Segmented<T extends string>({
     activeTone === 'credit'
       ? COLORS.credit
       : activeTone === 'debit'
-      ? COLORS.debit
-      : activeTone === 'accent'
-      ? COLORS.accent
-      : COLORS.ink;
+        ? COLORS.debit
+        : activeTone === 'accent'
+          ? COLORS.accent
+          : COLORS.ink;
 
   return (
     <View

@@ -119,41 +119,141 @@ export const ApiService = {
   /* ---------------------------------------------------------------- voice -- */
 
   processVoice: async (
-    data: FormData | { text: string; people?: { id: string; name: string }[]; current_date?: string }
+    data:
+      | FormData
+      | {
+          text?: string;
+          audioBase64?: string;
+          audioType?: string;
+          people?: { id: string; name: string }[];
+          current_date?: string;
+        },
   ): Promise<VoiceCommandParseResult> => {
     const targetUrl = `${getApiBaseUrl()}/voice/process`;
     const authHeaders = await getAuthHeaders();
 
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
 
+    // ── Log the outgoing request ──
+    const startTime = Date.now();
+    console.log(`\n🎙️ [ApiService] ═══ Voice STT Request ═══`);
+    console.log(`🎙️ [ApiService] URL: ${targetUrl}`);
+    console.log(`🎙️ [ApiService] isFormData: ${isFormData}`);
+    console.log(`🎙️ [ApiService] hasAuth: ${!!authHeaders.Authorization}`);
+
+    if (isFormData) {
+      const fd = data as FormData;
+      // Try to log FormData entries — RN's polyfill uses getParts(), web uses forEach
+      try {
+        const entries: string[] = [];
+        if (typeof (fd as any).getParts === 'function') {
+          // React Native polyfill
+          const parts = (fd as any).getParts();
+          for (const part of parts) {
+            if (part.uri) {
+              entries.push(
+                `${part.fieldName}: file(uri=${part.uri.slice(0, 60)}..., type=${part.type || '?'})`,
+              );
+            } else if (part.string !== undefined) {
+              const s = part.string;
+              entries.push(
+                `${part.fieldName}: ${s.length > 80 ? s.slice(0, 80) + '...' : s}`,
+              );
+            } else {
+              entries.push(`${part.fieldName}: [unknown part]`);
+            }
+          }
+        } else if (typeof fd.forEach === 'function') {
+          fd.forEach((value, key) => {
+            if (value instanceof Blob) {
+              entries.push(`${key}: Blob(${value.size} bytes, ${value.type})`);
+            } else {
+              const strVal = String(value);
+              entries.push(
+                `${key}: ${strVal.length > 80 ? strVal.slice(0, 80) + '...' : strVal}`,
+              );
+            }
+          });
+        }
+        console.log(`🎙️ [ApiService] FormData fields:\n   ${entries.join('\n   ')}`);
+      } catch {
+        console.log(`🎙️ [ApiService] FormData (could not enumerate entries)`);
+      }
+    } else {
+      const jsonPayload = data as Record<string, unknown>;
+      if (jsonPayload.audioBase64) {
+        const b64 = jsonPayload.audioBase64 as string;
+        console.log(
+          `🎙️ [ApiService] Audio payload: base64=${b64.length} chars (~${Math.round((b64.length * 3) / 4 / 1024)}KB), type=${jsonPayload.audioType || '?'}`,
+        );
+        console.log(
+          `🎙️ [ApiService] Other fields: people=${JSON.stringify(jsonPayload.people || []).slice(0, 100)}, date=${jsonPayload.current_date || '?'}`,
+        );
+      } else {
+        console.log(`🎙️ [ApiService] Text payload:`, JSON.stringify(data).slice(0, 200));
+      }
+    }
+
     const response = await fetch(targetUrl, {
       method: 'POST',
       body: isFormData ? (data as FormData) : JSON.stringify(data),
       headers: isFormData
         ? { Accept: 'application/json', ...authHeaders }
-        : { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeaders },
+        : {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...authHeaders,
+          },
     });
 
+    const elapsedMs = Date.now() - startTime;
+    console.log(
+      `🎙️ [ApiService] Response status: ${response.status} ${response.statusText} (${elapsedMs}ms)`,
+    );
+
     if (!response.ok) {
-      throw new Error(
-        await readErrorMessage(response, `Server Error (${response.status})`)
+      const errMsg = await readErrorMessage(
+        response,
+        `Server Error (${response.status})`,
       );
+      console.error(`❌ [ApiService] STT FAILED: ${errMsg}`);
+      throw new Error(errMsg);
     }
 
     const resJson = await response.json();
     const { audioBase64, ...cleanLog } = resJson;
-    console.log('[ApiService] Voice result:', cleanLog);
+    console.log(`✅ [ApiService] STT result (${elapsedMs}ms):`, cleanLog);
+    if (resJson.timings) {
+      console.log(
+        `   ↳ timings: STT=${resJson.timings.sttMs}ms (${resJson.timings.sttProvider}) | LLM=${resJson.timings.llmMs}ms (${resJson.timings.brainModel}) | Total=${resJson.timings.totalMs}ms`,
+      );
+    }
     return resJson;
   },
 
-  generateSpeech: async (text: string, voiceId?: string): Promise<{ audioBase64: string } | null> => {
+  generateSpeech: async (
+    text: string,
+    voiceId?: string,
+  ): Promise<{ audioBase64: string } | null> => {
+    const startTime = Date.now();
+    console.log(`\n🔊 [ApiService] ═══ TTS Request ═══`);
+    console.log(
+      `🔊 [ApiService] text: "${text?.slice(0, 80)}${(text?.length || 0) > 80 ? '...' : ''}" (${text?.length || 0} chars)`,
+    );
+    console.log(`🔊 [ApiService] voiceId: ${voiceId || 'default'}`);
+
     try {
-      return await authedJson<{ audioBase64: string }>('/voice/tts', {
+      const result = await authedJson<{ audioBase64: string }>('/voice/tts', {
         method: 'POST',
         body: JSON.stringify({ text, voiceId }),
       });
-    } catch (e) {
-      console.warn('[ApiService] TTS generation error:', e);
+      const elapsedMs = Date.now() - startTime;
+      const audioLen = result?.audioBase64?.length || 0;
+      console.log(`✅ [ApiService] TTS OK in ${elapsedMs}ms (${audioLen} base64 chars)`);
+      return result;
+    } catch (e: any) {
+      const elapsedMs = Date.now() - startTime;
+      console.warn(`⚠️ [ApiService] TTS FAILED after ${elapsedMs}ms: ${e?.message || e}`);
       return null;
     }
   },
@@ -169,7 +269,9 @@ export const ApiService = {
 
   /** Restart the pairing session to generate a fresh QR code. */
   refreshWaQr: (): Promise<{ success: boolean; status: string }> =>
-    authedJson<{ success: boolean; status: string }>('/wa/qr/refresh', { method: 'POST' }),
+    authedJson<{ success: boolean; status: string }>('/wa/qr/refresh', {
+      method: 'POST',
+    }),
 
   /**
    * Single-use, 60s pairing ticket. `EventSource` cannot send Authorization
@@ -186,16 +288,19 @@ export const ApiService = {
 
   unlinkWa: (): Promise<void> => authedJson<void>('/wa/link', { method: 'DELETE' }),
 
-  sendWaReminder: async (
-    customer: {
-      id?: string;
-      phone?: string;
-      name?: string;
-      balance: number;
-      message?: string;
-      storeName?: string;
-    }
-  ): Promise<{ success: boolean; phone?: string; message?: string; sentAt?: string }> => {
+  sendWaReminder: async (customer: {
+    id?: string;
+    phone?: string;
+    name?: string;
+    balance: number;
+    message?: string;
+    storeName?: string;
+  }): Promise<{
+    success: boolean;
+    phone?: string;
+    message?: string;
+    sentAt?: string;
+  }> => {
     // Omit empty phone — the validator rejects blank strings, and the server
     // falls back to the stored customer record when the field is absent.
     const body: Record<string, unknown> = {

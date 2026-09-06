@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animated,
   LayoutChangeEvent,
@@ -56,8 +56,11 @@ export const TabBar: React.FC<{
 }> = ({ active, onChange }) => {
   const insets = useSafeAreaInsets();
   const [trackWidth, setTrackWidth] = useState(0);
-  const activeIndex = Math.max(0, TABS.findIndex((t) => t.key === active));
-  const position = useRef(new Animated.Value(activeIndex)).current;
+  const activeIndex = Math.max(
+    0,
+    TABS.findIndex((t) => t.key === active),
+  );
+  const [position] = useState(() => new Animated.Value(activeIndex));
 
   useEffect(() => {
     Animated.spring(position, {
@@ -80,9 +83,7 @@ export const TabBar: React.FC<{
     >
       <View
         style={[styles.dock, ELEV.raised]}
-        onLayout={(e: LayoutChangeEvent) =>
-          setTrackWidth(e.nativeEvent.layout.width)
-        }
+        onLayout={(e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width)}
         accessibilityRole="tablist"
       >
         {itemWidth > 0 ? (
@@ -115,7 +116,7 @@ const TabItem: React.FC<{
   active: boolean;
   onPress: () => void;
 }> = ({ tab, active, onPress }) => {
-  const emphasis = useRef(new Animated.Value(active ? 1 : 0)).current;
+  const [emphasis] = useState(() => new Animated.Value(active ? 1 : 0));
 
   useEffect(() => {
     Animated.spring(emphasis, {

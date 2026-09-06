@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Animated,
   Easing,
@@ -13,25 +13,11 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-} from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
 
 import { supabase } from '../services/supabase';
 import { COLORS } from '../theme/colors';
-import {
-  CONTROL_HEIGHT,
-  GUTTER,
-  MOTION,
-  RADIUS,
-  SPACE,
-  TYPE,
-} from '../theme/tokens';
+import { CONTROL_HEIGHT, GUTTER, MOTION, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { COPY } from '../i18n/copy';
 import { Button, CrossFade, Enter, Press, useFeedback } from '../ui';
 import type { IconComponent } from '../ui';
@@ -52,7 +38,10 @@ interface AuthScreenProps {
 
 const C = COPY.onboarding.auth;
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onBackToWelcome }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({
+  initialMode = 'login',
+  onBackToWelcome,
+}) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -133,7 +122,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           (error as any).status === 400
         ) {
           throw new Error(
-            'Google Sign-In is not enabled in your Supabase project. Please enable Google in Supabase Dashboard > Authentication > Providers or use Email login.'
+            'Google Sign-In is not enabled in your Supabase project. Please enable Google in Supabase Dashboard > Authentication > Providers or use Email login.',
           );
         }
         throw error;
@@ -218,8 +207,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               {needsEmailConfirmation
                 ? C.subtitleConfirm
                 : mode === 'login'
-                ? C.subtitleLogin
-                : C.subtitleSignup}
+                  ? C.subtitleLogin
+                  : C.subtitleSignup}
             </Text>
           </CrossFade>
         </Enter>
@@ -270,7 +259,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                   trailing={
                     <Press
                       onPress={() => setShowPassword((s) => !s)}
-                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      accessibilityLabel={
+                        showPassword ? 'Hide password' : 'Show password'
+                      }
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       scale={1}
                     >
@@ -368,7 +359,7 @@ const Field: React.FC<{
   keyboardType,
   trailing,
 }) => {
-  const focus = useRef(new Animated.Value(0)).current;
+  const [focus] = useState(() => new Animated.Value(0));
 
   const ramp = (to: number) =>
     Animated.timing(focus, {
@@ -472,9 +463,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     height: '100%',
     // Web-only: the browser's own focus ring would fight the animated border.
-    ...(Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as unknown as object)
-      : null),
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : null),
   },
   submitSlot: {
     marginTop: SPACE.xs,
