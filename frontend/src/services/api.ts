@@ -7,7 +7,7 @@ import { supabase } from './supabase';
 export const getApiBaseUrl = () => {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl;
+    return envUrl.replace(/\/+$/, '');
   }
 
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
