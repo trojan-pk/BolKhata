@@ -7,11 +7,11 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "20.18.0"
+      "node": "22.14.0"
     },
     "preview": {
       "distribution": "internal",
-      "node": "20.18.0",
+      "node": "22.14.0",
       "android": {
         "buildType": "apk"
       },
@@ -23,7 +23,8 @@
       }
     },
     "production": {
-      "node": "20.18.0",
+      "distribution": "internal",
+      "node": "22.14.0",
       "android": {
         "buildType": "apk"
       },
