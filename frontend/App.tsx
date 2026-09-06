@@ -244,7 +244,13 @@ function BolKhata() {
         // 1. PKCE code exchange
         const parsed = Linking.parse(url);
         if (parsed.queryParams?.code) {
-          await supabase.auth.exchangeCodeForSession(String(parsed.queryParams.code));
+          const { data, error } = await supabase.auth.exchangeCodeForSession(String(parsed.queryParams.code));
+          if (!error && data?.session) {
+            setSession(data.session);
+            if (data.session.user?.id) {
+              await loadUserData(data.session.user.id);
+            }
+          }
           return;
         }
 
@@ -256,10 +262,16 @@ function BolKhata() {
           const accessToken = hashParams.get('access_token');
           const refreshToken = hashParams.get('refresh_token');
           if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
+            const { data, error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
+            if (!error && data?.session) {
+              setSession(data.session);
+              if (data.session.user?.id) {
+                await loadUserData(data.session.user.id);
+              }
+            }
           }
         }
       } catch (err) {
