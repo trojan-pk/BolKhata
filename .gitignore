@@ -33,3 +33,5 @@ lerna-debug.log*
 dist/
 /backend/wa
 /tests
+android/
+ios/

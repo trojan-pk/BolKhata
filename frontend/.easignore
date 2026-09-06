@@ -1,0 +1,12 @@
+# Native folders (EAS will run clean prebuild based on app.json)
+android/
+ios/
+
+# Cache and build outputs
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+bun.lock
+bun.lockb
