@@ -53,8 +53,15 @@ export const CrossFade: React.FC<CrossFadeProps> = ({
   /** What the last commit actually put on screen. */
   const rendered = useRef<Layer | null>(null);
 
-  /** 0 → outgoing fully visible, 1 → incoming fully visible. */
-  const [progress] = useState(() => new Animated.Value(0));
+  /**
+   * 0 → outgoing fully visible, 1 → incoming fully visible.
+   *
+   * Starts at 1: the first layer mounts with nothing to dissolve from, and the
+   * dissolve effect below only runs on a *change* of `phase` — an initial 0
+   * would leave the first screen (the app for a signed-in user, the intro
+   * otherwise) permanently at `opacity: 0`.
+   */
+  const [progress] = useState(() => new Animated.Value(1));
 
   /*
    * Declared before the recorder below, so within a single commit this runs
@@ -131,8 +138,7 @@ export const CrossFade: React.FC<CrossFadeProps> = ({
       {outgoing ? (
         <Animated.View
           key={outgoing.phase}
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, outgoingStyle]}
+          style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }, outgoingStyle]}
         >
           {outgoing.node}
         </Animated.View>

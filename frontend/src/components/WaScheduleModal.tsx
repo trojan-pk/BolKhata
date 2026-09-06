@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock } from 'lucide-react-native';
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+} from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Button, Press, useFeedback } from '../ui';
@@ -29,8 +28,18 @@ interface Props {
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 export function getTimeRemainingText(targetIso: string): string {
@@ -186,7 +195,11 @@ export const WaScheduleModal: React.FC<Props> = ({
     }
   };
 
-  const formattedSelectedDate = new Date(calYear, calMonth, selectedDay).toLocaleDateString([], {
+  const formattedSelectedDate = new Date(
+    calYear,
+    calMonth,
+    selectedDay,
+  ).toLocaleDateString([], {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -220,7 +233,8 @@ export const WaScheduleModal: React.FC<Props> = ({
         </View>
 
         <Text style={[TYPE.body, styles.subtitle]}>
-          Schedule WhatsApp payment reminder for <Text style={styles.boldText}>{customer.name}</Text>.
+          Schedule WhatsApp payment reminder for{' '}
+          <Text style={styles.boldText}>{customer.name}</Text>.
         </Text>
 
         {/* ── REAL VISUAL CALENDAR ── */}
@@ -478,10 +492,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.hairline,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04)',
   },
   monthBar: {
     flexDirection: 'row',

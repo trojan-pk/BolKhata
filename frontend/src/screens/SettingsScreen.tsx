@@ -1,12 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import {
-  Globe,
-  Info,
-  LogOut,
-  Sparkles,
-  Store,
-} from 'lucide-react-native';
+import { Globe, Info, LogOut, Sparkles, Store, Trash2 } from 'lucide-react-native';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
@@ -50,7 +44,8 @@ const APP_VERSION = '1.0.0';
 export const SettingsScreen: React.FC<{
   storeProfile: StoreProfile;
   onUpdateStore: (updated: StoreProfile) => void;
-}> = ({ storeProfile, onUpdateStore }) => {
+  onEraseAll: () => Promise<void> | void;
+}> = ({ storeProfile, onUpdateStore, onEraseAll }) => {
   const { toast, confirm } = useFeedback();
 
   const [name, setName] = useState(storeProfile.name);
@@ -67,18 +62,25 @@ export const SettingsScreen: React.FC<{
 
   useEffect(() => {
     ApiService.checkWaStatus()
-      .then((s) => { setWaLinked(s.linked); setWaPhone(s.phone); })
+      .then((s) => {
+        setWaLinked(s.linked);
+        setWaPhone(s.phone);
+      })
       .catch(() => {});
   }, []);
 
   // Keep the form in step when the profile changes elsewhere (e.g. after erase).
-  useEffect(() => {
+  // Adjusting state during render (React's documented pattern) instead of in an
+  // effect, so the compiler doesn't flag cascading renders.
+  const [syncedProfile, setSyncedProfile] = useState(storeProfile);
+  if (storeProfile !== syncedProfile) {
+    setSyncedProfile(storeProfile);
     setName(storeProfile.name);
     setOwnerName(storeProfile.ownerName);
     setMobile(storeProfile.mobile);
     setCurrency(storeProfile.currency);
     setLanguage(storeProfile.language);
-  }, [storeProfile]);
+  }
 
   const dirty = useMemo(
     () =>
@@ -87,7 +89,7 @@ export const SettingsScreen: React.FC<{
       mobile !== storeProfile.mobile ||
       currency !== storeProfile.currency ||
       language !== storeProfile.language,
-    [name, ownerName, mobile, currency, language, storeProfile]
+    [name, ownerName, mobile, currency, language, storeProfile],
   );
 
   const save = () => {
@@ -219,9 +221,7 @@ export const SettingsScreen: React.FC<{
               }
               title="WhatsApp Account Link"
               subtitle={
-                waLinked
-                  ? `Linked: +${waPhone ?? '…'}`
-                  : 'Link your WA to send reminders'
+                waLinked ? `Linked: +${waPhone ?? '…'}` : 'Link your WA to send reminders'
               }
               trailing={
                 <Badge
@@ -239,6 +239,30 @@ export const SettingsScreen: React.FC<{
               leading={<IconWell icon={Sparkles} tone="accent" />}
               title="Reminder Message Templates"
               subtitle="Choose preset or customize reminder format"
+              chevron
+            />
+          </Card>
+        </View>
+
+        {/* ---------------------------------------------------------- data -- */}
+        <View>
+          <GroupLabel text={COPY.settings.dataSection} />
+          <Card padding={0}>
+            <Row
+              variant="plain"
+              style={styles.listRow}
+              onPress={async () => {
+                const confirmed = await confirm({
+                  title: COPY.settings.clearConfirmTitle,
+                  body: COPY.settings.clearConfirmBody,
+                  confirmLabel: COPY.settings.clearConfirmCta,
+                  destructive: true,
+                });
+                if (confirmed) await onEraseAll();
+              }}
+              leading={<IconWell icon={Trash2} tone="debit" />}
+              title={COPY.settings.clearData}
+              subtitle={COPY.settings.clearDataHint}
               chevron
             />
           </Card>
@@ -295,8 +319,14 @@ export const SettingsScreen: React.FC<{
       <WhatsAppLinkModal
         visible={waModalOpen}
         onClose={() => setWaModalOpen(false)}
-        onLinked={(phone) => { setWaLinked(true); setWaPhone(phone); }}
-        onUnlinked={() => { setWaLinked(false); setWaPhone(undefined); }}
+        onLinked={(phone) => {
+          setWaLinked(true);
+          setWaPhone(phone);
+        }}
+        onUnlinked={() => {
+          setWaLinked(false);
+          setWaPhone(undefined);
+        }}
       />
 
       <WaTemplateModal

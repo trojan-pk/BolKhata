@@ -30,16 +30,13 @@ export const WaMarkdownPreview: React.FC<Props> = ({
   return (
     <View style={styles.bubble}>
       {lines.map((line, lineIndex) => {
-
         // 1. Blockquote (> quote)
         if (line.startsWith('>')) {
           const content = line.slice(1).trim();
           return (
             <View key={lineIndex} style={styles.quoteBlock}>
               <View style={styles.quoteBar} />
-              <View style={styles.quoteContent}>
-                {renderInlineMarkdown(content)}
-              </View>
+              <View style={styles.quoteContent}>{renderInlineMarkdown(content)}</View>
             </View>
           );
         }
@@ -129,10 +126,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: '#DCF8C6',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
   },
   lineRow: {
     minHeight: 20,

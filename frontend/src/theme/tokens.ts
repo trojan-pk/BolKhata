@@ -127,12 +127,11 @@ const shadow = (
   y: number,
   blur: number,
   opacity: number,
-  elevation: number
+  elevation: number,
 ): ViewStyle => ({
-  shadowColor: '#0B0F1A',
-  shadowOffset: { width: 0, height: y },
-  shadowOpacity: opacity,
-  shadowRadius: blur,
+  // Single boxShadow string: works on the New Architecture (RN 0.76+) and on
+  // react-native-web, where the per-part shadow* props are deprecated.
+  boxShadow: `0px ${y}px ${blur}px rgba(11, 15, 26, ${opacity})`,
   elevation,
 });
 

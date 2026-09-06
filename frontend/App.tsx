@@ -1,11 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StorageService, INITIAL_STORE_PROFILE } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
@@ -70,9 +67,7 @@ function BolKhata() {
   const { toast } = useFeedback();
 
   /* ------------------------------------------------------------------ data -- */
-  const [storeProfile, setStoreProfile] = useState<StoreProfile>(
-    INITIAL_STORE_PROFILE
-  );
+  const [storeProfile, setStoreProfile] = useState<StoreProfile>(INITIAL_STORE_PROFILE);
   const [parties, setParties] = useState<Party[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cashbook, setCashbook] = useState<CashbookEntry[]>([]);
@@ -96,8 +91,9 @@ function BolKhata() {
 
   /* --------------------------------------------------------------- routing -- */
   const [activeTab, setActiveTab] = useState<TabKey>('home');
-  const [customerFilter, setCustomerFilter] =
-    useState<'all' | 'collect' | 'pay' | 'settled'>('all');
+  const [customerFilter, setCustomerFilter] = useState<
+    'all' | 'collect' | 'pay' | 'settled'
+  >('all');
 
   /* ---------------------------------------------------------------- modals -- */
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
@@ -124,9 +120,12 @@ function BolKhata() {
    * jump — the fade-in below never had anything to fade in over.
    */
   const [splashLifting, setSplashLifting] = useState(false);
-  const splashOpacity = useRef(new Animated.Value(1)).current;
-  const appOpacity = useRef(new Animated.Value(0)).current;
-  const appShift = useRef(new Animated.Value(10)).current;
+  // Lazy `useState` (not `useRef(…).current`) so React Compiler's refs rule
+  // stays satisfied: the initializer runs once, keeping each Animated.Value
+  // stable across renders without reading a ref during render.
+  const [splashOpacity] = useState(() => new Animated.Value(1));
+  const [appOpacity] = useState(() => new Animated.Value(0));
+  const [appShift] = useState(() => new Animated.Value(10));
 
   const userId = session?.user?.id;
 
@@ -185,22 +184,28 @@ function BolKhata() {
     // Both answers are needed before the first screen can be chosen, so they're
     // resolved together — settling `authLoading` early would show Welcome for a
     // frame before the intro replaced it.
-    Promise.all([
-      supabase.auth.getSession(),
-      StorageService.getIntroSeen(),
-    ]).then(async ([{ data: { session } }, introSeen]) => {
-      if (cancelled) return;
-      setSession(session);
-      if (!session && !introSeen) setAuthView('intro');
-      if (session?.user?.id) {
-        await loadUserData(session.user.id);
-      }
-      if (!cancelled) {
-        setAuthLoading(false);
-      }
-    });
+    Promise.all([supabase.auth.getSession(), StorageService.getIntroSeen()]).then(
+      async ([
+        {
+          data: { session },
+        },
+        introSeen,
+      ]) => {
+        if (cancelled) return;
+        setSession(session);
+        if (!session && !introSeen) setAuthView('intro');
+        if (session?.user?.id) {
+          await loadUserData(session.user.id);
+        }
+        if (!cancelled) {
+          setAuthLoading(false);
+        }
+      },
+    );
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN' && session?.user?.id) {
         await loadUserData(session.user.id);
@@ -275,18 +280,24 @@ function BolKhata() {
       await StorageService.saveParties(nextParties, userId);
       await StorageService.saveTransactions(nextTxns, userId);
     },
-    [userId]
+    [userId],
   );
 
-  const commitCashbook = useCallback(async (next: CashbookEntry[]) => {
-    setCashbook(next);
-    await StorageService.saveCashbook(next, userId);
-  }, [userId]);
+  const commitCashbook = useCallback(
+    async (next: CashbookEntry[]) => {
+      setCashbook(next);
+      await StorageService.saveCashbook(next, userId);
+    },
+    [userId],
+  );
 
-  const saveProfile = useCallback(async (next: StoreProfile) => {
-    setStoreProfile(next);
-    await StorageService.saveStoreProfile(next, userId);
-  }, [userId]);
+  const saveProfile = useCallback(
+    async (next: StoreProfile) => {
+      setStoreProfile(next);
+      await StorageService.saveStoreProfile(next, userId);
+    },
+    [userId],
+  );
 
   /* -------------------------------------------------------------- mutations -- */
 
@@ -332,7 +343,7 @@ function BolKhata() {
       await commit([party, ...parties], nextTxns);
       toast(COPY.party.createdToast(party.name));
     },
-    [parties, transactions, commit, toast]
+    [parties, transactions, commit, toast],
   );
 
   const deleteParty = useCallback(
@@ -340,11 +351,11 @@ function BolKhata() {
       await StorageService.deleteParty(partyId, userId);
       await commit(
         parties.filter((p) => p.id !== partyId),
-        transactions.filter((t) => t.partyId !== partyId)
+        transactions.filter((t) => t.partyId !== partyId),
       );
       if (selectedParty?.id === partyId) setSelectedParty(null);
     },
-    [parties, transactions, commit, selectedParty, userId]
+    [parties, transactions, commit, selectedParty, userId],
   );
 
   const addTransaction = useCallback(
@@ -374,7 +385,7 @@ function BolKhata() {
       }
       toast(COPY.txn.savedToast);
     },
-    [parties, transactions, composer, commit, selectedParty, toast]
+    [parties, transactions, composer, commit, selectedParty, toast],
   );
 
   const settleParty = useCallback(async () => {
@@ -420,17 +431,15 @@ function BolKhata() {
         return name.includes(needle) || needle.includes(name);
       });
 
-      const party: Party =
-        existing ??
-        {
-          id: uuid(),
-          name: result.partyName.trim(),
-          mobile: '',
-          address: '',
-          type: 'customer',
-          currentBalance: 0,
-          lastUpdated: result.date || todayISO(),
-        };
+      const party: Party = existing ?? {
+        id: uuid(),
+        name: result.partyName.trim(),
+        mobile: '',
+        address: '',
+        type: 'customer',
+        currentBalance: 0,
+        lastUpdated: result.date || todayISO(),
+      };
 
       const txn: Transaction = {
         id: uuid(),
@@ -441,7 +450,9 @@ function BolKhata() {
         date: result.date || todayISO(),
         note:
           result.note ||
-          (result.type === 'gave' ? COPY.ledger.creditGiven : COPY.ledger.paymentReceived),
+          (result.type === 'gave'
+            ? COPY.ledger.creditGiven
+            : COPY.ledger.paymentReceived),
         paymentMode: 'cash',
         source: 'voice',
         createdAt: Date.now(),
@@ -453,17 +464,17 @@ function BolKhata() {
         baseParties,
         nextTxns,
         party.id,
-        result.date || todayISO()
+        result.date || todayISO(),
       );
 
       await commit(nextParties, nextTxns);
       toast(
         existing
           ? COPY.txn.savedToast
-          : `${party.name} added · ${COPY.txn.savedToast.toLowerCase()}`
+          : `${party.name} added · ${COPY.txn.savedToast.toLowerCase()}`,
       );
     },
-    [parties, transactions, commit, toast]
+    [parties, transactions, commit, toast],
   );
 
   const saveEditedTransaction = useCallback(
@@ -476,7 +487,7 @@ function BolKhata() {
         setSelectedParty(nextParties.find((p) => p.id === updated.partyId) || null);
       }
     },
-    [transactions, parties, commit, selectedParty]
+    [transactions, parties, commit, selectedParty],
   );
 
   const deleteTransaction = useCallback(
@@ -493,7 +504,7 @@ function BolKhata() {
         setSelectedParty(nextParties.find((p) => p.id === target.partyId) || null);
       }
     },
-    [transactions, parties, commit, selectedParty, userId]
+    [transactions, parties, commit, selectedParty, userId],
   );
 
   const addCashEntry = useCallback(
@@ -511,7 +522,7 @@ function BolKhata() {
       };
       await commitCashbook([record, ...cashbook]);
     },
-    [cashbook, commitCashbook]
+    [cashbook, commitCashbook],
   );
 
   const deleteCashEntry = useCallback(
@@ -519,7 +530,7 @@ function BolKhata() {
       await StorageService.deleteCashbookEntry(id, userId);
       await commitCashbook(cashbook.filter((c) => c.id !== id));
     },
-    [cashbook, commitCashbook, userId]
+    [cashbook, commitCashbook, userId],
   );
 
   const eraseAll = useCallback(async () => {
@@ -543,9 +554,9 @@ function BolKhata() {
           if (party.currentBalance < 0) acc.toPay += Math.abs(party.currentBalance);
           return acc;
         },
-        { toCollect: 0, toPay: 0 }
+        { toCollect: 0, toPay: 0 },
       ),
-    [parties]
+    [parties],
   );
 
   /* ------------------------------------------------------------------ views -- */
@@ -610,6 +621,7 @@ function BolKhata() {
           <SettingsScreen
             storeProfile={storeProfile}
             onUpdateStore={saveProfile}
+            onEraseAll={eraseAll}
           />
         );
       default:
@@ -629,11 +641,7 @@ function BolKhata() {
         replay used to paper over.
       */}
       {!authLoading && splashLifting ? (
-        <CrossFade
-          phase={session ? 'app' : authView}
-          direction={authDirection}
-          fill
-        >
+        <CrossFade phase={session ? 'app' : authView} direction={authDirection} fill>
           {!session ? (
             authView === 'intro' ? (
               <IntroScreen onDone={finishIntro} />
@@ -706,17 +714,17 @@ function BolKhata() {
         beat covers the hand-off and dissolves to reveal Home behind it.
       */}
       {celebrateName ? (
-        <SetupCelebration
-          name={celebrateName}
-          onDone={() => setCelebrateName(null)}
-        />
+        <SetupCelebration name={celebrateName} onDone={() => setCelebrateName(null)} />
       ) : null}
 
       {/* -------------------------------------------------- splash overlay -- */}
       {splashVisible ? (
         <Animated.View
-          style={[StyleSheet.absoluteFill, styles.splash, { opacity: splashOpacity }]}
-          pointerEvents="auto"
+          style={[
+            StyleSheet.absoluteFill,
+            styles.splash,
+            { opacity: splashOpacity, pointerEvents: 'auto' },
+          ]}
         >
           <SplashScreen
             onFinish={finishSplash}
@@ -821,7 +829,7 @@ const ScreenTransition: React.FC<{
   tabKey: string;
   children: React.ReactNode;
 }> = ({ tabKey, children }) => {
-  const fade = useRef(new Animated.Value(0)).current;
+  const [fade] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     fade.setValue(0);
@@ -834,9 +842,7 @@ const ScreenTransition: React.FC<{
   }, [tabKey, fade]);
 
   return (
-    <Animated.View style={[styles.screen, { opacity: fade }]}>
-      {children}
-    </Animated.View>
+    <Animated.View style={[styles.screen, { opacity: fade }]}>{children}</Animated.View>
   );
 };
 

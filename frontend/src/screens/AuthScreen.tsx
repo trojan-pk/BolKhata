@@ -494,10 +494,7 @@ const styles = StyleSheet.create({
     height: CONTROL_HEIGHT.lg,
     borderRadius: RADIUS.md,
     gap: SPACE.sm,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.04)',
     elevation: 1,
   },
   googleButtonText: {

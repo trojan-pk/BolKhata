@@ -589,10 +589,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 2,
     borderColor: COLORS.hairline,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04)',
     elevation: 2,
   },
   typeCardSelected: {

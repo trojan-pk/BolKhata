@@ -32,7 +32,9 @@ export const DrawnCheck: React.FC<DrawnCheckProps> = ({
   const [draw] = useState(() => new Animated.Value(0));
 
   const stroke = Math.max(2.5, size * 0.055);
-  const radius = (size - stroke) / 2;
+  // Clamped for the same reason as `VoiceOrb`'s ring: a negative `r` is an
+  // invalid SVG attribute and crashes the tree instead of just hiding the ring.
+  const radius = Math.max(0, (size - stroke) / 2);
   const center = size / 2;
 
   // The tick path, proportional to `size` so it scales cleanly.

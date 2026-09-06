@@ -78,8 +78,10 @@ export const TabBar: React.FC<{
 
   return (
     <View
-      style={[styles.layer, { paddingBottom: Math.max(insets.bottom, SPACE.md) }]}
-      pointerEvents="box-none"
+      style={[
+        styles.layer,
+        { paddingBottom: Math.max(insets.bottom, SPACE.md), pointerEvents: 'box-none' },
+      ]}
     >
       <View
         style={[styles.dock, ELEV.raised]}

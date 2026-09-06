@@ -62,7 +62,11 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
 
   function cleanup() {
     if (esRef.current) {
-      try { esRef.current.close(); } catch { /* ignore */ }
+      try {
+        esRef.current.close();
+      } catch {
+        /* ignore */
+      }
       esRef.current = null;
     }
     if (pollTimerRef.current) {
@@ -154,7 +158,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
               setQrBase64(data.qr);
               updateStatus('connecting');
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         });
 
         es.addEventListener('connected', (e: { data: string }) => {
@@ -165,7 +171,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
             updateStatus('linked');
             cleanup();
             if (onLinked && data.phone) onLinked(data.phone);
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         });
 
         es.addEventListener('error', (e: { data?: string }) => {
@@ -174,7 +182,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
             try {
               const data = JSON.parse(e.data ?? '{}') as { error?: string };
               if (data.error) setError(data.error);
-            } catch { /* non-fatal error */ }
+            } catch {
+              /* non-fatal error */
+            }
           }
         });
       }
@@ -226,8 +236,8 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         </View>
 
         <Text style={[TYPE.body, styles.subtitle]}>
-          Link your WhatsApp account to send payment reminders directly from
-          BolKhata — no browser tabs needed!
+          Link your WhatsApp account to send payment reminders directly from BolKhata — no
+          browser tabs needed!
         </Text>
 
         {/* ── linked ── */}
@@ -236,7 +246,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
             <View style={styles.linkedHeader}>
               <WhatsAppIcon size={35} color="#25D366" />
               <View style={styles.linkedTextCol}>
-                <Text style={[TYPE.title3, styles.linkedTitle]}>WhatsApp Linked & Active</Text>
+                <Text style={[TYPE.title3, styles.linkedTitle]}>
+                  WhatsApp Linked & Active
+                </Text>
                 <Text style={[TYPE.body, styles.linkedPhone]}>Phone: +{phone}</Text>
               </View>
             </View>
@@ -256,21 +268,38 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
           <View style={styles.linkContainer}>
             {/* Steps card */}
             <View style={styles.stepsCard}>
-              <Text style={[TYPE.label, styles.stepsTitle]}>How to link your WhatsApp:</Text>
-              
+              <Text style={[TYPE.label, styles.stepsTitle]}>
+                How to link your WhatsApp:
+              </Text>
+
               <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>1</Text></View>
-                <Text style={styles.stepText}>Open <Text style={styles.boldText}>WhatsApp</Text> on your phone</Text>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepNum}>1</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Open <Text style={styles.boldText}>WhatsApp</Text> on your phone
+                </Text>
               </View>
 
               <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>2</Text></View>
-                <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Menu ⋮</Text> or <Text style={styles.boldText}>Settings ⚙</Text> → <Text style={styles.boldText}>Linked Devices</Text></Text>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepNum}>2</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Tap <Text style={styles.boldText}>Menu ⋮</Text> or{' '}
+                  <Text style={styles.boldText}>Settings ⚙</Text> →{' '}
+                  <Text style={styles.boldText}>Linked Devices</Text>
+                </Text>
               </View>
 
               <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>3</Text></View>
-                <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Link a Device</Text> and scan the QR code below</Text>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepNum}>3</Text>
+                </View>
+                <Text style={styles.stepText}>
+                  Tap <Text style={styles.boldText}>Link a Device</Text> and scan the QR
+                  code below
+                </Text>
               </View>
             </View>
 
@@ -458,10 +487,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#25D366',
-    shadowColor: '#25D366',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    boxShadow: '0px 6px 16px rgba(37, 211, 102, 0.2)',
     elevation: 4,
   },
   qrImage: {

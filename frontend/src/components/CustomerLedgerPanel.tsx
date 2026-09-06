@@ -664,10 +664,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.md,
     borderRadius: RADIUS.xl,
     backgroundColor: '#25D366',
-    shadowColor: '#25D366',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    boxShadow: '0px 3px 8px rgba(37, 211, 102, 0.3)',
     elevation: 3,
   },
   scheduleBtn: {
@@ -744,14 +741,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderColor: COLORS.hairline,
     borderWidth: 1,
-    shadowOpacity: 0,
+    boxShadow: '0px 0px 0px rgba(37, 211, 102, 0)',
     elevation: 0,
   },
   waBtnCooldown: {
     backgroundColor: '#F1F5F9',
     borderColor: '#CBD5E1',
     borderWidth: 1.5,
-    shadowOpacity: 0,
+    boxShadow: '0px 0px 0px rgba(37, 211, 102, 0)',
     elevation: 0,
   },
   waBtnSending: {

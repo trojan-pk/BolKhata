@@ -62,7 +62,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { width } = useWindowDimensions();
   const { toast } = useFeedback();
 
-  const orbSize = Math.min(Math.round((width || 390) * 0.56), 216);
+  // Floored so a degenerate viewport width can't shrink the orb into an
+  // invalid SVG (its ring radius derives from this size).
+  const orbSize = Math.max(48, Math.min(Math.round((width || 390) * 0.56), 216));
 
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [captureMode, setCaptureMode] = useState<'hold' | 'tap' | null>(null);

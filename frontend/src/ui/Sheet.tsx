@@ -170,8 +170,7 @@ export const Sheet: React.FC<SheetProps> = ({
         ]}
       >
         <Animated.View
-          style={[StyleSheet.absoluteFill, { opacity: progress }]}
-          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { opacity: progress, pointerEvents: 'none' }]}
         >
           <View style={styles.scrim} />
         </Animated.View>
@@ -185,8 +184,10 @@ export const Sheet: React.FC<SheetProps> = ({
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={variant === 'bottom' ? styles.kavBottom : styles.kavCenter}
-          pointerEvents="box-none"
+          style={[
+            variant === 'bottom' ? styles.kavBottom : styles.kavCenter,
+            { pointerEvents: 'box-none' },
+          ]}
         >
           <Animated.View
             onLayout={variant === 'bottom' ? onPanelLayout : undefined}

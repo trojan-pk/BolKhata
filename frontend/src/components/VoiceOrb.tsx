@@ -47,7 +47,10 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
   /* ------------------------------------------------------------- geometry -- */
   const strokeWidth = isActive ? 3.5 : 1.5;
-  const radius = (size - strokeWidth) / 2;
+  // Clamped: SVG rejects a negative radius outright (Firefox throws, which
+  // takes the whole React tree down with it), so a degenerate `size` must
+  // degrade to an invisible ring rather than an invalid one.
+  const radius = Math.max(0, (size - strokeWidth) / 2);
   const center = size / 2;
   const circumference = useMemo(() => 2 * Math.PI * radius, [radius]);
   const markSize = Math.round(size * 0.4);
@@ -177,18 +180,26 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
       {isRecording ? (
         <>
           <Animated.View
-            pointerEvents="none"
             style={[
               styles.halo,
-              { width: size, height: size, borderRadius: size / 2 },
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                pointerEvents: 'none',
+              },
               haloStyle(halo1),
             ]}
           />
           <Animated.View
-            pointerEvents="none"
             style={[
               styles.halo,
-              { width: size, height: size, borderRadius: size / 2 },
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                pointerEvents: 'none',
+              },
               haloStyle(halo2),
             ]}
           />

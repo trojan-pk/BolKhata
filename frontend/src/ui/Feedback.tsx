@@ -104,10 +104,9 @@ const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
 
   return (
     <Animated.View
-      pointerEvents="box-none"
       style={[
         styles.toastLayer,
-        { paddingTop: insets.top + SPACE.sm },
+        { paddingTop: insets.top + SPACE.sm, pointerEvents: 'box-none' },
         {
           opacity: progress,
           transform: [
