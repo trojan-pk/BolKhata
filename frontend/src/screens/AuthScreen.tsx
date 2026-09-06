@@ -52,6 +52,13 @@ interface AuthScreenProps {
 
 const C = COPY.onboarding.auth;
 
+const getAuthRedirectUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return Linking.createURL('auth/callback');
+};
+
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onBackToWelcome }) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
@@ -82,10 +89,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         });
         if (error) throw error;
       } else {
-        const redirectUrl =
-          Platform.OS === 'web' && typeof window !== 'undefined'
-            ? window.location.origin
-            : Linking.createURL('/');
+        const redirectUrl = getAuthRedirectUrl();
 
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
@@ -113,10 +117,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
-      const redirectUrl =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.origin
-          : Linking.createURL('/');
+      const redirectUrl = getAuthRedirectUrl();
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -142,10 +143,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
       if (Platform.OS !== 'web' && data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         if (res.type === 'success' && res.url) {
+          const parsed = Linking.parse(res.url);
+
+          // 1. Handle PKCE code exchange
+          if (parsed.queryParams?.code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+              String(parsed.queryParams.code)
+            );
+            if (exchangeError) throw exchangeError;
+            return;
+          }
+
           let accessToken: string | undefined;
           let refreshToken: string | undefined;
 
-          // 1. Try parsing from hash fragment (#access_token=...)
+          // 2. Try parsing from hash fragment (#access_token=...)
           const hashIdx = res.url.indexOf('#');
           if (hashIdx !== -1) {
             const hashStr = res.url.substring(hashIdx + 1);
@@ -154,9 +166,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
             refreshToken = hashParams.get('refresh_token') ?? undefined;
           }
 
-          // 2. Fallback to query params (?access_token=...)
+          // 3. Fallback to query params (?access_token=...)
           if (!accessToken || !refreshToken) {
-            const parsed = Linking.parse(res.url);
             accessToken = (parsed.queryParams?.access_token as string) || accessToken;
             refreshToken = (parsed.queryParams?.refresh_token as string) || refreshToken;
           }

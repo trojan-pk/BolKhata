@@ -16,7 +16,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://bolkhata-backend-production.up.railway.app",
+        "EXPO_PUBLIC_API_URL": "https://bolkhata-production-6447.up.railway.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://fdociazyyufqdfraacjc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_eK5e2rntPyXA0KZQ_8Zfwg__gkd-iB3",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkb2NpYXp5eXVmcWRmcmFhY2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzQ4NzIsImV4cCI6MjEwMjkxMDg3Mn0.ZgO3ka_p82Xf5TRF00jYjMFxtu_ezxan2yvgUlWwTkE"
@@ -28,7 +28,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://bolkhata-backend-production.up.railway.app",
+        "EXPO_PUBLIC_API_URL": "https://bolkhata-production-6447.up.railway.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://fdociazyyufqdfraacjc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_eK5e2rntPyXA0KZQ_8Zfwg__gkd-iB3",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkb2NpYXp5eXVmcWRmcmFhY2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMzQ4NzIsImV4cCI6MjEwMjkxMDg3Mn0.ZgO3ka_p82Xf5TRF00jYjMFxtu_ezxan2yvgUlWwTkE"

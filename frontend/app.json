@@ -2,7 +2,7 @@
   "expo": {
     "name": "BolKhata",
     "slug": "bolkhata",
-    "scheme": "bolkhata",
+    "scheme": ["bolkhata", "veldger"],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/BKS-01-01.png",
