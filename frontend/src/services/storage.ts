@@ -24,7 +24,7 @@ export const INITIAL_STORE_PROFILE: StoreProfile = {
   mobile: '',
   currency: 'Rs',
   language: 'roman_ur',
-  expressApiUrl: 'http://localhost:3000',
+  expressApiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://bolkhata-production-6447.up.railway.app',
   isBackendConnected: true,
   accountType: 'commercial',
   businessCategory: 'General Store',

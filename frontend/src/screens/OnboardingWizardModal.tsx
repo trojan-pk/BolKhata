@@ -93,7 +93,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         accountType,
         businessCategory: accountType === 'commercial' ? businessCategory : undefined,
         isOnboarded: true,
-        expressApiUrl: 'http://localhost:3000',
+        expressApiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://bolkhata-production-6447.up.railway.app',
         isBackendConnected: true,
       };
 
