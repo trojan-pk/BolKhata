@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   LayoutChangeEvent,
@@ -21,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import {
+  CURSOR,
   ELEV,
   MAX_CONTENT_WIDTH,
   MOTION,
@@ -191,6 +193,9 @@ const TabItem: React.FC<{
   onPress: () => void;
 }> = ({ tab, active, onPress }) => {
   const emphasis = useRef(new Animated.Value(active ? 1 : 0)).current;
+  /** Press feedback. The dock was the one surface in the app that responded to
+   *  a tap with nothing at all until the screen behind it had already changed. */
+  const sink = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(emphasis, {
@@ -201,24 +206,41 @@ const TabItem: React.FC<{
     }).start();
   }, [active, emphasis]);
 
+  const press = (to: number) =>
+    Animated.spring(sink, {
+      toValue: to,
+      friction: 12,
+      tension: 260,
+      useNativeDriver: true,
+    }).start();
+
   const Icon = tab.icon;
 
   return (
     <Pressable
       onPress={onPress}
+      onPressIn={() => press(1)}
+      onPressOut={() => press(0)}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={tab.label}
-      style={[styles.item, NO_OUTLINE]}
+      style={[styles.item, NO_OUTLINE, CURSOR.pointer]}
     >
       <Animated.View
         style={{
           alignItems: 'center',
+          opacity: sink.interpolate({ inputRange: [0, 1], outputRange: [1, 0.6] }),
           transform: [
             {
               translateY: emphasis.interpolate({
                 inputRange: [0, 1],
                 outputRange: [1, -1],
+              }),
+            },
+            {
+              scale: sink.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0.9],
               }),
             },
           ],
@@ -304,19 +326,40 @@ const CenterMicButton: React.FC<{
     onPressOut?.();
   };
 
+  /**
+   * Releases the press-sink if the state changes while the finger is still
+   * down. A hold that hits the recording time limit flips straight to
+   * `processing`, which disables the Pressable — so `onPressOut` never fires and
+   * the button was left visually squashed for the whole processing pass.
+   */
+  useEffect(() => {
+    if (isProcessing) {
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 8,
+        tension: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isProcessing, scale]);
+
   return (
     <View style={styles.centerItem}>
       <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPress={isProcessing ? undefined : onPress}
+        onPressIn={isProcessing ? undefined : handlePressIn}
+        onPressOut={isProcessing ? undefined : handlePressOut}
+        disabled={isProcessing}
         accessibilityRole="button"
+        accessibilityState={{ busy: isProcessing }}
         accessibilityLabel={
-          isRecording
+          isProcessing
+            ? 'Processing voice entry'
+            : isRecording
             ? 'Stop recording voice entry'
             : 'Record transaction with voice'
         }
-        style={NO_OUTLINE}
+        style={[NO_OUTLINE, isProcessing ? CURSOR.disabled : CURSOR.pointer]}
       >
         <Animated.View
           style={[
@@ -336,7 +379,14 @@ const CenterMicButton: React.FC<{
             />
           ) : null}
 
-          {isRecording ? (
+          {/*
+            Processing used to render a static mic at 85% opacity, which is
+            indistinguishable from the button having simply stopped working.
+            A spinner says the app is still on it.
+          */}
+          {isProcessing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : isRecording ? (
             <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
           ) : (
             <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
@@ -374,7 +424,9 @@ const styles = StyleSheet.create({
     left: 0,
     height: DOCK_HEIGHT - PAD * 2 - 2,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceSunken,
+    // Accent-tinted rather than grey: the active icon and label are already
+    // accent, so a neutral pill behind them read as an unrelated highlight.
+    backgroundColor: COLORS.accentSoft,
   },
   item: {
     flex: 1,
@@ -421,7 +473,6 @@ const styles = StyleSheet.create({
   },
   micProcessing: {
     backgroundColor: '#8B5CF6',
-    opacity: 0.85,
   },
   micHalo: {
     position: 'absolute',

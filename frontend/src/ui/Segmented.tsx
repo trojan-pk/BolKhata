@@ -10,7 +10,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { COLORS } from '../theme/colors';
-import { MOTION, NO_OUTLINE, RADIUS, TYPE } from '../theme/tokens';
+import { CURSOR, MOTION, NO_OUTLINE, RADIUS, TYPE } from '../theme/tokens';
 
 export interface Segment<T extends string> {
   value: T;
@@ -108,7 +108,7 @@ export function Segmented<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={segment.label}
-            style={[styles.segment, NO_OUTLINE]}
+            style={[styles.segment, NO_OUTLINE, CURSOR.pointer]}
           >
             <Text
               style={[

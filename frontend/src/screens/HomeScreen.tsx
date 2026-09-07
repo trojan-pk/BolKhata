@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { Sparkles } from 'lucide-react-native';
+import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, SPACE } from '../theme/tokens';
+import { DOCK_INSET, GUTTER, SPACE } from '../theme/tokens';
 import { Party, Transaction } from '../types';
 import { BalanceCard } from '../components/BalanceCard';
 import { EntryRow } from '../components/EntryRow';
@@ -24,6 +26,10 @@ interface HomeScreenProps {
   toPay: number;
   currency: string;
   loading?: boolean;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** Increments when the active tab is tapped again. */
+  scrollTopSignal?: number;
   onOpenVoiceReview?: () => void;
   onViewAllCustomers: () => void;
   onSelectTransaction: (txn: Transaction) => void;
@@ -41,10 +47,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   toPay,
   currency,
   loading = false,
+  refreshing = false,
+  onRefresh,
+  scrollTopSignal = 0,
   onViewAllCustomers,
   onSelectTransaction,
 }) => {
   const [feedExpanded, setFeedExpanded] = useState(false);
+  const scroller = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (scrollTopSignal > 0) {
+      scroller.current?.scrollTo({ y: 0, animated: true });
+    }
+  }, [scrollTopSignal]);
 
   const FEED_PREVIEW = 5;
   const recent = feedExpanded
@@ -54,10 +70,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <ScrollView
+      ref={scroller}
       style={styles.screen}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.accent}
+            colors={[COLORS.accent]}
+            progressBackgroundColor={COLORS.surface}
+          />
+        ) : undefined
+      }
     >
       {/* ---------------------------------------------------- Net Position -- */}
       <View style={[styles.block, styles.topBlock]}>
@@ -75,6 +103,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <View style={styles.block}>
         <SectionHeader
           title={COPY.home.recentActivity}
+          meta={
+            transactions.length > FEED_PREVIEW
+              ? `${recent.length} of ${transactions.length}`
+              : undefined
+          }
           actionLabel={
             canExpand ? (feedExpanded ? 'Show less' : COPY.common.viewAll) : undefined
           }
@@ -112,7 +145,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 132,
+    paddingBottom: DOCK_INSET,
   },
   topBlock: {
     marginTop: SPACE.md,

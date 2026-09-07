@@ -76,7 +76,9 @@ export const Money: React.FC<MoneyProps> = ({
  * figures that change while you watch — recording an entry should visibly move
  * the number it affects.
  */
-export const AnimatedMoney: React.FC<MoneyProps & { duration?: number }> = ({
+export const AnimatedMoney: React.FC<
+  MoneyProps & { duration?: number; signed?: boolean }
+> = ({
   value,
   currency = 'Rs',
   size = 'display',
@@ -84,6 +86,9 @@ export const AnimatedMoney: React.FC<MoneyProps & { duration?: number }> = ({
   style,
   duration = 520,
   numberOfLines = 1,
+  /** Prefixes `−` when negative. On a figure that can go either way, the sign
+   *  is the only cue that survives being read at a glance. */
+  signed = false,
 }) => {
   const [shown, setShown] = useState(Math.abs(value));
   const fromRef = useRef(Math.abs(value));
@@ -116,12 +121,14 @@ export const AnimatedMoney: React.FC<MoneyProps & { duration?: number }> = ({
   }, [target, duration]);
 
   const resolvedTone = tone === 'auto' ? (value < 0 ? 'debit' : 'credit') : tone;
+  const mark = signed && Math.round(value) < 0 ? '− ' : '';
 
   return (
     <Text
       style={[SIZES[size], TABULAR, { color: TONES[resolvedTone] }, style]}
       numberOfLines={numberOfLines}
     >
+      {mark}
       {currency} {groupDigits(shown)}
     </Text>
   );

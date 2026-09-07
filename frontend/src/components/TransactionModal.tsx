@@ -57,13 +57,22 @@ export const TransactionModal: React.FC<{
     setError(null);
   };
 
+  const amountValue = parseAmount(amount);
+  /**
+   * The save button stays inert until there is something to save.
+   *
+   * It used to be tappable on an empty sheet, so the first thing a new user did
+   * was press the big green button and get an error back. Preventing the
+   * mistake beats reporting it.
+   */
+  const canSave = amountValue > 0;
+
   const submit = () => {
-    const value = parseAmount(amount);
-    if (value <= 0) {
+    if (!canSave) {
       setError(COPY.txn.invalidAmount);
       return;
     }
-    onSubmit({ amount: value, note: note.trim(), paymentMode: method });
+    onSubmit({ amount: amountValue, note: note.trim(), paymentMode: method });
     onClose();
   };
 
@@ -80,6 +89,7 @@ export const TransactionModal: React.FC<{
           variant={isGave ? 'debit' : 'credit'}
           size="lg"
           onPress={submit}
+          disabled={!canSave}
           fullWidth
         />
       }
@@ -128,6 +138,12 @@ export const TransactionModal: React.FC<{
         value={note}
         onChangeText={setNote}
         placeholder={COPY.txn.notePlaceholder}
+        // A note is a memory aid, not a paragraph, and it has to stay readable
+        // inside a one-line row on the statement.
+        maxLength={80}
+        counter
+        returnKeyType="done"
+        onSubmitEditing={submit}
       />
     </Sheet>
   );

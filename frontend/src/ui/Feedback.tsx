@@ -20,6 +20,7 @@ import { AlertTriangle, Check, Info } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
 import {
+  CURSOR,
   ELEV,
   MAX_CONTENT_WIDTH,
   MOTION,
@@ -73,13 +74,25 @@ const TOAST_TONES: Record<ToastTone, { icon: IconComponent; tint: string }> = {
   info: { icon: Info, tint: '#A9B4FF' },
 };
 
+/**
+ * How long each tone stays up. Errors get longer — they carry information the
+ * user has to act on, and often arrive while attention is still on the control
+ * that triggered them.
+ */
+const TOAST_DWELL: Record<ToastTone, number> = {
+  success: 2600,
+  info: 3000,
+  error: 4400,
+};
+
 const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
   request,
   onDismiss,
 }) => {
   const insets = useSafeAreaInsets();
   const progress = useRef(new Animated.Value(0)).current;
-  const { icon: Icon, tint } = TOAST_TONES[request.tone || 'info'];
+  const tone = request.tone || 'info';
+  const { icon: Icon, tint } = TOAST_TONES[tone];
 
   useEffect(() => {
     Animated.spring(progress, {
@@ -96,7 +109,7 @@ const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }).start(({ finished }) => finished && onDismiss());
-    }, 2600);
+    }, TOAST_DWELL[tone]);
 
     return () => clearTimeout(timer);
     // A new request remounts this component, so binding once is correct.
@@ -125,7 +138,10 @@ const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
         onPress={onDismiss}
         accessibilityRole="alert"
         accessibilityLabel={request.message}
-        style={[styles.toast, ELEV.raised, NO_OUTLINE]}
+        // Announced by TalkBack without stealing focus from the control the
+        // user just used.
+        accessibilityLiveRegion="polite"
+        style={[styles.toast, ELEV.raised, NO_OUTLINE, CURSOR.pointer]}
       >
         <Icon size={16} color={tint} strokeWidth={2.4} />
         <Text style={[TYPE.label, styles.toastText]} numberOfLines={2}>
@@ -146,9 +162,14 @@ const Toast: React.FC<{ request: ToastRequest; onDismiss: () => void }> = ({
 export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [toastRequest, setToastRequest] = useState<
-    (ToastRequest & { id: number }) | null
-  >(null);
+  /**
+   * Toasts queue rather than replace.
+   *
+   * Several actions fire two in a row — creating a customer from voice reports
+   * the customer and then the entry — and the second used to cut the first off
+   * a few frames into its entrance, so the first message was never readable.
+   */
+  const [queue, setQueue] = useState<(ToastRequest & { id: number })[]>([]);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const resolverRef = useRef<((ok: boolean) => void) | null>(null);
   const nextId = useRef(0);
@@ -158,7 +179,19 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({
     const text = typeof message === 'string' ? message : String((message as { message?: string })?.message || '');
     if (!text || text === '[object Object]') return;
     nextId.current += 1;
-    setToastRequest({ message: text, tone, id: nextId.current });
+    const id = nextId.current;
+    setQueue((prev) => {
+      // Swallow a repeat of what is already showing — a double-tapped save
+      // shouldn't queue the same confirmation twice.
+      if (prev.some((item) => item.message === text)) return prev;
+      // Three deep is plenty. Overflow drops the newest rather than the oldest,
+      // so whatever is on screen right now is never yanked mid-display.
+      return [...prev, { message: text, tone, id }].slice(0, 3);
+    });
+  }, []);
+
+  const dismissCurrent = useCallback(() => {
+    setQueue((prev) => prev.slice(1));
   }, []);
 
   const confirm = useCallback((request: ConfirmRequest) => {
@@ -179,16 +212,14 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const api = useMemo<FeedbackApi>(() => ({ toast, confirm }), [toast, confirm]);
 
+  const current = queue[0];
+
   return (
     <FeedbackContext.Provider value={api}>
       {children}
 
-      {toastRequest ? (
-        <Toast
-          key={toastRequest.id}
-          request={toastRequest}
-          onDismiss={() => setToastRequest(null)}
-        />
+      {current ? (
+        <Toast key={current.id} request={current} onDismiss={dismissCurrent} />
       ) : null}
 
       <Sheet

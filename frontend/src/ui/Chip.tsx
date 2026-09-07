@@ -20,6 +20,13 @@ export const Chip: React.FC<{
   style?: StyleProp<ViewStyle>;
 }> = ({ label, selected = false, onPress, count, icon: Icon, size = 'md', style }) => {
   const tint = selected ? COLORS.textOnInk : COLORS.textSecondary;
+  /*
+    A filter with nothing behind it stays tappable — hiding it would make the
+    rail jump around as balances change — but it reads back a step so the eye
+    goes to the filters that will actually return something.
+  */
+  const empty = count === 0 && !selected;
+
   return (
     <Press
       onPress={onPress}
@@ -31,11 +38,21 @@ export const Chip: React.FC<{
         styles.chip,
         size === 'sm' ? styles.chipSm : styles.chipMd,
         selected ? styles.chipOn : styles.chipOff,
+        empty && styles.chipEmpty,
         style,
       ]}
     >
-      {Icon ? <Icon size={13} color={tint} strokeWidth={2.2} /> : null}
-      <Text style={[TYPE.label, { color: tint }]} numberOfLines={1}>
+      {Icon ? (
+        <Icon
+          size={13}
+          color={empty ? COLORS.textFaint : tint}
+          strokeWidth={2.2}
+        />
+      ) : null}
+      <Text
+        style={[TYPE.label, { color: empty ? COLORS.textFaint : tint }]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       {count !== undefined ? (
@@ -43,7 +60,11 @@ export const Chip: React.FC<{
           style={[
             styles.count,
             {
-              backgroundColor: selected ? COLORS.inkLift : COLORS.surfaceSunken,
+              backgroundColor: selected
+                ? COLORS.inkLift
+                : empty
+                ? 'transparent'
+                : COLORS.surfaceSunken,
             },
           ]}
         >
@@ -51,7 +72,13 @@ export const Chip: React.FC<{
             style={[
               TYPE.caption,
               styles.countText,
-              { color: selected ? COLORS.textOnInk : COLORS.textMuted },
+              {
+                color: selected
+                  ? COLORS.textOnInk
+                  : empty
+                  ? COLORS.textFaint
+                  : COLORS.textMuted,
+              },
             ]}
           >
             {count}
@@ -85,6 +112,10 @@ const styles = StyleSheet.create({
   chipOff: {
     backgroundColor: COLORS.surface,
     borderColor: COLORS.hairlineStrong,
+  },
+  chipEmpty: {
+    backgroundColor: 'transparent',
+    borderColor: COLORS.hairline,
   },
   count: {
     minWidth: 18,

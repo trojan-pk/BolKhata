@@ -10,6 +10,7 @@ import {
 import { StorageService, INITIAL_STORE_PROFILE } from './src/services/storage';
 import { COLORS } from './src/theme/colors';
 import { injectWebGoogleFonts } from './src/theme/typography';
+import { injectWebStyles } from './src/theme/webStyles';
 import { MAX_CONTENT_WIDTH, MOTION } from './src/theme/tokens';
 import { COPY } from './src/i18n/copy';
 import {
@@ -22,7 +23,7 @@ import {
   TransactionType,
 } from './src/types';
 
-import { CrossFade, FeedbackProvider, useFeedback } from './src/ui';
+import { CrossFade, EdgeFade, FeedbackProvider, useFeedback } from './src/ui';
 import { SplashScreen } from './src/components/SplashScreen';
 import { SetupCelebration } from './src/components/SetupCelebration';
 import { AppBar } from './src/components/AppBar';
@@ -83,6 +84,7 @@ const uid = (prefix: string) =>
 export default function App() {
   useEffect(() => {
     injectWebGoogleFonts();
+    injectWebStyles();
   }, []);
 
   return (
@@ -210,26 +212,48 @@ function BolKhata() {
     ]).start(() => setSplashVisible(false));
   }, [splashOpacity, appOpacity, appShift]);
 
-  const loadUserData = useCallback(async (uid?: string) => {
-    setLoading(true);
+  const loadUserData = useCallback(
+    async (uid?: string, opts?: { quiet?: boolean }) => {
+      // A pull-to-refresh already has its own spinner. Flipping `loading` too
+      // would swap the list out for skeletons under the user's finger.
+      if (!opts?.quiet) setLoading(true);
+      try {
+        const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
+          StorageService.getStoreProfile(uid),
+          StorageService.getParties(uid),
+          StorageService.getTransactions(uid),
+          StorageService.getCashbook(uid),
+        ]);
+        setStoreProfile(profile);
+        setParties(loadedParties);
+        setTransactions(loadedTxns);
+        setCashbook(loadedCash);
+        loadedUserRef.current = uid ?? null;
+      } catch (e) {
+        console.warn('[BolKhata] Error loading user data:', e);
+      } finally {
+        if (!opts?.quiet) setLoading(false);
+      }
+    },
+    []
+  );
+
+  /**
+   * Pull-to-refresh. Held open for a beat past the read so the gesture has a
+   * visible result — the local store usually answers faster than the spinner
+   * can be seen, which reads as the pull having done nothing.
+   */
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    const started = Date.now();
     try {
-      const [profile, loadedParties, loadedTxns, loadedCash] = await Promise.all([
-        StorageService.getStoreProfile(uid),
-        StorageService.getParties(uid),
-        StorageService.getTransactions(uid),
-        StorageService.getCashbook(uid),
-      ]);
-      setStoreProfile(profile);
-      setParties(loadedParties);
-      setTransactions(loadedTxns);
-      setCashbook(loadedCash);
-      loadedUserRef.current = uid ?? null;
-    } catch (e) {
-      console.warn('[BolKhata] Error loading user data:', e);
+      await loadUserData(userId, { quiet: true });
     } finally {
-      setLoading(false);
+      const elapsed = Date.now() - started;
+      setTimeout(() => setRefreshing(false), Math.max(0, 420 - elapsed));
     }
-  }, []);
+  }, [loadUserData, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -679,6 +703,23 @@ function BolKhata() {
     setActiveTab('customers');
   };
 
+  /**
+   * Tapping the tab you're already on scrolls that screen back to the top —
+   * the standard escape hatch from a long list, and the one thing the dock
+   * previously did nothing at all in response to.
+   */
+  const [scrollTopSignal, setScrollTopSignal] = useState(0);
+  const handleTabChange = useCallback(
+    (key: TabKey) => {
+      if (key === activeTab) {
+        setScrollTopSignal((n) => n + 1);
+        return;
+      }
+      setActiveTab(key);
+    },
+    [activeTab]
+  );
+
   const screen = () => {
     switch (activeTab) {
       case 'home':
@@ -690,6 +731,9 @@ function BolKhata() {
             toPay={toPay}
             currency={storeProfile.currency}
             loading={loading}
+            refreshing={refreshing}
+            onRefresh={refresh}
+            scrollTopSignal={scrollTopSignal}
             onViewAllCustomers={() => goToCustomers('all')}
             onSelectTransaction={setEditingTxn}
           />
@@ -701,6 +745,9 @@ function BolKhata() {
             parties={parties}
             currency={storeProfile.currency}
             loading={loading}
+            refreshing={refreshing}
+            onRefresh={refresh}
+            scrollTopSignal={scrollTopSignal}
             initialFilter={customerFilter}
             onSelectParty={setSelectedParty}
             onAddParty={() => setAddPartyOpen(true)}
@@ -810,9 +857,16 @@ function BolKhata() {
                 />
               )}
 
+              {/*
+                Dissolves the last stretch of every screen into the page colour
+                so rows don't stop dead at the window edge behind the dock.
+                Declared before the dock so it stacks underneath it.
+              */}
+              <EdgeFade height={110} />
+
               <TabBar
                 active={activeTab}
-                onChange={setActiveTab}
+                onChange={handleTabChange}
                 onPressVoice={handleVoicePress}
                 onPressInVoice={handleVoicePressIn}
                 onPressOutVoice={handleVoicePressOut}

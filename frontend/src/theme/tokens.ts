@@ -186,8 +186,49 @@ export const CONTROL_HEIGHT = {
 /** Content never stretches past this — keeps the app readable on tablets/web. */
 export const MAX_CONTENT_WIDTH = 560;
 
+/**
+ * Bottom padding every scrolling screen needs to clear the floating dock.
+ *
+ * Dock height (64) + its bottom inset + breathing room, so the last row can be
+ * scrolled fully clear of the nav rather than resting half behind it.
+ */
+export const DOCK_INSET = 132;
+
+/**
+ * How far a finger may drift off a pressable before the press is abandoned.
+ * Generous on purpose — a thumb rolls slightly on release, and losing the tap
+ * because of it reads as the app ignoring you.
+ */
+export const PRESS_RETENTION = { top: 20, bottom: 20, left: 20, right: 20 } as const;
+
 /** Web-only outline reset for pressables and inputs. */
 export const NO_OUTLINE = Platform.select({
   web: { outlineStyle: 'none' } as unknown as ViewStyle,
   default: {} as ViewStyle,
 }) as ViewStyle;
+
+/**
+ * Web-only pointer cursors. Native ignores these.
+ *
+ * Without them every tappable surface in the browser build keeps the default
+ * arrow, which silently removes the main affordance a pointer user has for
+ * telling apart what is clickable from what is just painted on.
+ */
+export const CURSOR = {
+  pointer: Platform.select({
+    web: { cursor: 'pointer' } as unknown as ViewStyle,
+    default: {} as ViewStyle,
+  }) as ViewStyle,
+  disabled: Platform.select({
+    web: { cursor: 'not-allowed' } as unknown as ViewStyle,
+    default: {} as ViewStyle,
+  }) as ViewStyle,
+  text: Platform.select({
+    web: { cursor: 'text' } as unknown as ViewStyle,
+    default: {} as ViewStyle,
+  }) as ViewStyle,
+  grab: Platform.select({
+    web: { cursor: 'grab' } as unknown as ViewStyle,
+    default: {} as ViewStyle,
+  }) as ViewStyle,
+};

@@ -9,6 +9,7 @@ export type { IconComponent, IconProps } from './icon';
 export { Button, IconButton, LinkButton } from './Button';
 export type { ButtonVariant, ButtonSize } from './Button';
 export { Card, Divider, VDivider, Gap } from './Card';
+export { EdgeFade } from './EdgeFade';
 export { Money, AnimatedMoney } from './Money';
 export type { MoneySize, MoneyTone } from './Money';
 export { Avatar, Badge } from './Avatar';

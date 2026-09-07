@@ -10,7 +10,7 @@ import {
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, SPACE, TYPE } from '../theme/tokens';
+import { DOCK_INSET, GUTTER, SPACE, TYPE } from '../theme/tokens';
 import { CashbookEntry } from '../types';
 import {
   AmountField,
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: GUTTER,
-    paddingBottom: 132,
+    paddingBottom: DOCK_INSET,
   },
   eyebrow: {
     color: COLORS.textMuted,

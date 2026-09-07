@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ArrowDownLeft, ArrowUpRight, Search, SearchX, UserPlus, Users, X } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, SPACE, TYPE } from '../theme/tokens';
+import { DOCK_INSET, GUTTER, SPACE, TYPE } from '../theme/tokens';
 import { Party } from '../types';
+import { pluralise } from '../utils/format';
 import { CustomerCard } from '../components/CustomerCard';
 import {
   Card,
@@ -30,6 +31,10 @@ export const CustomersScreen: React.FC<{
   parties: Party[];
   currency?: string;
   loading?: boolean;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** Increments when the active tab is tapped again. */
+  scrollTopSignal?: number;
   onSelectParty: (party: Party) => void;
   onAddParty: () => void;
   initialFilter?: Filter;
@@ -37,12 +42,22 @@ export const CustomersScreen: React.FC<{
   parties,
   currency = 'Rs',
   loading = false,
+  refreshing = false,
+  onRefresh,
+  scrollTopSignal = 0,
   onSelectParty,
   onAddParty,
   initialFilter = 'all',
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>(initialFilter);
+  const scroller = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (scrollTopSignal > 0) {
+      scroller.current?.scrollTo({ y: 0, animated: true });
+    }
+  }, [scrollTopSignal]);
 
   const counts = useMemo(
     () => ({
@@ -171,11 +186,42 @@ export const CustomersScreen: React.FC<{
         />
       </ScrollView>
 
+      {/*
+        Confirms the search did something. Without it a query that narrows
+        twenty names to three looks identical to one that found nothing but
+        happened to scroll.
+      */}
+      {searching && visible.length > 0 ? (
+        <Text
+          style={[TYPE.caption, styles.resultCount]}
+          accessibilityLiveRegion="polite"
+        >
+          {`${visible.length} ${pluralise(
+            visible.length,
+            'match',
+            'matches'
+          )} for “${query.trim()}”`}
+        </Text>
+      ) : null}
+
       <ScrollView
+        ref={scroller}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.accent}
+              colors={[COLORS.accent]}
+              progressBackgroundColor={COLORS.surface}
+            />
+          ) : undefined
+        }
       >
         {parties.length > 0 ? (
           <Card padding={0} style={styles.totals}>
@@ -266,13 +312,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: GUTTER,
     paddingVertical: SPACE.xs,
   },
+  resultCount: {
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    paddingHorizontal: GUTTER,
+    paddingTop: SPACE.sm,
+  },
   list: {
     flex: 1,
   },
   listContent: {
     paddingHorizontal: GUTTER,
     paddingTop: SPACE.md,
-    paddingBottom: 132,
+    paddingBottom: DOCK_INSET,
     gap: SPACE.lg,
   },
   totals: {

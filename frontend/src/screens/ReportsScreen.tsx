@@ -3,7 +3,7 @@ import { Platform, ScrollView, Share, StyleSheet, Text, View } from 'react-nativ
 import { CheckCircle2, Share2 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { DOCK_INSET, GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Party } from '../types';
 import {
   Avatar,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: GUTTER,
-    paddingBottom: 132,
+    paddingBottom: DOCK_INSET,
   },
   eyebrow: {
     color: COLORS.textMuted,

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE } from '../theme/tokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
  * Pulsing placeholder shown while the ledger loads off disk. Preferred over a
@@ -14,9 +15,17 @@ export const Skeleton: React.FC<{
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }> = ({ width = '100%', height = 14, radius = RADIUS.xs, style }) => {
+  const reducedMotion = useReducedMotion();
   const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
+    // A steady placeholder still communicates "loading" through its shape; the
+    // pulse is what reduce-motion is asking us to drop.
+    if (reducedMotion) {
+      pulse.setValue(0.7);
+      return;
+    }
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -35,7 +44,7 @@ export const Skeleton: React.FC<{
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, reducedMotion]);
 
   return (
     <Animated.View

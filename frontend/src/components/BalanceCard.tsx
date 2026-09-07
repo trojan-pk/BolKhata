@@ -1,10 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowUpRight, Minus } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { ELEV, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { AnimatedMoney, Badge, Money, Press } from '../ui';
+
+/** On-ink money tints. The palette's `credit`/`debit` are tuned for paper and
+ *  go muddy against `COLORS.ink`, so the card carries its own lifted pair. */
+const ON_INK_CREDIT = '#34D399';
+const ON_INK_DEBIT = '#FB7185';
 
 /**
  * The one number that answers "how am I doing?" — net position, stated in words
@@ -29,6 +34,16 @@ export const BalanceCard: React.FC<{
       ? COPY.ledger.youOwe
       : COPY.ledger.allSquare;
 
+  /*
+    Owed and owing used to render as the same white figure, distinguished only
+    by a muted caption below it — the one number on the screen you cannot afford
+    to read backwards. It now carries three reinforcing cues: a minus sign, a
+    directional arrow, and a tinted caption.
+  */
+  const CaptionIcon = net > 0 ? ArrowDownLeft : net < 0 ? ArrowUpRight : Minus;
+  const captionTint =
+    net > 0 ? ON_INK_CREDIT : net < 0 ? ON_INK_DEBIT : COLORS.textOnInkMuted;
+
   return (
     <View style={[styles.card, ELEV.card]}>
       <View style={styles.head}>
@@ -48,9 +63,16 @@ export const BalanceCard: React.FC<{
         currency={currency}
         size="display"
         tone="onInk"
+        signed
         style={styles.net}
       />
-      <Text style={[TYPE.bodySm, styles.caption]}>{caption}</Text>
+
+      <View style={styles.captionRow}>
+        <CaptionIcon size={13} color={captionTint} strokeWidth={2.8} />
+        <Text style={[TYPE.bodySm, styles.caption, { color: captionTint }]}>
+          {caption}
+        </Text>
+      </View>
 
       <View style={styles.split}>
         <SplitStat
@@ -91,6 +113,8 @@ const SplitStat: React.FC<{
       disabled={!onPress}
       scale={0.98}
       dim={0.75}
+      // Sitting on ink, so the hover wash has to lighten rather than darken.
+      hoverTone="light"
       accessibilityLabel={`${label}, ${currency} ${Math.abs(value)}`}
       style={styles.stat}
     >
@@ -134,9 +158,14 @@ const styles = StyleSheet.create({
   net: {
     marginTop: SPACE.md,
   },
+  captionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 3,
+  },
   caption: {
-    color: COLORS.textOnInkMuted,
-    marginTop: 2,
+    fontWeight: '600',
   },
   split: {
     flexDirection: 'row',

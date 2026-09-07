@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +26,7 @@ import {
   RADIUS,
   SPACE,
   TYPE,
+  CURSOR,
 } from '../theme/tokens';
 import { IconButton } from './Button';
 
@@ -56,6 +58,11 @@ interface SheetProps {
  * The app's only modal surface, in two flavours. Handles its own enter/exit
  * animation (RN's built-in `animationType` can't fade a backdrop independently
  * of the panel), keyboard avoidance, safe-area padding, and Android back.
+ *
+ * Bottom sheets are draggable: the grabber and the title block are a drag
+ * handle, and a downward flick or a drag past a third of the panel dismisses.
+ * The grabber was previously decorative, which is worse than not drawing one —
+ * it advertises a gesture that then does nothing.
  */
 export const Sheet: React.FC<SheetProps> = ({
   visible,
@@ -75,13 +82,19 @@ export const Sheet: React.FC<SheetProps> = ({
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [panelHeight, setPanelHeight] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
+  /** Live finger offset, added to the entrance transform. */
+  const drag = useRef(new Animated.Value(0)).current;
+  const panelHeightRef = useRef(0);
 
   const scrollMaxHeight = Math.round(windowHeight * maxHeightRatio);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      drag.setValue(0);
+      setScrolled(false);
       Animated.spring(progress, {
         toValue: 1,
         friction: 22,
@@ -95,25 +108,91 @@ export const Sheet: React.FC<SheetProps> = ({
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start(({ finished }) => {
-        if (finished) setMounted(false);
+        if (finished) {
+          setMounted(false);
+          // Clear any leftover drag offset so the next open starts square.
+          drag.setValue(0);
+        }
       });
     }
     // `mounted` intentionally excluded — it would retrigger the exit animation.
-  }, [visible, progress]);
+  }, [visible, progress, drag]);
+
+  /**
+   * Escape closes on web. Browser users reach for it before they look for the
+   * close button, and every other dismissal route was already wired up.
+   */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible || typeof document === 'undefined') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [visible, onClose]);
+
+  // The pan responder is built once, so it reads the latest `onClose` and the
+  // measured panel height through refs rather than closing over stale values.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const dragResponder = useRef(
+    PanResponder.create({
+      // Claim the gesture only once it is clearly a downward drag, so a
+      // horizontal swipe or a stray tap still reaches the controls underneath.
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        gesture.dy > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_evt, gesture) => {
+        // Upward drag is resisted rather than followed — the sheet is already
+        // at its resting height, so there is nothing above it to reveal.
+        drag.setValue(gesture.dy > 0 ? gesture.dy : gesture.dy / 6);
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        const height = panelHeightRef.current || 420;
+        const flicked = gesture.vy > 0.7;
+        const dragged = gesture.dy > Math.min(140, height / 3);
+
+        if (flicked || dragged) {
+          onCloseRef.current();
+          return;
+        }
+        Animated.spring(drag, {
+          toValue: 0,
+          friction: 14,
+          tension: 160,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(drag, {
+          toValue: 0,
+          friction: 14,
+          tension: 160,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
 
   if (!mounted) return null;
 
   const onPanelLayout = (e: LayoutChangeEvent) => {
     const next = e.nativeEvent.layout.height;
-    if (next > 0 && Math.abs(next - panelHeight) > 1) setPanelHeight(next);
+    if (next > 0 && Math.abs(next - panelHeight) > 1) {
+      setPanelHeight(next);
+      panelHeightRef.current = next;
+    }
   };
 
   const bottomTransform = [
     {
-      translateY: progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [panelHeight || 420, 0],
-      }),
+      translateY: Animated.add(
+        progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [panelHeight || 420, 0],
+        }),
+        drag
+      ),
     },
   ];
 
@@ -125,6 +204,19 @@ export const Sheet: React.FC<SheetProps> = ({
       }),
     },
   ];
+
+  /** The backdrop lightens as the sheet is dragged away, so the drag feels live. */
+  const scrimOpacity =
+    variant === 'bottom'
+      ? Animated.multiply(
+          progress,
+          drag.interpolate({
+            inputRange: [0, Math.max(1, panelHeight || 420)],
+            outputRange: [1, 0.15],
+            extrapolate: 'clamp',
+          })
+        )
+      : progress;
 
   const titleBlock = header ?? (
     title || subtitle ? (
@@ -155,6 +247,11 @@ export const Sheet: React.FC<SheetProps> = ({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       bounces={false}
+      scrollEventThrottle={32}
+      onScroll={(e) => {
+        const next = e.nativeEvent.contentOffset.y > 2;
+        if (next !== scrolled) setScrolled(next);
+      }}
     >
       {children}
     </ScrollView>
@@ -177,7 +274,7 @@ export const Sheet: React.FC<SheetProps> = ({
         ]}
       >
         <Animated.View
-          style={[StyleSheet.absoluteFill, { opacity: progress }]}
+          style={[StyleSheet.absoluteFill, { opacity: scrimOpacity }]}
           pointerEvents="none"
         >
           <View style={styles.scrim} />
@@ -209,8 +306,25 @@ export const Sheet: React.FC<SheetProps> = ({
               },
             ]}
           >
-            {variant === 'bottom' ? <View style={styles.grabber} /> : null}
-            {titleBlock}
+            {variant === 'bottom' ? (
+              <View
+                {...dragResponder.panHandlers}
+                style={[styles.handleZone, CURSOR.grab]}
+                accessibilityLabel="Drag down to close"
+              >
+                <View style={styles.grabber} />
+                {titleBlock}
+              </View>
+            ) : (
+              titleBlock
+            )}
+
+            {/*
+              Appears only once the body has scrolled, so a short sheet has no
+              rule across it but a long one shows where the content is cut.
+            */}
+            {scrollable && scrolled ? <View style={styles.scrollEdge} /> : null}
+
             {body}
             {footer ? <View style={styles.footer}>{footer}</View> : null}
           </Animated.View>
@@ -263,13 +377,23 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 400,
   },
+  handleZone: {
+    // The grabber alone is a 44×4 target. Extending the drag zone across the
+    // title block makes the gesture findable without a visible change.
+    paddingTop: 0,
+  },
   grabber: {
-    width: 40,
+    width: 44,
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.hairlineStrong,
     alignSelf: 'center',
     marginBottom: SPACE.md,
+  },
+  scrollEdge: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.hairline,
+    marginHorizontal: SPACE.xl,
   },
   titleRow: {
     flexDirection: 'row',

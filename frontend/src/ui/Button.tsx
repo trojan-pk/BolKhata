@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   StyleProp,
@@ -79,6 +79,17 @@ const SIZING: Record<ButtonSize, { height: number; pad: number; gap: number; ico
   lg: { height: CONTROL_HEIGHT.lg, pad: SPACE.xl, gap: SPACE.sm, icon: 19 },
 };
 
+/** Filled variants sit on dark ground, so their hover wash has to go light. */
+const HOVER_TONE: Record<ButtonVariant, 'dark' | 'light'> = {
+  primary: 'light',
+  accent: 'light',
+  secondary: 'dark',
+  ghost: 'dark',
+  credit: 'light',
+  debit: 'light',
+  danger: 'dark',
+};
+
 export const Button: React.FC<ButtonProps> = ({
   label,
   onPress,
@@ -104,6 +115,7 @@ export const Button: React.FC<ButtonProps> = ({
     <Press
       onPress={isBlocked ? undefined : onPress}
       disabled={isBlocked}
+      hoverTone={HOVER_TONE[variant]}
       accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: isBlocked, busy: loading }}
       style={[
@@ -118,23 +130,27 @@ export const Button: React.FC<ButtonProps> = ({
         style,
       ]}
     >
+      {/*
+        The label stays mounted while loading, just invisible, and the spinner
+        floats over it. Swapping the two out resized the button mid-submit, which
+        made the whole form twitch at the exact moment the user was waiting on it.
+      */}
+      <View style={[styles.content, { gap: dims.gap }, loading && styles.contentHidden]}>
+        {iconPosition === 'left' ? iconNode : null}
+        <Text
+          style={[size === 'sm' ? TYPE.label : styles.labelMd, { color: tint }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {iconPosition === 'right' ? iconNode : null}
+      </View>
+
       {loading ? (
-        <ActivityIndicator size="small" color={tint} />
-      ) : (
-        <>
-          {iconPosition === 'left' ? iconNode : null}
-          <Text
-            style={[
-              size === 'sm' ? TYPE.label : styles.labelMd,
-              { color: tint },
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
-          {iconPosition === 'right' ? iconNode : null}
-        </>
-      )}
+        <View style={styles.spinner} pointerEvents="none">
+          <ActivityIndicator size="small" color={tint} />
+        </View>
+      ) : null}
     </Press>
   );
 };
@@ -185,6 +201,7 @@ export const IconButton: React.FC<{
     <Press
       onPress={onPress}
       disabled={disabled}
+      hoverTone={variant === 'ink' || variant === 'credit' ? 'light' : 'dark'}
       accessibilityLabel={accessibilityLabel}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={[
@@ -205,6 +222,7 @@ export const LinkButton: React.FC<{
   onPress?: () => void;
   tone?: 'accent' | 'muted' | 'danger';
 }> = ({ label, onPress, tone = 'accent' }) => {
+  const [hovered, setHovered] = useState(false);
   const tint =
     tone === 'accent'
       ? COLORS.accent
@@ -218,8 +236,20 @@ export const LinkButton: React.FC<{
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       scale={1}
       dim={0.55}
+      // A wash would draw a box around bare words; links underline instead.
+      hover={false}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
     >
-      <Text style={[TYPE.label, { color: tint }]}>{label}</Text>
+      <Text
+        style={[
+          TYPE.label,
+          { color: tint },
+          hovered && styles.linkHovered,
+        ]}
+      >
+        {label}
+      </Text>
     </Press>
   );
 };
@@ -231,6 +261,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: RADIUS.md,
   },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Lets a long label ellipsize inside the button instead of pushing past its
+    // padding. Yoga defaults flexShrink to 0, so this has to be explicit.
+    flexShrink: 1,
+  },
+  contentHidden: {
+    opacity: 0,
+  },
+  spinner: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   labelMd: {
     ...TYPE.label,
     fontSize: 14,
@@ -240,6 +286,9 @@ const styles = StyleSheet.create({
   fullWidth: {
     alignSelf: 'stretch',
     width: '100%',
+  },
+  linkHovered: {
+    textDecorationLine: 'underline',
   },
   iconBtn: {
     alignItems: 'center',

@@ -10,7 +10,7 @@ import {
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
+import { DOCK_INSET, GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { StoreProfile } from '../types';
 import { LanguageCode } from '../i18n/translations';
 import {
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: GUTTER,
-    paddingBottom: 132,
+    paddingBottom: DOCK_INSET,
     gap: SPACE.xxl,
   },
   formCard: {

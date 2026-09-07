@@ -2,13 +2,22 @@ import React, { useCallback, useRef } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   PressableProps,
   StyleProp,
   StyleSheet,
   ViewStyle,
 } from 'react-native';
-import { MOTION, NO_OUTLINE } from '../theme/tokens';
+import {
+  CURSOR,
+  MOTION,
+  NO_OUTLINE,
+  PRESS_RETENTION,
+} from '../theme/tokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+
+const IS_WEB = Platform.OS === 'web';
 
 export interface PressProps extends Omit<PressableProps, 'style' | 'children'> {
   style?: StyleProp<ViewStyle>;
@@ -16,23 +25,53 @@ export interface PressProps extends Omit<PressableProps, 'style' | 'children'> {
   scale?: number;
   /** Opacity at full press. */
   dim?: number;
+  /**
+   * Web hover wash. `false` opts out — right for bare text links, where a
+   * rectangle of wash would appear around the words.
+   */
+  hover?: boolean;
+  /**
+   * Which way the hover wash goes. `light` for anything sitting on ink, where a
+   * dark wash is invisible.
+   */
+  hoverTone?: 'dark' | 'light';
+  /** Strength of the hover wash. Raise it for large, quiet surfaces. */
+  hoverOpacity?: number;
   children?: React.ReactNode;
 }
+
+/** Corner radii are copied onto the hover wash so it can't bleed past them. */
+const RADIUS_KEYS = [
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius',
+] as const;
 
 /**
  * The single tappable primitive. Every touch in the app runs through it, so
  * press feedback is identical everywhere: a spring-driven sink plus a slight
  * dim, native-driven so it never stutters behind a busy JS thread.
+ *
+ * On web it also supplies the two affordances a pointer user needs and RN
+ * doesn't give for free — a pointer cursor and a hover wash.
  */
 export const Press: React.FC<PressProps> = ({
   style,
   scale = 0.97,
   dim = 0.9,
+  hover = true,
+  hoverTone = 'dark',
+  hoverOpacity = hoverTone === 'light' ? 0.09 : 0.05,
   disabled,
   children,
+  onPressIn,
+  onPressOut,
   ...rest
 }) => {
   const progress = useRef(new Animated.Value(0)).current;
+  const hoverProgress = useRef(new Animated.Value(0)).current;
 
   const animate = useCallback(
     (to: number) => {
@@ -44,6 +83,18 @@ export const Press: React.FC<PressProps> = ({
       }).start();
     },
     [progress]
+  );
+
+  const animateHover = useCallback(
+    (to: number) => {
+      Animated.timing(hoverProgress, {
+        toValue: to,
+        duration: MOTION.fast,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    },
+    [hoverProgress]
   );
 
   const animatedStyle = {
@@ -99,13 +150,35 @@ export const Press: React.FC<PressProps> = ({
     ...(marginRight !== undefined ? { marginRight } : null),
   };
 
+  const showHover = IS_WEB && hover && !disabled;
+
+  const washRadii = RADIUS_KEYS.reduce<ViewStyle>((acc, key) => {
+    const value = (innerStyle as Record<string, unknown>)[key];
+    if (typeof value === 'number') (acc as Record<string, unknown>)[key] = value;
+    return acc;
+  }, {});
+
   return (
     <Pressable
       disabled={disabled}
-      onPressIn={() => animate(1)}
-      onPressOut={() => animate(0)}
+      onPressIn={(event) => {
+        if (!disabled) animate(1);
+        onPressIn?.(event);
+      }}
+      onPressOut={(event) => {
+        animate(0);
+        onPressOut?.(event);
+      }}
+      onHoverIn={showHover ? () => animateHover(1) : undefined}
+      onHoverOut={showHover ? () => animateHover(0) : undefined}
+      // A thumb rolls on release; without this the tap is lost to a few pixels.
+      pressRetentionOffset={PRESS_RETENTION}
       accessibilityRole="button"
-      style={[NO_OUTLINE, outerLayout]}
+      style={[
+        NO_OUTLINE,
+        disabled ? CURSOR.disabled : CURSOR.pointer,
+        outerLayout,
+      ]}
       {...rest}
     >
       <Animated.View
@@ -116,6 +189,22 @@ export const Press: React.FC<PressProps> = ({
         ]}
       >
         {children}
+        {showHover ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              washRadii,
+              {
+                backgroundColor: hoverTone === 'light' ? '#FFFFFF' : '#0B0F1A',
+                opacity: hoverProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, hoverOpacity],
+                }),
+              },
+            ]}
+          />
+        ) : null}
       </Animated.View>
     </Pressable>
   );
@@ -155,9 +244,16 @@ export const Enter: React.FC<{
   style,
   children,
 }) => {
+  const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
+    // Reduce-motion asked for no entrance at all, so land at rest immediately
+    // rather than playing a shorter version of the same slide.
+    if (reducedMotion) {
+      progress.setValue(1);
+      return;
+    }
     const timer = setTimeout(() => {
       Animated.timing(progress, {
         toValue: 1,
@@ -167,7 +263,7 @@ export const Enter: React.FC<{
       }).start();
     }, delay + Math.min(index, maxSteps) * stagger);
     return () => clearTimeout(timer);
-  }, [index, progress, stagger, duration, delay, maxSteps]);
+  }, [index, progress, stagger, duration, delay, maxSteps, reducedMotion]);
 
   return (
     <Animated.View
