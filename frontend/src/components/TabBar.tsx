@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import {
   Home,
+  Mic,
   PieChart,
-  Settings as SettingsIcon,
   Users,
   Wallet,
 } from 'lucide-react-native';
@@ -30,47 +30,77 @@ import { IconComponent } from '../ui/icon';
 
 export type TabKey = 'home' | 'customers' | 'cashbook' | 'reports' | 'settings';
 
-const TABS: {
+interface NavTabItem {
   key: TabKey;
   label: string;
   icon: IconComponent;
-}[] = [
+}
+
+const LEFT_TABS: NavTabItem[] = [
   { key: 'home', label: COPY.nav.home, icon: Home },
   { key: 'customers', label: COPY.nav.customers, icon: Users },
+];
+
+const RIGHT_TABS: NavTabItem[] = [
   { key: 'cashbook', label: COPY.nav.cashbook, icon: Wallet },
   { key: 'reports', label: COPY.nav.reports, icon: PieChart },
-  { key: 'settings', label: COPY.nav.settings, icon: SettingsIcon },
 ];
+
+const TOTAL_SLOTS = 5;
+
+const TAB_SLOT_MAP: Record<string, number> = {
+  home: 0,
+  customers: 1,
+  cashbook: 3,
+  reports: 4,
+};
 
 const DOCK_HEIGHT = 62;
 const PAD = 5;
 
 /**
- * Floating ink dock. The indicator position is derived from the measured track
- * width rather than hard-coded percentages, so it lands dead-centre under every
- * tab on any screen size — including the wide web layout.
+ * Floating dock with centered Voice action button.
+ * Layout: [Home] [Customers]  ( 🎙️ Voice )  [Cashbook] [Reports]
  */
 export const TabBar: React.FC<{
   active: TabKey;
   onChange: (key: TabKey) => void;
-}> = ({ active, onChange }) => {
+  onPressVoice?: () => void;
+}> = ({ active, onChange, onPressVoice }) => {
   const insets = useSafeAreaInsets();
   const [trackWidth, setTrackWidth] = useState(0);
-  const activeIndex = Math.max(0, TABS.findIndex((t) => t.key === active));
-  const position = useRef(new Animated.Value(activeIndex)).current;
+
+  const activeSlot = TAB_SLOT_MAP[active] ?? -1;
+  const position = useRef(new Animated.Value(Math.max(0, activeSlot))).current;
+  const indicatorOpacity = useRef(new Animated.Value(activeSlot >= 0 ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.spring(position, {
-      toValue: activeIndex,
-      ...MOTION.spring,
-    }).start();
-  }, [activeIndex, position]);
+    if (activeSlot >= 0) {
+      Animated.parallel([
+        Animated.spring(position, {
+          toValue: activeSlot,
+          ...MOTION.spring,
+        }),
+        Animated.timing(indicatorOpacity, {
+          toValue: 1,
+          duration: MOTION.fast,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    } else {
+      Animated.timing(indicatorOpacity, {
+        toValue: 0,
+        duration: MOTION.fast,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [activeSlot, position, indicatorOpacity]);
 
-  const itemWidth = trackWidth > 0 ? (trackWidth - PAD * 2) / TABS.length : 0;
+  const itemWidth = trackWidth > 0 ? (trackWidth - PAD * 2) / TOTAL_SLOTS : 0;
 
   const translateX = position.interpolate({
-    inputRange: TABS.map((_, i) => i),
-    outputRange: TABS.map((_, i) => PAD + i * itemWidth),
+    inputRange: [0, 1, 2, 3, 4],
+    outputRange: [0, 1, 2, 3, 4].map((i) => PAD + i * itemWidth),
   });
 
   return (
@@ -91,13 +121,40 @@ export const TabBar: React.FC<{
               styles.indicator,
               {
                 width: itemWidth,
+                opacity: indicatorOpacity,
                 transform: [{ translateX }],
               },
             ]}
           />
         ) : null}
 
-        {TABS.map((tab) => (
+        {/* Left Tabs: Home, Customers */}
+        {LEFT_TABS.map((tab) => (
+          <TabItem
+            key={tab.key}
+            tab={tab}
+            active={tab.key === active}
+            onPress={() => onChange(tab.key)}
+          />
+        ))}
+
+        {/* Middle Voice Button */}
+        <View style={styles.voiceSlot}>
+          <Pressable
+            onPress={onPressVoice}
+            accessibilityRole="button"
+            accessibilityLabel="Voice Assistant"
+            style={({ pressed }) => [
+              styles.voiceBtn,
+              pressed && styles.voiceBtnPressed,
+            ]}
+          >
+            <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
+          </Pressable>
+        </View>
+
+        {/* Right Tabs: Cashbook, Reports */}
+        {RIGHT_TABS.map((tab) => (
           <TabItem
             key={tab.key}
             tab={tab}
@@ -111,7 +168,7 @@ export const TabBar: React.FC<{
 };
 
 const TabItem: React.FC<{
-  tab: (typeof TABS)[number];
+  tab: NavTabItem;
   active: boolean;
   onPress: () => void;
 }> = ({ tab, active, onPress }) => {
@@ -150,14 +207,14 @@ const TabItem: React.FC<{
         }}
       >
         <Icon
-          size={19}
-          color={active ? COLORS.textOnInk : COLORS.textOnInkMuted}
-          strokeWidth={active ? 2.3 : 1.9}
+          size={20}
+          color={active ? COLORS.accent : COLORS.textMuted}
+          strokeWidth={active ? 2.5 : 2}
         />
         <Text
           style={[
             styles.label,
-            { color: active ? COLORS.textOnInk : COLORS.textOnInkMuted },
+            { color: active ? COLORS.accent : COLORS.textMuted },
             active && styles.labelActive,
           ]}
           numberOfLines={1}
@@ -187,9 +244,9 @@ const styles = StyleSheet.create({
     height: DOCK_HEIGHT,
     paddingHorizontal: PAD,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.ink,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.inkSoft,
+    borderColor: COLORS.hairlineStrong,
   },
   indicator: {
     position: 'absolute',
@@ -197,13 +254,36 @@ const styles = StyleSheet.create({
     left: 0,
     height: DOCK_HEIGHT - PAD * 2 - 2,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.inkLift,
+    backgroundColor: COLORS.surfaceSunken,
   },
   item: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  voiceSlot: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  voiceBtnPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: COLORS.accentPressed,
   },
   label: {
     ...TYPE.caption,

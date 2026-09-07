@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import {
@@ -33,6 +33,7 @@ import { CustomerLedgerPanel } from './src/components/CustomerLedgerPanel';
 import { EditTransactionModal } from './src/components/EditTransactionModal';
 import { TransactionModal } from './src/components/TransactionModal';
 import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
+import { VoiceRecordingModal } from './src/components/VoiceRecordingModal';
 
 import { HomeScreen } from './src/screens/HomeScreen';
 import { CustomersScreen } from './src/screens/CustomersScreen';
@@ -107,6 +108,11 @@ function BolKhata() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   /**
+   * Whose data is currently in state. Guards against `SIGNED_IN` — which also
+   * fires on token refresh and tab focus — re-running the whole load.
+   */
+  const loadedUserRef = useRef<string | null>(null);
+  /**
    * The pre-session flow. `intro` is only ever entered once per device — see
    * `StorageService.getIntroSeen`.
    */
@@ -129,6 +135,7 @@ function BolKhata() {
   /* ---------------------------------------------------------------- modals -- */
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [voiceRecordOpen, setVoiceRecordOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceResult, setVoiceResult] = useState<unknown>(null);
   const [addPartyOpen, setAddPartyOpen] = useState(false);
@@ -194,6 +201,7 @@ function BolKhata() {
       setParties(loadedParties);
       setTransactions(loadedTxns);
       setCashbook(loadedCash);
+      loadedUserRef.current = uid ?? null;
     } catch (e) {
       console.warn('[BolKhata] Error loading user data:', e);
     } finally {
@@ -225,8 +233,14 @@ function BolKhata() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (_event === 'SIGNED_IN' && session?.user?.id) {
-        await loadUserData(session.user.id);
+        // `SIGNED_IN` also fires on tab focus and after a token refresh, so an
+        // unconditional reload here re-fetched the whole ledger repeatedly and
+        // could clobber in-flight local edits. Only a new user reloads.
+        if (loadedUserRef.current !== session.user.id) {
+          await loadUserData(session.user.id);
+        }
       } else if (_event === 'SIGNED_OUT') {
+        loadedUserRef.current = null;
         setParties([]);
         setTransactions([]);
         setCashbook([]);
@@ -236,16 +250,43 @@ function BolKhata() {
       }
     });
 
+    /**
+     * Strips auth material out of the address bar once it has been consumed.
+     *
+     * Leaving `?code=` behind meant a refresh replayed a spent single-use code
+     * and failed, and it kept the grant in browser history.
+     */
+    const scrubWebUrl = () => {
+      if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+      if (window.location.search || window.location.hash) {
+        const { origin, pathname } = window.location;
+        window.history.replaceState({}, document.title, `${origin}${pathname}`);
+      }
+    };
+
+    /**
+     * Native-only OAuth / email-confirmation callback handling.
+     *
+     * On web this must not run: `detectSessionInUrl` is enabled there, so
+     * supabase-js consumes the `?code=` itself. Both of them racing for the same
+     * single-use PKCE code meant the loser threw "invalid flow state" — which is
+     * why Google sign-in and confirmation links failed intermittently in the
+     * browser depending on which handler reached the code first.
+     */
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
-      if (!url) return;
+      if (!url || Platform.OS === 'web') return;
 
       try {
         // 1. PKCE code exchange
         const parsed = Linking.parse(url);
         if (parsed.queryParams?.code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(String(parsed.queryParams.code));
-          if (!error && data?.session) {
+          if (error) {
+            console.warn('[BolKhata] Code exchange failed:', error.message);
+            return;
+          }
+          if (data?.session) {
             setSession(data.session);
             if (data.session.user?.id) {
               await loadUserData(data.session.user.id);
@@ -280,9 +321,15 @@ function BolKhata() {
     };
 
     const linkSub = Linking.addEventListener('url', handleDeepLink);
-    Linking.getInitialURL().then((url) => {
-      if (url) handleDeepLink({ url });
-    });
+
+    if (Platform.OS === 'web') {
+      // Let supabase-js finish reading the URL, then clear it.
+      void supabase.auth.getSession().then(scrubWebUrl);
+    } else {
+      Linking.getInitialURL().then((url) => {
+        if (url) handleDeepLink({ url });
+      });
+    }
 
     return () => {
       cancelled = true;
@@ -600,13 +647,8 @@ function BolKhata() {
             toPay={toPay}
             currency={storeProfile.currency}
             loading={loading}
-            onOpenVoiceReview={() => setVoiceOpen(true)}
             onViewAllCustomers={() => goToCustomers('all')}
             onSelectTransaction={setEditingTxn}
-            onVoiceResultParsed={(result) => {
-              setVoiceResult(result);
-              setVoiceOpen(true);
-            }}
           />
         );
       case 'customers':
@@ -715,7 +757,11 @@ function BolKhata() {
                 </ScreenTransition>
               </View>
 
-              <TabBar active={activeTab} onChange={setActiveTab} />
+              <TabBar
+                active={activeTab}
+                onChange={setActiveTab}
+                onPressVoice={() => setVoiceRecordOpen(true)}
+              />
 
               {/* Post-signup personalisation & business setup wizard */}
               {!loading && session && !storeProfile.isOnboarded && (
@@ -814,6 +860,23 @@ function BolKhata() {
         currency={storeProfile.currency}
         onClose={() => setAddPartyOpen(false)}
         onSubmit={addParty}
+      />
+
+      <VoiceRecordingModal
+        visible={voiceRecordOpen}
+        parties={parties}
+        currency={storeProfile.currency}
+        onClose={() => setVoiceRecordOpen(false)}
+        onParsed={(result) => {
+          setVoiceRecordOpen(false);
+          setVoiceResult(result);
+          setVoiceOpen(true);
+        }}
+        onManualFallback={() => {
+          setVoiceRecordOpen(false);
+          setVoiceResult(null);
+          setVoiceOpen(true);
+        }}
       />
 
       <VoiceAssistantModal
