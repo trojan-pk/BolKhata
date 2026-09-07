@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   waIcon: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: RADIUS.md,
     backgroundColor: '#E8F9F0',
     alignItems: 'center',
     justifyContent: 'center',
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   stepBadge: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: 6,
     backgroundColor: '#E8F9F0',
     alignItems: 'center',
     justifyContent: 'center',

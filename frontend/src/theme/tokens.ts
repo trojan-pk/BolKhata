@@ -28,12 +28,12 @@ export const SPACE = {
 export const GUTTER = SPACE.xl;
 
 export const RADIUS = {
-  xs: 8,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
-  xxl: 28,
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 14,
+  xxl: 18,
   pill: 999,
 } as const;
 

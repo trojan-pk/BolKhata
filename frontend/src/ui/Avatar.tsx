@@ -27,7 +27,7 @@ export const Avatar: React.FC<{
         {
           width: size,
           height: size,
-          borderRadius: Math.round(size * 0.34),
+          borderRadius: Math.round(size * 0.24),
           backgroundColor: bg,
         },
         style,

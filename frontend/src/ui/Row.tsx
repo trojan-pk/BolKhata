@@ -111,7 +111,7 @@ export const IconWell: React.FC<{
         {
           width: size,
           height: size,
-          borderRadius: Math.round(size * 0.32),
+          borderRadius: Math.round(size * 0.24),
           backgroundColor: skin.bg,
         },
       ]}

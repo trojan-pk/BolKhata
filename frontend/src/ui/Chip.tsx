@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: RADIUS.pill,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
   },
   chipSm: {
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     paddingHorizontal: 4,
     height: 17,
-    borderRadius: 9,
+    borderRadius: RADIUS.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },

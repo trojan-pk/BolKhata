@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     maxWidth: MAX_CONTENT_WIDTH - SPACE.sm,
     height: DOCK_HEIGHT,
     paddingHorizontal: PAD,
-    borderRadius: RADIUS.pill,
+    borderRadius: RADIUS.xl,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.hairlineStrong,
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     top: PAD,
     left: 0,
     height: DOCK_HEIGHT - PAD * 2 - 2,
-    borderRadius: RADIUS.pill,
+    borderRadius: RADIUS.md,
     backgroundColor: COLORS.surfaceSunken,
   },
   item: {

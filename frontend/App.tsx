@@ -450,6 +450,21 @@ function BolKhata() {
     [parties, transactions, commit, selectedParty, userId]
   );
 
+  const updateParty = useCallback(
+    async (updated: Party) => {
+      const nextParties = parties.map((p) => (p.id === updated.id ? updated : p));
+      const nextTxns = transactions.map((t) =>
+        t.partyId === updated.id ? { ...t, partyName: updated.name } : t
+      );
+      await commit(nextParties, nextTxns);
+      if (selectedParty?.id === updated.id) {
+        setSelectedParty(updated);
+      }
+      toast(`${updated.name} updated`);
+    },
+    [parties, transactions, commit, selectedParty, toast]
+  );
+
   const addTransaction = useCallback(
     async (data: { amount: number; note: string; paymentMode: PaymentMode }) => {
       const party = parties.find((p) => p.id === composer.partyId);
@@ -516,6 +531,7 @@ function BolKhata() {
       type: TransactionType;
       note: string;
       date?: string;
+      mobile?: string;
     }) => {
       const needle = result.partyName.trim().toLowerCase();
       const existing = parties.find((p) => {
@@ -523,17 +539,20 @@ function BolKhata() {
         return name.includes(needle) || needle.includes(name);
       });
 
-      const party: Party =
-        existing ??
-        {
-          id: uid('p'),
-          name: result.partyName.trim(),
-          mobile: '',
-          address: '',
-          type: 'customer',
-          currentBalance: 0,
-          lastUpdated: result.date || todayISO(),
-        };
+      const party: Party = existing
+        ? {
+            ...existing,
+            mobile: result.mobile?.trim() ? result.mobile.trim() : existing.mobile,
+          }
+        : {
+            id: uid('p'),
+            name: result.partyName.trim(),
+            mobile: result.mobile?.trim() || '',
+            address: '',
+            type: 'customer',
+            currentBalance: 0,
+            lastUpdated: result.date || todayISO(),
+          };
 
       const txn: Transaction = {
         id: uid('t'),
@@ -551,7 +570,9 @@ function BolKhata() {
       };
 
       const nextTxns = [txn, ...transactions];
-      const baseParties = existing ? parties : [party, ...parties];
+      const baseParties = existing
+        ? parties.map((p) => (p.id === party.id ? party : p))
+        : [party, ...parties];
       const nextParties = withRecalculatedBalance(
         baseParties,
         nextTxns,
@@ -869,6 +890,7 @@ function BolKhata() {
         }
         onSettleUp={settleParty}
         onEditTransaction={setEditingTxn}
+        onEditParty={updateParty}
         onDeleteParty={deleteParty}
       />
 

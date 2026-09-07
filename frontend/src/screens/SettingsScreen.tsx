@@ -10,7 +10,7 @@ import {
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { GUTTER, SPACE, TYPE } from '../theme/tokens';
+import { GUTTER, RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { StoreProfile } from '../types';
 import { LanguageCode } from '../i18n/translations';
 import {
@@ -210,7 +210,7 @@ export const SettingsScreen: React.FC<{
                   style={{
                     width: 36,
                     height: 36,
-                    borderRadius: 18,
+                    borderRadius: RADIUS.md,
                     backgroundColor: waLinked ? '#E8F9F0' : '#F1F5F9',
                     alignItems: 'center',
                     justifyContent: 'center',

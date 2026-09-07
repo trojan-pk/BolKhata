@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   statIconBadge: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },

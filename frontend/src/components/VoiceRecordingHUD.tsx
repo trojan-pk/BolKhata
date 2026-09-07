@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: RADIUS.pill,
+    borderRadius: RADIUS.lg,
     backgroundColor: '#18181B', // Deep obsidian dark card
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.14)',
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },

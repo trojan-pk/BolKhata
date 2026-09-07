@@ -16,6 +16,7 @@ import {
   CheckCheck,
   ChevronLeft,
   Clock,
+  Edit3,
   MessageCircle,
   Minus,
   Phone,
@@ -23,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import { EditCustomerModal } from './EditCustomerModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
@@ -82,6 +84,7 @@ export const CustomerLedgerPanel: React.FC<{
   onAddGot: () => void;
   onSettleUp: () => void;
   onEditTransaction?: (txn: Transaction) => void;
+  onEditParty?: (updated: Party) => void;
   onDeleteParty?: (partyId: string) => void;
 }> = ({
   visible,
@@ -94,6 +97,7 @@ export const CustomerLedgerPanel: React.FC<{
   onAddGot,
   onSettleUp,
   onEditTransaction,
+  onEditParty,
   onDeleteParty,
 }) => {
   const { confirm, toast } = useFeedback();
@@ -102,6 +106,7 @@ export const CustomerLedgerPanel: React.FC<{
 
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
+  const [editOpen, setEditOpen] = useState(false);
 
   // WhatsApp backend, schedule & cooldown state
   const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -329,19 +334,28 @@ export const CustomerLedgerPanel: React.FC<{
               size={40}
             />
 
-            <View style={styles.identity}>
+            <Press
+              onPress={() => setEditOpen(true)}
+              style={styles.identity}
+              accessibilityLabel={`Edit ${party.name}`}
+            >
               <Avatar name={party.name} size={36} />
               <View style={styles.identityText}>
                 <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
                   {party.name}
                 </Text>
                 <Text style={[TYPE.caption, styles.sub]} numberOfLines={1}>
-                  {party.mobile ? formatPhone(party.mobile) : 'No phone number'}
+                  {party.mobile ? formatPhone(party.mobile) : 'No phone · Tap to edit'}
                 </Text>
               </View>
-            </View>
+            </Press>
 
             <View style={styles.barActions}>
+              <IconButton
+                icon={Edit3}
+                onPress={() => setEditOpen(true)}
+                accessibilityLabel="Edit customer details"
+              />
               {phone ? (
                 <IconButton
                   icon={Phone}
@@ -418,10 +432,10 @@ export const CustomerLedgerPanel: React.FC<{
                 ]}
               >
                 <WhatsAppIcon
-                  size={20}
+                  size={18}
                   color={
                     cooldownSecs > 0
-                      ? '#128C7E'
+                      ? '#0F172A'
                       : waLinked
                       ? '#FFFFFF'
                       : COLORS.textMuted
@@ -433,20 +447,17 @@ export const CustomerLedgerPanel: React.FC<{
                     !waLinked && styles.waBtnTextDim,
                     cooldownSecs > 0 && styles.waBtnTextCooldown,
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {sendingReminder
                     ? 'Sending…'
                     : cooldownSecs > 0
-                    ? `Remind in ${Math.floor(cooldownSecs / 60)}m ${cooldownSecs % 60 < 10 ? '0' : ''}${cooldownSecs % 60}s`
+                    ? `Wait ${Math.floor(cooldownSecs / 60)}m ${cooldownSecs % 60 < 10 ? '0' : ''}${cooldownSecs % 60}s`
                     : waLinked
                     ? 'Send WA Reminder'
                     : 'Link WA in Settings'}
                 </Text>
-                {cooldownSecs > 0 ? (
-                  <View style={styles.cooldownBadge}>
-                    <Text style={styles.cooldownBadgeText}>1h Cooldown</Text>
-                  </View>
-                ) : null}
               </Press>
 
               <Press
@@ -578,6 +589,14 @@ export const CustomerLedgerPanel: React.FC<{
         onClose={() => setScheduleModalOpen(false)}
         onScheduled={fetchSchedules}
       />
+
+      <EditCustomerModal
+        visible={editOpen}
+        party={party}
+        onClose={() => setEditOpen(false)}
+        onSave={(updated) => onEditParty?.(updated)}
+        onDelete={onDeleteParty}
+      />
     </Animated.View>
   );
 };
@@ -670,32 +689,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACE.sm,
+    gap: 6,
     paddingVertical: SPACE.md,
-    paddingHorizontal: SPACE.md,
-    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.sm + 2,
+    borderRadius: RADIUS.md,
     backgroundColor: '#25D366',
     shadowColor: '#25D366',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   scheduleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingVertical: SPACE.md,
     paddingHorizontal: SPACE.md,
-    borderRadius: RADIUS.xl,
+    borderRadius: RADIUS.md,
     backgroundColor: '#E8F9F0',
     borderWidth: 1.5,
     borderColor: '#128C7E',
+    flexShrink: 0,
   },
   scheduleBtnText: {
     ...TYPE.label,
     color: '#075E54',
     fontWeight: '700',
+    fontSize: 13,
   },
   scheduledBanner: {
     flexDirection: 'row',
@@ -704,7 +725,7 @@ const styles = StyleSheet.create({
     marginTop: SPACE.sm,
     paddingVertical: SPACE.sm,
     paddingHorizontal: SPACE.md,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.sm,
     backgroundColor: '#E8F9F0',
     borderWidth: 1,
     borderColor: '#25D366',
@@ -742,14 +763,15 @@ const styles = StyleSheet.create({
     ...TYPE.label,
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 13.5,
   },
   waBtnTextDim: {
     color: COLORS.textMuted,
   },
   waBtnTextCooldown: {
-    color: '#1E293B',
+    color: '#334155',
     fontWeight: '700',
+    fontSize: 13,
   },
   waBtnDisabled: {
     backgroundColor: COLORS.surface,
@@ -767,19 +789,6 @@ const styles = StyleSheet.create({
   },
   waBtnSending: {
     opacity: 0.7,
-  },
-  cooldownBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: RADIUS.pill,
-    marginLeft: SPACE.xs,
-  },
-  cooldownBadgeText: {
-    ...TYPE.caption,
-    color: '#0F172A',
-    fontSize: 12,
-    fontWeight: '700',
   },
   statement: {
     marginTop: SPACE.xxl,

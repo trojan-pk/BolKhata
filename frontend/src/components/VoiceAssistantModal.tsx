@@ -7,6 +7,7 @@ import {
   Check,
   Edit3,
   Quote,
+  Phone,
   Tag,
   Trash2,
   User,
@@ -53,6 +54,7 @@ interface VoiceAssistantModalProps {
     type: TransactionType;
     note: string;
     date?: string;
+    mobile?: string;
   }) => void;
   onUpdateTransaction?: (updatedTxn: Transaction) => void;
   onDeleteTransaction?: (txnId: string) => void;
@@ -86,6 +88,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [activeIntent, setActiveIntent] = useState<VoiceActionIntent>('create_transaction');
   const [transcript, setTranscript] = useState('');
   const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<TransactionType>('gave');
   const [reason, setReason] = useState('');
@@ -147,6 +150,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     const rawPerson = data.person?.name ?? data.customerName ?? data.partyName ?? '';
     const person = String(rawPerson || '').trim();
     const matchedP = person ? matchParty(person) : undefined;
+    const rawMobile =
+      data.person?.mobile ||
+      data.customerPhone ||
+      data.mobile ||
+      data.phone ||
+      matchedP?.mobile ||
+      '';
+    setMobile(String(rawMobile || '').trim());
 
     // 1. BALANCE QUERY INTENT
     if (rawIntent === 'get_balance') {
@@ -304,6 +315,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setActiveIntent('create_transaction');
     setTranscript('');
     setName('');
+    setMobile('');
     setAmount('');
     setReason('');
     setType('gave');
@@ -374,6 +386,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       type,
       note: cleanReason,
       date,
+      mobile: String(mobile || '').trim(),
     });
     onClose();
   };
@@ -603,10 +616,24 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             onChangeText={(next) => {
               setName(next);
               if (error) setError(null);
+              const matched = matchParty(next);
+              if (matched?.mobile && !mobile) {
+                setMobile(matched.mobile);
+              }
             }}
             placeholder={COPY.voice.namePlaceholder}
             icon={User}
             autoCapitalize="words"
+          />
+
+          <TextField
+            label={COPY.party.phoneLabel}
+            optional
+            value={mobile}
+            onChangeText={setMobile}
+            placeholder={COPY.party.phonePlaceholder}
+            icon={Phone}
+            keyboardType="phone-pad"
           />
 
           {message ? <Badge label={message} tone="accent" /> : null}
