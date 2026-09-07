@@ -11,6 +11,7 @@ import {
   Home,
   Mic,
   PieChart,
+  Square,
   Users,
   Wallet,
 } from 'lucide-react-native';
@@ -65,8 +66,18 @@ const PAD = 5;
 export const TabBar: React.FC<{
   active: TabKey;
   onChange: (key: TabKey) => void;
+  isRecording?: boolean;
   onPressVoice?: () => void;
-}> = ({ active, onChange, onPressVoice }) => {
+  onPressInVoice?: () => void;
+  onPressOutVoice?: () => void;
+}> = ({
+  active,
+  onChange,
+  isRecording = false,
+  onPressVoice,
+  onPressInVoice,
+  onPressOutVoice,
+}) => {
   const insets = useSafeAreaInsets();
   const [trackWidth, setTrackWidth] = useState(0);
 
@@ -142,14 +153,21 @@ export const TabBar: React.FC<{
         <View style={styles.voiceSlot}>
           <Pressable
             onPress={onPressVoice}
+            onPressIn={onPressInVoice}
+            onPressOut={onPressOutVoice}
             accessibilityRole="button"
-            accessibilityLabel="Voice Assistant"
+            accessibilityLabel={isRecording ? 'Stop recording' : 'Record voice entry'}
             style={({ pressed }) => [
               styles.voiceBtn,
+              isRecording && styles.voiceBtnRecording,
               pressed && styles.voiceBtnPressed,
             ]}
           >
-            <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
+            {isRecording ? (
+              <Square size={18} color="#FFFFFF" fill="#FFFFFF" />
+            ) : (
+              <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
+            )}
           </Pressable>
         </View>
 
@@ -235,6 +253,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     paddingHorizontal: SPACE.lg,
+    zIndex: 1001,
   },
   dock: {
     flexDirection: 'row',
@@ -269,9 +288,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   voiceBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -281,8 +300,18 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
+  voiceBtnRecording: {
+    backgroundColor: '#6366F1',
+    borderWidth: 2,
+    borderColor: '#38BDF8',
+    shadowColor: '#EC4899',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   voiceBtnPressed: {
-    transform: [{ scale: 0.92 }],
+    transform: [{ scale: 0.91 }],
     backgroundColor: COLORS.accentPressed,
   },
   label: {

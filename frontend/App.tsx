@@ -33,7 +33,9 @@ import { CustomerLedgerPanel } from './src/components/CustomerLedgerPanel';
 import { EditTransactionModal } from './src/components/EditTransactionModal';
 import { TransactionModal } from './src/components/TransactionModal';
 import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
-import { VoiceRecordingModal } from './src/components/VoiceRecordingModal';
+import { AuroraVoiceOverlay } from './src/components/AuroraVoiceOverlay';
+import { Audio } from 'expo-av';
+import { ApiService } from './src/services/api';
 
 import { HomeScreen } from './src/screens/HomeScreen';
 import { CustomersScreen } from './src/screens/CustomersScreen';
@@ -135,11 +137,239 @@ function BolKhata() {
   /* ---------------------------------------------------------------- modals -- */
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
-  const [voiceRecordOpen, setVoiceRecordOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceResult, setVoiceResult] = useState<unknown>(null);
   const [addPartyOpen, setAddPartyOpen] = useState(false);
   const [apiConfigOpen, setApiConfigOpen] = useState(false);
+
+  /* -------------------------------------------------------- voice capture -- */
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing'>('idle');
+  const [voiceDuration, setVoiceDuration] = useState(0);
+  const [promptIdx, setPromptIdx] = useState(0);
+
+  const webRecorderRef = useRef<MediaRecorder | null>(null);
+  const webChunksRef = useRef<Blob[]>([]);
+  const webStreamRef = useRef<MediaStream | null>(null);
+  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
+  const capturingRef = useRef(false);
+  const isTapRecordingRef = useRef(false);
+  const pressStartRef = useRef(0);
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopRef = useRef<() => void>(() => {});
+
+  const releaseWebStream = () => {
+    if (webStreamRef.current) {
+      webStreamRef.current.getTracks().forEach((track) => track.stop());
+      webStreamRef.current = null;
+    }
+  };
+
+  const abortVoiceCapture = useCallback((message?: string) => {
+    capturingRef.current = false;
+    isTapRecordingRef.current = false;
+    setVoiceState('idle');
+    if (sessionTimerRef.current) {
+      clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    releaseWebStream();
+    if (message) toast(message, 'error');
+  }, [toast]);
+
+  const sendForParsing = useCallback(async (body: FormData) => {
+    body.append(
+      'people',
+      JSON.stringify(parties.map((p) => ({ id: p.id, name: p.name })))
+    );
+    body.append('current_date', todayISO());
+
+    try {
+      const result = await ApiService.processVoice(body);
+      if (result) {
+        setVoiceResult(result);
+        setVoiceOpen(true);
+      } else {
+        toast(COPY.voice.failed, 'error');
+        setVoiceResult(null);
+        setVoiceOpen(true);
+      }
+    } catch (error) {
+      toast(COPY.voice.failed, 'error');
+      setVoiceResult(null);
+      setVoiceOpen(true);
+    } finally {
+      setVoiceState('idle');
+    }
+  }, [parties, toast]);
+
+  const stopVoiceCaptureAndParse = useCallback(async () => {
+    if (!capturingRef.current) return;
+    capturingRef.current = false;
+    isTapRecordingRef.current = false;
+
+    if (sessionTimerRef.current) {
+      clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+
+    setVoiceState('processing');
+
+    try {
+      if (Platform.OS === 'web') {
+        const recorder = webRecorderRef.current;
+        if (!recorder) {
+          setVoiceState('idle');
+          return;
+        }
+        recorder.onstop = async () => {
+          releaseWebStream();
+          const chunks = webChunksRef.current;
+          if (!chunks.length) {
+            setVoiceState('idle');
+            return;
+          }
+          const mimeType = recorder.mimeType || 'audio/webm';
+          const blob = new Blob(chunks, { type: mimeType });
+          if (blob.size < 500) {
+            setVoiceState('idle');
+            toast(COPY.voice.tooShort, 'error');
+            return;
+          }
+          const file = new File([blob], 'recording.webm', { type: mimeType });
+          const formData = new FormData();
+          formData.append('audio', file);
+          await sendForParsing(formData);
+        };
+        recorder.stop();
+        return;
+      }
+
+      const recording = nativeRecordingRef.current;
+      if (!recording) {
+        setVoiceState('idle');
+        return;
+      }
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      nativeRecordingRef.current = null;
+      if (!uri) {
+        setVoiceState('idle');
+        toast(COPY.voice.failed, 'error');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('audio', {
+        uri,
+        type: 'audio/m4a',
+        name: 'recording.m4a',
+      } as any);
+      await sendForParsing(formData);
+    } catch {
+      setVoiceState('idle');
+      toast(COPY.voice.failed, 'error');
+    }
+  }, [sendForParsing, toast]);
+
+  useEffect(() => {
+    stopRef.current = stopVoiceCaptureAndParse;
+  }, [stopVoiceCaptureAndParse]);
+
+  const startVoiceCapture = useCallback(async () => {
+    if (capturingRef.current) return;
+
+    try {
+      capturingRef.current = true;
+      setVoiceDuration(0);
+      setVoiceState('recording');
+
+      sessionTimerRef.current = setTimeout(() => {
+        if (capturingRef.current) stopRef.current();
+      }, 30000);
+
+      durationIntervalRef.current = setInterval(() => {
+        setVoiceDuration((prev) => prev + 1);
+      }, 1000);
+
+      if (Platform.OS === 'web') {
+        const media =
+          typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+        if (!media?.getUserMedia) {
+          abortVoiceCapture(COPY.voice.micUnavailable);
+          return;
+        }
+        const stream = await media.getUserMedia({ audio: true });
+        webStreamRef.current = stream;
+        webChunksRef.current = [];
+        const recorder = new MediaRecorder(stream);
+        webRecorderRef.current = recorder;
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) webChunksRef.current.push(event.data);
+        };
+        recorder.start();
+        return;
+      }
+
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        abortVoiceCapture(COPY.voice.micDenied);
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      await recording.startAsync();
+      nativeRecordingRef.current = recording;
+    } catch (error) {
+      abortVoiceCapture(COPY.voice.micDenied);
+    }
+  }, [abortVoiceCapture]);
+
+  useEffect(() => {
+    if (voiceState !== 'recording') return;
+    const interval = setInterval(() => {
+      setPromptIdx((prev) => (prev + 1) % COPY.home.examples.length);
+    }, 3200);
+    return () => clearInterval(interval);
+  }, [voiceState]);
+
+  /* ------------------------------------------- tap vs hold-and-release -- */
+  const handleVoicePressIn = () => {
+    pressStartRef.current = Date.now();
+    if (voiceState === 'idle') {
+      startVoiceCapture();
+    }
+  };
+
+  const handleVoicePressOut = () => {
+    const elapsed = Date.now() - pressStartRef.current;
+    if (elapsed >= 450 && capturingRef.current) {
+      stopVoiceCaptureAndParse();
+    } else if (elapsed < 450 && capturingRef.current) {
+      isTapRecordingRef.current = true;
+    }
+  };
+
+  const handleVoicePress = () => {
+    if (isTapRecordingRef.current && capturingRef.current) {
+      stopVoiceCaptureAndParse();
+    }
+  };
   const [composer, setComposer] = useState<{
     visible: boolean;
     type: TransactionType;
@@ -760,7 +990,10 @@ function BolKhata() {
               <TabBar
                 active={activeTab}
                 onChange={setActiveTab}
-                onPressVoice={() => setVoiceRecordOpen(true)}
+                isRecording={voiceState === 'recording'}
+                onPressVoice={handleVoicePress}
+                onPressInVoice={handleVoicePressIn}
+                onPressOutVoice={handleVoicePressOut}
               />
 
               {/* Post-signup personalisation & business setup wizard */}
@@ -862,21 +1095,14 @@ function BolKhata() {
         onSubmit={addParty}
       />
 
-      <VoiceRecordingModal
-        visible={voiceRecordOpen}
-        parties={parties}
-        currency={storeProfile.currency}
-        onClose={() => setVoiceRecordOpen(false)}
-        onParsed={(result) => {
-          setVoiceRecordOpen(false);
-          setVoiceResult(result);
-          setVoiceOpen(true);
-        }}
-        onManualFallback={() => {
-          setVoiceRecordOpen(false);
-          setVoiceResult(null);
-          setVoiceOpen(true);
-        }}
+      {/* 60% Black Screen + Gradient Aurora Voice Animation */}
+      <AuroraVoiceOverlay
+        visible={voiceState !== 'idle'}
+        state={voiceState === 'processing' ? 'processing' : 'recording'}
+        durationSeconds={voiceDuration}
+        promptText={`“${COPY.home.examples[promptIdx]}”`}
+        onStop={stopVoiceCaptureAndParse}
+        onCancel={() => abortVoiceCapture()}
       />
 
       <VoiceAssistantModal
