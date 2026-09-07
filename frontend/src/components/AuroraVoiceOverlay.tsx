@@ -17,6 +17,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { Sparkles, Square } from 'lucide-react-native';
+import Aurora from './Aurora';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
@@ -184,6 +185,16 @@ export const AuroraVoiceOverlay: React.FC<AuroraVoiceOverlayProps> = ({
         accessibilityRole="button"
         accessibilityLabel="Stop recording"
       />
+
+      {/* React Bits Aurora Component */}
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <Aurora
+          colorStops={['#7cff67', '#B497CF', '#5227FF']}
+          blend={0.5}
+          amplitude={1.0}
+          speed={0.5}
+        />
+      </View>
 
       {/* Screen Edge Aurora Glow (Bottom and lateral edges) */}
       <Animated.View
