@@ -72,44 +72,112 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setError(null);
 
     const url = `${getApiBaseUrl()}/wa/link/${userId}`;
-    // EventSource is a Web API — available in Expo web & React Native via
-    // the runtime polyfill; cast via 'any' to avoid missing global typings
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const es: any = new (globalThis as any).EventSource(url);
-    esRef.current = es;
 
-    es.addEventListener('qr', (e: { data: string }) => {
-      const data = JSON.parse(e.data) as { qr: string };
-      setQrBase64(data.qr);
-      updateStatus('connecting');
-    });
+    // On Web, use browser EventSource if available
+    if (typeof (globalThis as any).EventSource !== 'undefined') {
+      const es = new (globalThis as any).EventSource(url);
+      esRef.current = es;
 
-    es.addEventListener('connected', (e: { data: string }) => {
-      const data = JSON.parse(e.data) as { phone?: string };
-      setPhone(data.phone ?? null);
-      updateStatus('linked');
-      es.close();
-      if (onLinked && data.phone) onLinked(data.phone);
-    });
+      es.addEventListener('qr', (e: { data: string }) => {
+        try {
+          const data = JSON.parse(e.data) as { qr: string };
+          setQrBase64(data.qr);
+          updateStatus('connecting');
+        } catch {}
+      });
 
-    es.addEventListener('error', (e: { data?: string }) => {
-      try {
-        const data = JSON.parse(e.data ?? '{}') as { error?: string };
-        setError(data.error ?? 'Connection failed');
-      } catch {
-        setError('Connection failed');
-      }
-      updateStatus('error');
-      es.close();
-    });
+      es.addEventListener('connected', (e: { data: string }) => {
+        try {
+          const data = JSON.parse(e.data) as { phone?: string };
+          setPhone(data.phone ?? null);
+          updateStatus('linked');
+          es.close();
+          if (onLinked && data.phone) onLinked(data.phone);
+        } catch {}
+      });
 
-    es.onerror = () => {
-      // SSE closes naturally after 'connected' — only treat as error if not yet linked
-      if (statusRef.current !== 'linked') {
-        setError('Lost connection to server');
+      es.addEventListener('error', (e: { data?: string }) => {
+        try {
+          const data = JSON.parse(e.data ?? '{}') as { error?: string };
+          setError(data.error ?? 'Connection failed');
+        } catch {
+          setError('Connection failed');
+        }
         updateStatus('error');
-      }
-    };
+        es.close();
+      });
+
+      es.onerror = () => {
+        if (statusRef.current !== 'linked') {
+          setError('Lost connection to server');
+          updateStatus('error');
+        }
+      };
+      return;
+    }
+
+    // On React Native (mobile), EventSource is undefined on globalThis.
+    // Use XMLHttpRequest streaming to parse SSE chunks safely.
+    try {
+      const xhr = new XMLHttpRequest();
+      esRef.current = { close: () => xhr.abort() };
+
+      let lastIndex = 0;
+      const processBuffer = () => {
+        const text = xhr.responseText || '';
+        const newChunk = text.substring(lastIndex);
+        lastIndex = text.length;
+
+        const lines = newChunk.split(/\r?\n/);
+        let currentEvent = 'message';
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          if (line.startsWith('event:')) {
+            currentEvent = line.replace(/^event:\s*/, '');
+          } else if (line.startsWith('data:')) {
+            const dataStr = line.replace(/^data:\s*/, '');
+            try {
+              const data = JSON.parse(dataStr);
+              if (currentEvent === 'qr' && data.qr) {
+                setQrBase64(data.qr);
+                updateStatus('connecting');
+              } else if (currentEvent === 'connected') {
+                setPhone(data.phone ?? null);
+                updateStatus('linked');
+                xhr.abort();
+                if (onLinked && data.phone) onLinked(data.phone);
+              } else if (currentEvent === 'error') {
+                setError(data.error ?? 'Connection failed');
+                updateStatus('error');
+                xhr.abort();
+              }
+            } catch {}
+          }
+        }
+      };
+
+      xhr.onprogress = processBuffer;
+      xhr.onload = () => {
+        processBuffer();
+      };
+      xhr.onerror = () => {
+        if (statusRef.current !== 'linked') {
+          setError('Lost connection to server');
+          updateStatus('error');
+        }
+      };
+
+      xhr.open('GET', url);
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+      xhr.setRequestHeader('Cache-Control', 'no-cache');
+      xhr.send();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to initialize connection');
+      updateStatus('error');
+    }
   }
 
   async function handleUnlink() {
