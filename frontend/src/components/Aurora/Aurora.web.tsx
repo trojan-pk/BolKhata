@@ -205,6 +205,14 @@ export default function Aurora(props: AuroraProps) {
     let animateId = 0;
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
+      const w = ctn.offsetWidth || (typeof window !== 'undefined' ? window.innerWidth : 400);
+      const h = ctn.offsetHeight || (typeof window !== 'undefined' ? window.innerHeight : 800);
+      if (w > 0 && h > 0 && (gl.canvas.width !== w || gl.canvas.height !== h)) {
+        renderer.setSize(w, h);
+        if (program) {
+          program.uniforms.uResolution.value = [w, h];
+        }
+      }
       const { time = t * 0.01, speed = 1.0 } = propsRef.current;
       program.uniforms.uTime.value = time * speed * 0.1;
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
