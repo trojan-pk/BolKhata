@@ -48,13 +48,13 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setStatus(s);
   }
 
-  // ─── start SSE stream when modal opens ─────────────────────────────────────
+  // ─── check status or start SSE stream when modal opens ────────────────────
   useEffect(() => {
     if (!visible) {
       cleanup();
       return;
     }
-    startLinking();
+    initModal();
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, userId]);
@@ -64,6 +64,31 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
       esRef.current.close();
       esRef.current = null;
     }
+  }
+
+  async function initModal() {
+    updateStatus('connecting');
+    setQrBase64(null);
+    setError(null);
+
+    // 1. First check if backend session is ALREADY active & linked
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/wa/status/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.linked && data.phone) {
+          setPhone(data.phone);
+          updateStatus('linked');
+          if (onLinked) onLinked(data.phone);
+          return;
+        }
+      }
+    } catch {
+      // Proceed to SSE linking if status check fails
+    }
+
+    // 2. Not linked, start QR SSE stream
+    startLinking();
   }
 
   function startLinking() {
@@ -256,14 +281,23 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
                 <Text style={[TYPE.body, styles.linkedPhone]}>Phone: +{phone}</Text>
               </View>
             </View>
-            <Button
-              label="Unlink WhatsApp Account"
-              icon={Link2Off}
-              variant="secondary"
-              size="md"
-              onPress={handleUnlink}
-              style={styles.unlinkBtn}
-            />
+            <View style={styles.linkedActions}>
+              <Button
+                label="Unlink Account"
+                icon={Link2Off}
+                variant="danger"
+                size="md"
+                onPress={handleUnlink}
+                style={styles.linkedBtn}
+              />
+              <Button
+                label="Scan New Device"
+                variant="secondary"
+                size="md"
+                onPress={startLinking}
+                style={styles.linkedBtn}
+              />
+            </View>
           </View>
         ) : null}
 
@@ -416,8 +450,13 @@ const styles = StyleSheet.create({
     color: '#128C7E',
     fontWeight: '600',
   },
-  unlinkBtn: {
-    alignSelf: 'stretch',
+  linkedActions: {
+    flexDirection: 'row',
+    gap: SPACE.sm,
+    width: '100%',
+  },
+  linkedBtn: {
+    flex: 1,
   },
   // instructions & qr
   linkContainer: {

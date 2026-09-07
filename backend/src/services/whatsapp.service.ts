@@ -150,6 +150,7 @@ setInterval(checkAndRunScheduledReminders, 30000)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const activeSockets = new Map<string, any>()
+const connectingUsers = new Set<string>()
 
 export interface SessionStatus { linked: boolean; phone?: string }
 
@@ -174,8 +175,10 @@ export function getSessionStatus(userId: string): SessionStatus {
     }
     const savedPhone = getSavedPhone(userId)
     if (savedPhone) {
-        // Auto-connect socket in background if creds exist on disk
-        startSession(userId, () => {}, () => {}).catch(() => {})
+        // Auto-connect socket in background if creds exist on disk and not already connecting
+        if (!connectingUsers.has(userId)) {
+            startSession(userId, () => {}, () => {}).catch(() => {})
+        }
         return { linked: true, phone: savedPhone }
     }
     return { linked: false }
@@ -190,6 +193,21 @@ export async function startSession(
     send: SendEvent,
     onComplete: (result: { success: boolean; phone?: string; error?: string }) => void
 ): Promise<void> {
+    // If already active and connected, return immediately
+    const existingSock = activeSockets.get(userId)
+    if (existingSock) {
+        const me = existingSock.user ?? existingSock.authState?.creds?.me
+        const phone: string | undefined = me?.id?.split(':')[0] ?? me?.id
+        send('connected', { phone })
+        onComplete({ success: true, phone })
+        return
+    }
+
+    if (connectingUsers.has(userId)) {
+        return
+    }
+
+    connectingUsers.add(userId)
     let isFinished = false
 
     const {
@@ -206,6 +224,7 @@ export async function startSession(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async function clearSocket(sock?: any) {
         isFinished = true
+        connectingUsers.delete(userId)
         activeSockets.delete(userId)
         if (sock) {
             sock.ev.removeAllListeners('creds.update')
@@ -234,6 +253,7 @@ export async function startSession(
             if (isFinished) return
             if (qr) send('qr', { qr: imageSync(qr).toString('base64') })
             if (connection === 'open') {
+                connectingUsers.delete(userId)
                 const me = sock.user ?? sock.authState?.creds?.me
                 const phone: string | undefined = me?.id?.split(':')[0] ?? me?.id
                 activeSockets.set(userId, sock)
@@ -244,13 +264,19 @@ export async function startSession(
                 const code: number = (lastDisconnect?.error instanceof Boom)
                     ? lastDisconnect.error.output?.statusCode
                     : 0
-                if ([401, 403, 428].includes(code)) {
-                    await clearSocket()
-                    send('error', { error: 'Session expired or logged out' })
-                    onComplete({ success: false, error: 'Session expired' })
+
+                // 401 is loggedOut. Other codes (428, 408, 440, 515) are transient network/socket drops.
+                if (code === 401 || code === 403) {
+                    await clearSocket(sock)
+                    send('error', { error: 'WhatsApp logged out' })
+                    onComplete({ success: false, error: 'WhatsApp logged out' })
                     return
                 }
-                if (!isFinished) { await delay(3000); connect() }
+
+                if (!isFinished) {
+                    await delay(3000)
+                    connect()
+                }
             }
         })
 
