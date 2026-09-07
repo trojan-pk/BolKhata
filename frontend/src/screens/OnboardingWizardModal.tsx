@@ -212,6 +212,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                       </View>
                     </Enter>
 
+                    <View style={styles.fieldDivider} />
+
                     <Enter index={1} {...beat} style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>
                         Owner / Manager Name <Text style={styles.requiredStar}>*</Text>
@@ -227,6 +229,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                         />
                       </View>
                     </Enter>
+
+                    <View style={styles.sectionDivider} />
 
                     <Enter index={2} {...beat} style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Business Category</Text>
@@ -276,6 +280,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                   </Enter>
                 )}
 
+                <View style={styles.sectionDivider} />
+
                 <Enter index={3} {...beat} style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Phone / WhatsApp Number</Text>
                   <View style={styles.inputBox}>
@@ -290,6 +296,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                     />
                   </View>
                 </Enter>
+
+                <View style={styles.fieldDivider} />
 
                 <Enter index={4} {...beat} style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Preferred Currency</Text>
@@ -317,6 +325,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                   </View>
                 </Enter>
 
+                <View style={styles.footerDivider} />
+
                 <Enter index={5} {...beat} style={styles.buttonRow}>
                   <Button
                     label="Back"
@@ -325,6 +335,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                     icon={ArrowLeft}
                     disabled={saving}
                     onPress={() => setStep(1)}
+                    style={styles.backButton}
                   />
                   <Button
                     label="Complete Setup"
@@ -614,7 +625,25 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   formContainer: {
-    gap: 16,
+    gap: 12,
+  },
+  fieldDivider: {
+    height: 1,
+    backgroundColor: COLORS.hairline,
+    opacity: 0.6,
+    marginVertical: 2,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: COLORS.hairlineStrong,
+    opacity: 0.8,
+    marginVertical: 6,
+  },
+  footerDivider: {
+    height: 1,
+    backgroundColor: COLORS.hairline,
+    marginTop: 8,
+    marginBottom: 4,
   },
   inputGroup: {
     gap: 6,
@@ -703,10 +732,14 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 6,
+  },
+  backButton: {
+    flex: 1,
   },
   finishButton: {
-    flex: 1,
+    flex: 2,
   },
 });

@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: RADIUS.md,
-    width: '100%',
   },
   labelMd: {
     ...TYPE.label,

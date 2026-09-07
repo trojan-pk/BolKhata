@@ -123,42 +123,65 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
       esRef.current = { close: () => xhr.abort() };
 
       let lastIndex = 0;
+      let buffer = '';
+
       const processBuffer = () => {
         const text = xhr.responseText || '';
-        const newChunk = text.substring(lastIndex);
-        lastIndex = text.length;
+        if (text.length > lastIndex) {
+          const newChunk = text.substring(lastIndex);
+          lastIndex = text.length;
+          buffer += newChunk;
 
-        const lines = newChunk.split(/\r?\n/);
-        let currentEvent = 'message';
+          // SSE event messages are delimited by double newline \n\n
+          let boundaryIndex: number;
+          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+            const eventBlock = buffer.substring(0, boundaryIndex);
+            buffer = buffer.substring(boundaryIndex + 2);
 
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
+            const lines = eventBlock.split(/\r?\n/);
+            let eventType = 'message';
+            let dataStr = '';
 
-          if (line.startsWith('event:')) {
-            currentEvent = line.replace(/^event:\s*/, '');
-          } else if (line.startsWith('data:')) {
-            const dataStr = line.replace(/^data:\s*/, '');
-            try {
-              const data = JSON.parse(dataStr);
-              if (currentEvent === 'qr' && data.qr) {
-                setQrBase64(data.qr);
-                updateStatus('connecting');
-              } else if (currentEvent === 'connected') {
-                setPhone(data.phone ?? null);
-                updateStatus('linked');
-                xhr.abort();
-                if (onLinked && data.phone) onLinked(data.phone);
-              } else if (currentEvent === 'error') {
-                setError(data.error ?? 'Connection failed');
-                updateStatus('error');
-                xhr.abort();
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith(':')) continue; // Skip comments/keepalives
+
+              if (trimmed.startsWith('event:')) {
+                eventType = trimmed.replace(/^event:\s*/, '').trim();
+              } else if (trimmed.startsWith('data:')) {
+                dataStr += trimmed.replace(/^data:\s*/, '');
               }
-            } catch {}
+            }
+
+            if (dataStr) {
+              try {
+                const data = JSON.parse(dataStr);
+                if (eventType === 'qr' && data.qr) {
+                  setQrBase64(data.qr);
+                  updateStatus('connecting');
+                } else if (eventType === 'connected') {
+                  setPhone(data.phone ?? null);
+                  updateStatus('linked');
+                  xhr.abort();
+                  if (onLinked && data.phone) onLinked(data.phone);
+                } else if (eventType === 'error') {
+                  setError(data.error ?? 'Connection failed');
+                  updateStatus('error');
+                  xhr.abort();
+                }
+              } catch (parseErr) {
+                console.warn('[WhatsAppLinkModal] Error parsing SSE payload:', parseErr);
+              }
+            }
           }
         }
       };
 
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 3 || xhr.readyState === 4) {
+          processBuffer();
+        }
+      };
       xhr.onprogress = processBuffer;
       xhr.onload = () => {
         processBuffer();
