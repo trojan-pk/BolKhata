@@ -24,15 +24,15 @@ interface HomeScreenProps {
   toPay: number;
   currency: string;
   loading?: boolean;
+  onOpenVoiceReview?: () => void;
   onViewAllCustomers: () => void;
   onSelectTransaction: (txn: Transaction) => void;
-  onOpenVoiceReview?: () => void;
   onVoiceResultParsed?: (result: unknown) => void;
 }
 
 /**
- * Home dashboard: Net position anchors the top of the screen, followed by
- * the recent transactions feed.
+ * Clean, elegant dashboard:
+ * Net position summary card followed immediately by recent transaction activity.
  */
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   parties,
@@ -59,8 +59,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ---------------------------------------------------- net position -- */}
-      <View style={styles.block}>
+      {/* ---------------------------------------------------- Net Position -- */}
+      <View style={[styles.block, styles.topBlock]}>
         <BalanceCard
           toCollect={toCollect}
           toPay={toPay}
@@ -71,8 +71,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         />
       </View>
 
-      {/* -------------------------------------------------- recent activity -- */}
-      <View style={styles.sectionBlock}>
+      {/* -------------------------------------------------- Recent Activity -- */}
+      <View style={styles.block}>
         <SectionHeader
           title={COPY.home.recentActivity}
           actionLabel={
@@ -113,13 +113,11 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 132,
-    paddingTop: SPACE.sm,
+  },
+  topBlock: {
+    marginTop: SPACE.md,
   },
   block: {
-    paddingHorizontal: GUTTER,
-    marginTop: SPACE.xs,
-  },
-  sectionBlock: {
     paddingHorizontal: GUTTER,
     marginTop: SPACE.xl,
   },

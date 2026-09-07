@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   LayoutChangeEvent,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -28,90 +30,101 @@ import {
   TYPE,
 } from '../theme/tokens';
 import { IconComponent } from '../ui/icon';
+import { VoiceState } from '../hooks/useVoiceRecording';
 
 export type TabKey = 'home' | 'customers' | 'cashbook' | 'reports' | 'settings';
 
-interface NavTabItem {
+interface NavTab {
   key: TabKey;
   label: string;
   icon: IconComponent;
+  colIndex: number;
 }
 
-const LEFT_TABS: NavTabItem[] = [
-  { key: 'home', label: COPY.nav.home, icon: Home },
-  { key: 'customers', label: COPY.nav.customers, icon: Users },
+const LEFT_TABS: NavTab[] = [
+  { key: 'home', label: COPY.nav.home, icon: Home, colIndex: 0 },
+  { key: 'customers', label: COPY.nav.customers, icon: Users, colIndex: 1 },
 ];
 
-const RIGHT_TABS: NavTabItem[] = [
-  { key: 'cashbook', label: COPY.nav.cashbook, icon: Wallet },
-  { key: 'reports', label: COPY.nav.reports, icon: PieChart },
+const RIGHT_TABS: NavTab[] = [
+  { key: 'cashbook', label: COPY.nav.cashbook, icon: Wallet, colIndex: 3 },
+  { key: 'reports', label: COPY.nav.reports, icon: PieChart, colIndex: 4 },
 ];
 
-const TOTAL_SLOTS = 5;
-
-const TAB_SLOT_MAP: Record<string, number> = {
+const TAB_COL_MAP: Record<TabKey, number> = {
   home: 0,
   customers: 1,
   cashbook: 3,
   reports: 4,
+  settings: -1,
 };
 
-const DOCK_HEIGHT = 62;
+const TOTAL_COLS = 5;
+const DOCK_HEIGHT = 64;
 const PAD = 5;
 
-/**
- * Floating dock with centered Voice action button.
- * Layout: [Home] [Customers]  ( 🎙️ Voice )  [Cashbook] [Reports]
- */
-export const TabBar: React.FC<{
+export interface TabBarProps {
   active: TabKey;
   onChange: (key: TabKey) => void;
-  isRecording?: boolean;
   onPressVoice?: () => void;
   onPressInVoice?: () => void;
   onPressOutVoice?: () => void;
-}> = ({
+  voiceState?: VoiceState;
+}
+
+/**
+ * Floating dock navigation with a prominent, tactile Center Mic action button.
+ */
+export const TabBar: React.FC<TabBarProps> = ({
   active,
   onChange,
-  isRecording = false,
   onPressVoice,
   onPressInVoice,
   onPressOutVoice,
+  voiceState = 'idle',
 }) => {
   const insets = useSafeAreaInsets();
   const [trackWidth, setTrackWidth] = useState(0);
 
-  const activeSlot = TAB_SLOT_MAP[active] ?? -1;
-  const position = useRef(new Animated.Value(Math.max(0, activeSlot))).current;
-  const indicatorOpacity = useRef(new Animated.Value(activeSlot >= 0 ? 1 : 0)).current;
+  const colIndex = TAB_COL_MAP[active] ?? 0;
+  const isTabVisible = colIndex >= 0;
+
+  const position = useRef(new Animated.Value(Math.max(0, colIndex))).current;
+  const indicatorOpacity = useRef(new Animated.Value(isTabVisible ? 1 : 0)).current;
 
   useEffect(() => {
-    if (activeSlot >= 0) {
+    if (isTabVisible) {
       Animated.parallel([
         Animated.spring(position, {
-          toValue: activeSlot,
+          toValue: colIndex,
           ...MOTION.spring,
         }),
         Animated.timing(indicatorOpacity, {
           toValue: 1,
-          duration: MOTION.fast,
-          useNativeDriver: false,
+          duration: 150,
+          useNativeDriver: true,
         }),
       ]).start();
     } else {
       Animated.timing(indicatorOpacity, {
         toValue: 0,
-        duration: MOTION.fast,
-        useNativeDriver: false,
+        duration: 150,
+        useNativeDriver: true,
       }).start();
     }
-  }, [activeSlot, position, indicatorOpacity]);
+  }, [colIndex, isTabVisible, position, indicatorOpacity]);
 
-  const itemWidth = trackWidth > 0 ? (trackWidth - PAD * 2) / TOTAL_SLOTS : 0;
+  const itemWidth = trackWidth > 0 ? (trackWidth - PAD * 2) / TOTAL_COLS : 0;
 
   const translateX = position.interpolate({
     inputRange: [0, 1, 2, 3, 4],
-    outputRange: [0, 1, 2, 3, 4].map((i) => PAD + i * itemWidth),
+    outputRange: [
+      PAD + 0 * itemWidth,
+      PAD + 1 * itemWidth,
+      PAD + 2 * itemWidth,
+      PAD + 3 * itemWidth,
+      PAD + 4 * itemWidth,
+    ],
   });
 
   return (
@@ -149,27 +162,13 @@ export const TabBar: React.FC<{
           />
         ))}
 
-        {/* Middle Voice Button */}
-        <View style={styles.voiceSlot}>
-          <Pressable
-            onPress={onPressVoice}
-            onPressIn={onPressInVoice}
-            onPressOut={onPressOutVoice}
-            accessibilityRole="button"
-            accessibilityLabel={isRecording ? 'Stop recording' : 'Record voice entry'}
-            style={({ pressed }) => [
-              styles.voiceBtn,
-              isRecording && styles.voiceBtnRecording,
-              pressed && styles.voiceBtnPressed,
-            ]}
-          >
-            {isRecording ? (
-              <Square size={18} color="#FFFFFF" fill="#FFFFFF" />
-            ) : (
-              <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
-            )}
-          </Pressable>
-        </View>
+        {/* Center: Distinct Voice Mic Action Button */}
+        <CenterMicButton
+          voiceState={voiceState}
+          onPress={onPressVoice}
+          onPressIn={onPressInVoice}
+          onPressOut={onPressOutVoice}
+        />
 
         {/* Right Tabs: Cashbook, Reports */}
         {RIGHT_TABS.map((tab) => (
@@ -185,8 +184,9 @@ export const TabBar: React.FC<{
   );
 };
 
+/** Standard Nav Tab item */
 const TabItem: React.FC<{
-  tab: NavTabItem;
+  tab: NavTab;
   active: boolean;
   onPress: () => void;
 }> = ({ tab, active, onPress }) => {
@@ -225,7 +225,7 @@ const TabItem: React.FC<{
         }}
       >
         <Icon
-          size={20}
+          size={19}
           color={active ? COLORS.accent : COLORS.textMuted}
           strokeWidth={active ? 2.5 : 2}
         />
@@ -245,6 +245,108 @@ const TabItem: React.FC<{
   );
 };
 
+/** Center Prominent Mic Action Button */
+const CenterMicButton: React.FC<{
+  voiceState: VoiceState;
+  onPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
+}> = ({ voiceState, onPress, onPressIn, onPressOut }) => {
+  const isRecording = voiceState === 'recording';
+  const isProcessing = voiceState === 'processing';
+
+  const scale = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Pulse animation while actively recording
+  useEffect(() => {
+    if (isRecording) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.28,
+            duration: 550,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.0,
+            duration: 550,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording, pulseAnim]);
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.92,
+      friction: 8,
+      tension: 300,
+      useNativeDriver: true,
+    }).start();
+    onPressIn?.();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      friction: 8,
+      tension: 300,
+      useNativeDriver: true,
+    }).start();
+    onPressOut?.();
+  };
+
+  return (
+    <View style={styles.centerItem}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isRecording
+            ? 'Stop recording voice entry'
+            : 'Record transaction with voice'
+        }
+        style={NO_OUTLINE}
+      >
+        <Animated.View
+          style={[
+            styles.micContainer,
+            isRecording && styles.micRecording,
+            isProcessing && styles.micProcessing,
+            { transform: [{ scale }] },
+          ]}
+        >
+          {/* Breathing halo ring while recording */}
+          {isRecording ? (
+            <Animated.View
+              style={[
+                styles.micHalo,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            />
+          ) : null}
+
+          {isRecording ? (
+            <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
+          ) : (
+            <Mic size={22} color="#FFFFFF" strokeWidth={2.4} />
+          )}
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   layer: {
     position: 'absolute',
@@ -253,7 +355,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     paddingHorizontal: SPACE.lg,
-    zIndex: 1001,
   },
   dock: {
     flexDirection: 'row',
@@ -281,38 +382,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  voiceSlot: {
+  centerItem: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
-  voiceBtn: {
+  micContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.accent, // Deep vibrant violet
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 8,
+    elevation: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 14px rgba(91, 70, 246, 0.40)',
+      } as any,
+    }),
   },
-  voiceBtnRecording: {
-    backgroundColor: '#6366F1',
-    borderWidth: 2,
-    borderColor: '#38BDF8',
-    shadowColor: '#EC4899',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 8,
+  micRecording: {
+    backgroundColor: '#EF4444', // Vivid recording red
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    shadowColor: '#EF4444',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 18px rgba(239, 68, 68, 0.60)',
+      } as any,
+    }),
   },
-  voiceBtnPressed: {
-    transform: [{ scale: 0.91 }],
-    backgroundColor: COLORS.accentPressed,
+  micProcessing: {
+    backgroundColor: '#8B5CF6',
+    opacity: 0.85,
+  },
+  micHalo: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.30)',
   },
   label: {
     ...TYPE.caption,

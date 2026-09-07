@@ -153,9 +153,12 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({
   const resolverRef = useRef<((ok: boolean) => void) | null>(null);
   const nextId = useRef(0);
 
-  const toast = useCallback((message: string, tone: ToastTone = 'success') => {
+  const toast = useCallback((message: string | unknown, tone: ToastTone = 'success') => {
+    if (!message) return;
+    const text = typeof message === 'string' ? message : String((message as { message?: string })?.message || '');
+    if (!text || text === '[object Object]') return;
     nextId.current += 1;
-    setToastRequest({ message, tone, id: nextId.current });
+    setToastRequest({ message: text, tone, id: nextId.current });
   }, []);
 
   const confirm = useCallback((request: ConfirmRequest) => {

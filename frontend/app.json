@@ -2,7 +2,10 @@
   "expo": {
     "name": "BolKhata",
     "slug": "bolkhata",
-    "scheme": ["bolkhata", "veldger"],
+    "scheme": [
+      "bolkhata",
+      "veldger"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/BKS-01-01.png",
@@ -26,11 +29,11 @@
     "web": {
       "favicon": "./assets/BKS-01-01.png"
     },
+    "owner": "trojans01",
     "extra": {
       "eas": {
-        "projectId": "bf3933c2-90e7-4475-916d-388c547ee427"
+        "projectId": "604bf042-a515-44a0-a8b9-02da71a1f247"
       }
-    },
-    "owner": "ahmmikun"
+    }
   }
 }

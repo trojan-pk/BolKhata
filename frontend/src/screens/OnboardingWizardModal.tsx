@@ -120,7 +120,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
           {/* Header Progress */}
           <View style={styles.header}>
             <View style={styles.badgePill}>
-              <Sparkles size={14} color="#4F46E5" />
+              <Sparkles size={14} color={COLORS.ink} />
               <Text style={styles.badgePillText}>Quick 1-Minute Setup</Text>
             </View>
 
@@ -148,8 +148,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 <Enter index={0} {...beat}>
                   <TypeCard
                     icon={Building2}
-                    iconBg="#EEF2FF"
-                    iconTint="#4F46E5"
+                    iconBg={COLORS.ink}
+                    iconTint="#FFFFFF"
                     title="Commercial & Business"
                     desc="For shopkeepers, dukaandaar, retail stores, wholesalers, agencies, and freelancers."
                     perks={[
@@ -165,8 +165,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 <Enter index={1} {...beat}>
                   <TypeCard
                     icon={User}
-                    iconBg="#ECFDF5"
-                    iconTint="#059669"
+                    iconBg={COLORS.ink}
+                    iconTint="#FFFFFF"
                     title="Personal & Daily Use"
                     desc="For individuals, students, roommates, and family finances."
                     perks={[
@@ -212,8 +212,6 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                       </View>
                     </Enter>
 
-                    <View style={styles.fieldDivider} />
-
                     <Enter index={1} {...beat} style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>
                         Owner / Manager Name <Text style={styles.requiredStar}>*</Text>
@@ -229,8 +227,6 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                         />
                       </View>
                     </Enter>
-
-                    <View style={styles.sectionDivider} />
 
                     <Enter index={2} {...beat} style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Business Category</Text>
@@ -280,8 +276,6 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                   </Enter>
                 )}
 
-                <View style={styles.sectionDivider} />
-
                 <Enter index={3} {...beat} style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Phone / WhatsApp Number</Text>
                   <View style={styles.inputBox}>
@@ -296,8 +290,6 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                     />
                   </View>
                 </Enter>
-
-                <View style={styles.fieldDivider} />
 
                 <Enter index={4} {...beat} style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Preferred Currency</Text>
@@ -459,7 +451,7 @@ const TypeCard: React.FC<{
       <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
         <Icon size={26} color={iconTint} />
       </View>
-      {selected && <CheckCircle2 size={22} color={iconTint} />}
+      {selected && <CheckCircle2 size={22} color={COLORS.ink} />}
     </View>
     <Text style={styles.cardTitle}>{title}</Text>
     <Text style={styles.cardDesc}>{desc}</Text>
@@ -481,60 +473,64 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 36,
-    maxWidth: 520,
+    paddingHorizontal: 28,
+    paddingVertical: 44,
+    maxWidth: 540,
     width: '100%',
     alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 36,
   },
   badgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-    marginBottom: 12,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.ink,
+    gap: 7,
+    marginBottom: 20,
   },
   badgePillText: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
-    color: '#4F46E5',
+    letterSpacing: 0.3,
+    color: COLORS.ink,
   },
   headings: {
     alignItems: 'center',
   },
   headingTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 24,
+    fontSize: 26,
+    letterSpacing: -0.6,
     color: COLORS.ink,
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   headingSubtitle: {
     fontFamily: FONTS.body,
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 380,
+    lineHeight: 21,
+    maxWidth: 400,
   },
   stepBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 26,
     gap: 8,
   },
   stepDot: {
     width: DOT,
     height: DOT,
     borderRadius: DOT / 2,
-    backgroundColor: COLORS.hairline,
+    backgroundColor: COLORS.hairlineStrong,
   },
   stepDotActive: {
     backgroundColor: COLORS.ink,
@@ -558,7 +554,7 @@ const styles = StyleSheet.create({
   stepLine: {
     width: CONNECTOR,
     height: 2,
-    backgroundColor: COLORS.hairline,
+    backgroundColor: COLORS.hairlineStrong,
     overflow: 'hidden',
   },
   stepLineFill: {
@@ -566,128 +562,121 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.ink,
   },
   stepOneCards: {
-    gap: 16,
+    gap: 18,
   },
   continueSlot: {
-    marginTop: 8,
+    marginTop: 16,
   },
   typeCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: COLORS.hairline,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 20,
+    padding: 22,
+    borderWidth: 1.5,
+    borderColor: COLORS.ink,
   },
   typeCardSelected: {
     borderColor: COLORS.ink,
-    backgroundColor: '#FAFAFF',
+    borderWidth: 2.5,
+    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.ink,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
-    color: COLORS.textPrimary,
-    marginBottom: 4,
+    fontSize: 18,
+    letterSpacing: -0.3,
+    color: COLORS.ink,
+    marginBottom: 6,
   },
   cardDesc: {
     fontFamily: FONTS.body,
     fontSize: 13,
     color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginBottom: 12,
+    lineHeight: 19,
+    marginBottom: 16,
   },
   perksList: {
-    gap: 4,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.hairline,
-    paddingTop: 10,
+    gap: 7,
+    borderTopWidth: 1.5,
+    borderTopColor: COLORS.ink,
+    paddingTop: 14,
   },
   perkItem: {
     fontFamily: FONTS.bodyMedium,
-    fontSize: 12,
-    color: COLORS.textMuted,
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    lineHeight: 17,
   },
   formContainer: {
-    gap: 12,
-  },
-  fieldDivider: {
-    height: 1,
-    backgroundColor: COLORS.hairline,
-    opacity: 0.6,
-    marginVertical: 2,
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: COLORS.hairlineStrong,
-    opacity: 0.8,
-    marginVertical: 6,
+    gap: 20,
   },
   footerDivider: {
-    height: 1,
-    backgroundColor: COLORS.hairline,
+    height: 1.5,
+    backgroundColor: COLORS.ink,
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   inputGroup: {
-    gap: 6,
+    gap: 9,
   },
   inputLabel: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 13,
-    color: COLORS.textPrimary,
+    letterSpacing: 0.1,
+    color: COLORS.ink,
   },
   requiredStar: {
-    color: '#EF4444',
+    color: COLORS.debit,
   },
   inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 48,
+    borderWidth: 1.5,
+    borderColor: COLORS.ink,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 54,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   textInput: {
     flex: 1,
     fontFamily: FONTS.body,
     fontSize: 15,
-    color: COLORS.textPrimary,
+    color: COLORS.ink,
     height: '100%',
   },
   categoryScroll: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingVertical: 4,
+    paddingRight: 4,
   },
   categoryChip: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.ink,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   categoryChipSelected: {
     backgroundColor: COLORS.ink,
@@ -696,7 +685,7 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontFamily: FONTS.bodyMedium,
     fontSize: 13,
-    color: COLORS.textPrimary,
+    color: COLORS.ink,
   },
   categoryChipTextSelected: {
     color: '#FFFFFF',
@@ -705,18 +694,18 @@ const styles = StyleSheet.create({
   currencyRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   currencyChip: {
     flex: 1,
-    minWidth: 70,
+    minWidth: 72,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.hairline,
-    borderRadius: 10,
-    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.ink,
+    borderRadius: 12,
+    paddingVertical: 12,
   },
   currencyChipSelected: {
     backgroundColor: COLORS.ink,
@@ -725,7 +714,7 @@ const styles = StyleSheet.create({
   currencyChipText: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 13,
-    color: COLORS.textPrimary,
+    color: COLORS.ink,
   },
   currencyChipTextSelected: {
     color: '#FFFFFF',
@@ -733,8 +722,8 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 6,
+    gap: 14,
+    marginTop: 8,
   },
   backButton: {
     flex: 1,

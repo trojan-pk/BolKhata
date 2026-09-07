@@ -19,36 +19,51 @@ export const AppBar: React.FC<{
   const owner = storeProfile.ownerName?.trim();
   const synced = !!storeProfile.isBackendConnected;
 
+  const identityContent = (
+    <>
+      <Avatar name={name} size={38} tone="auto" />
+      <View style={styles.identityText}>
+        <View style={styles.nameRow}>
+          <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
+            {name}
+          </Text>
+          {storeProfile.accountType === 'commercial' && (
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>
+                {storeProfile.businessCategory ? storeProfile.businessCategory.split(' ')[0] : '🏢'}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[TYPE.caption, styles.owner]} numberOfLines={1}>
+          {owner
+            ? `${owner} · ${storeProfile.accountType === 'personal' ? 'Personal' : 'Merchant'}`
+            : 'Voice ledger'}
+        </Text>
+      </View>
+    </>
+  );
+
   return (
     <View style={styles.bar}>
-      <Press
-        onPress={onPressIdentity}
-        disabled={!onPressIdentity}
-        scale={0.99}
-        accessibilityLabel={`${name}${owner ? `, ${owner}` : ''}`}
-        style={styles.identity}
-      >
-        <Avatar name={name} size={38} tone="ink" />
-        <View style={styles.identityText}>
-          <View style={styles.nameRow}>
-            <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
-              {name}
-            </Text>
-            {storeProfile.accountType === 'commercial' && (
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryBadgeText}>
-                  {storeProfile.businessCategory ? storeProfile.businessCategory.split(' ')[0] : '🏢'}
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text style={[TYPE.caption, styles.owner]} numberOfLines={1}>
-            {owner
-              ? `${owner} · ${storeProfile.accountType === 'personal' ? 'Personal' : 'Merchant'}`
-              : 'Voice ledger'}
-          </Text>
+      {onPressIdentity ? (
+        <Press
+          onPress={onPressIdentity}
+          scale={0.99}
+          accessibilityLabel={`${name}${owner ? `, ${owner}` : ''}`}
+          style={styles.identity}
+        >
+          {identityContent}
+        </Press>
+      ) : (
+        <View
+          accessibilityLabel={`${name}${owner ? `, ${owner}` : ''}`}
+          style={styles.identity}
+        >
+          {identityContent}
         </View>
-      </Press>
+      )}
+
 
       <View style={styles.actions}>
         <Badge
@@ -72,16 +87,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACE.md,
     paddingHorizontal: GUTTER,
-    paddingVertical: SPACE.md,
-    backgroundColor: COLORS.paper,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+    backgroundColor: 'transparent',
   },
   identity: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACE.md,
+    gap: SPACE.sm,
   },
   identityText: {
     flex: 1,

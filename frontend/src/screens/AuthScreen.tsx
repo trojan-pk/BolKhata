@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TextInputProps,
   View,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -20,9 +21,15 @@ import {
   EyeOff,
   Lock,
   Mail,
+  RefreshCw,
 } from 'lucide-react-native';
 
 import { supabase } from '../services/supabase';
+import {
+  describeAuthError,
+  isExistingAccountSignup,
+  isValidEmail,
+} from '../services/authErrors';
 import { COLORS } from '../theme/colors';
 import {
   CONTROL_HEIGHT,
@@ -38,8 +45,13 @@ import type { IconComponent } from '../ui';
 import { VoiceLogo } from '../components/VoiceLogo';
 import { GoogleIcon } from '../components/GoogleIcon';
 
-// Ensure WebBrowser is initialized for OAuth flows
-if (Platform.OS !== 'web') {
+/**
+ * Closes the OAuth popup on web when the provider redirects back into it.
+ *
+ * This is a web-only concern — on native it is a no-op. It used to sit behind
+ * `Platform.OS !== 'web'`, i.e. it only ran where it does nothing.
+ */
+if (Platform.OS === 'web') {
   WebBrowser.maybeCompleteAuthSession();
 }
 
@@ -52,9 +64,19 @@ interface AuthScreenProps {
 
 const C = COPY.onboarding.auth;
 
+/** Seconds to block the resend button for after a mail is dispatched. */
+const RESEND_COOLDOWN = 45;
+
+/**
+ * Where the provider (or the confirmation mail) should send the user back to.
+ *
+ * The web branch keeps `pathname`, not just `origin` — the app is served from a
+ * subpath in the static export, and dropping it landed the callback on a 404
+ * instead of the app.
+ */
 const getAuthRedirectUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.location.origin;
+    return `${window.location.origin}${window.location.pathname}`;
   }
   return Linking.createURL('auth/callback');
 };
@@ -66,19 +88,70 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
+  /**
+   * Frozen copy of the address the confirmation mail went to. The live `email`
+   * field is still editable behind the card, so reading it there would let the
+   * card describe an address we never actually mailed.
+   */
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [resendIn, setResendIn] = useState(0);
   const { toast } = useFeedback();
 
-  const handleEmailAuth = async () => {
-    const cleanEmail = email.trim();
+  /**
+   * Guards every `setState` that lands after an `await`. Without it, a sign-in
+   * that resolves once the session has already swapped this screen out warns
+   * about updating an unmounted component.
+   */
+  const alive = useRef(true);
+  useEffect(() => () => {
+    alive.current = false;
+  }, []);
+
+  /* Ticks the resend cooldown down to zero. */
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
+  const passwordRef = useRef<TextInput>(null);
+
+  /** Moves the user into the "check your inbox" state for a known address. */
+  const enterConfirmation = useCallback((address: string, startCooldown: boolean) => {
+    setPendingEmail(address);
+    setNeedsEmailConfirmation(true);
+    if (startCooldown) setResendIn(RESEND_COOLDOWN);
+  }, []);
+
+  const leaveConfirmation = useCallback(() => {
+    setNeedsEmailConfirmation(false);
+    setResendIn(0);
+    setMode('login');
+  }, []);
+
+  /** Shared validation so login and signup reject the same bad input. */
+  const validate = (cleanEmail: string): boolean => {
     if (!cleanEmail || !password) {
       toast(C.needBoth);
-      return;
+      return false;
     }
-
-    if (password.length < 6) {
+    if (!isValidEmail(cleanEmail)) {
+      toast(C.invalidEmail);
+      return false;
+    }
+    // Only signup owns the length rule — on login the server is the authority,
+    // and rejecting locally would lock out any account created before it.
+    if (mode === 'signup' && password.length < 6) {
       toast(C.shortPassword);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleEmailAuth = async () => {
+    if (loading) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!validate(cleanEmail)) return;
 
     setLoading(true);
     try {
@@ -88,103 +161,192 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           password,
         });
         if (error) throw error;
+        // Success needs no toast: onAuthStateChange swaps the whole screen for
+        // the ledger, which is a clearer confirmation than any message.
       } else {
-        const redirectUrl = getAuthRedirectUrl();
-
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
-          options: {
-            emailRedirectTo: redirectUrl,
-          },
+          options: { emailRedirectTo: getAuthRedirectUrl() },
         });
         if (error) throw error;
 
+        if (isExistingAccountSignup(data.user)) {
+          // Supabase reports this as a success to avoid leaking which addresses
+          // are registered. Claiming "verification sent" left the user waiting
+          // for a mail that was never going to arrive.
+          if (!alive.current) return;
+          setMode('login');
+          toast(C.accountExists);
+          return;
+        }
+
         if (data.user && !data.session) {
-          setNeedsEmailConfirmation(true);
+          if (!alive.current) return;
+          enterConfirmation(cleanEmail, true);
           toast(C.verificationSent);
-        } else {
+        } else if (data.session) {
+          // Confirmations are off on this project — the user is already in.
           toast(C.accountCreated);
         }
       }
-    } catch (err: any) {
-      toast(err.message || C.failed);
+    } catch (err) {
+      const failure = describeAuthError(err);
+      if (!alive.current) return;
+
+      // An unverified address on login is a recoverable state, not a failure:
+      // drop into the confirmation card where resend and retry live.
+      if (failure.kind === 'unconfirmed') {
+        enterConfirmation(cleanEmail, false);
+      } else if (failure.kind === 'exists') {
+        setMode('login');
+      }
+      toast(failure.message);
     } finally {
-      setLoading(false);
+      if (alive.current) setLoading(false);
+    }
+  };
+
+  /** Re-sends the signup confirmation mail, rate-limited on our side too. */
+  const handleResend = async () => {
+    if (loading || resendIn > 0 || !pendingEmail) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingEmail,
+        options: { emailRedirectTo: getAuthRedirectUrl() },
+      });
+      if (error) throw error;
+      if (!alive.current) return;
+      setResendIn(RESEND_COOLDOWN);
+      toast(C.resendSent);
+    } catch (err) {
+      const failure = describeAuthError(err);
+      if (!alive.current) return;
+      // The server's own cooldown is authoritative; mirror it in the button.
+      if (failure.kind === 'rateLimit') setResendIn(RESEND_COOLDOWN);
+      toast(failure.message);
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+  };
+
+  /**
+   * "I've confirmed — continue".
+   *
+   * Confirming in a browser on the same device deep-links back and signs the
+   * user in on its own. This covers the other case — confirming on a laptop, or
+   * in a browser that never returned to the app — by retrying the sign-in with
+   * the credentials already in hand instead of making them type them again.
+   */
+  const handleConfirmedContinue = async () => {
+    if (loading) return;
+
+    // A session may already exist if the deep link landed while this card was up.
+    const { data: existing } = await supabase.auth.getSession();
+    if (existing?.session) return;
+
+    if (!password) {
+      leaveConfirmation();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: pendingEmail,
+        password,
+      });
+      if (error) throw error;
+    } catch (err) {
+      const failure = describeAuthError(err);
+      if (!alive.current) return;
+      toast(failure.kind === 'unconfirmed' ? C.stillUnconfirmed : failure.message);
+    } finally {
+      if (alive.current) setLoading(false);
     }
   };
 
   const handleGoogleAuth = async () => {
+    if (loading) return;
     setLoading(true);
     try {
       const redirectUrl = getAuthRedirectUrl();
+      const isNative = Platform.OS !== 'web';
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
+          skipBrowserRedirect: isNative,
         },
       });
+      if (error) throw error;
 
-      if (error) {
-        if (
-          error.message?.toLowerCase().includes('not enabled') ||
-          (error as any).code === 400 ||
-          (error as any).status === 400
-        ) {
-          throw new Error(
-            'Google Sign-In is not enabled in your Supabase project. Please enable Google in Supabase Dashboard > Authentication > Providers or use Email login.'
-          );
-        }
-        throw error;
+      // Web: supabase-js has already navigated the tab to Google. Nothing left
+      // to do here, and the spinner stays up until the page unloads.
+      if (!isNative) return;
+
+      if (!data?.url) throw new Error(C.googleNoSession);
+
+      const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      // Closing the sheet is a deliberate choice, not a fault — say so quietly
+      // instead of leaving the button to spin back with no explanation.
+      if (res.type !== 'success' || !res.url) {
+        if (alive.current) toast(C.googleCancelled);
+        return;
       }
 
-      if (Platform.OS !== 'web' && data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        if (res.type === 'success' && res.url) {
-          const parsed = Linking.parse(res.url);
+      const parsed = Linking.parse(res.url);
 
-          // 1. Handle PKCE code exchange
-          if (parsed.queryParams?.code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-              String(parsed.queryParams.code)
-            );
-            if (exchangeError) throw exchangeError;
-            return;
-          }
+      // Google reports refusals in the callback rather than by failing the request.
+      const denied =
+        (parsed.queryParams?.error_description as string) ||
+        (parsed.queryParams?.error as string);
+      if (denied) throw new Error(String(denied));
 
-          let accessToken: string | undefined;
-          let refreshToken: string | undefined;
-
-          // 2. Try parsing from hash fragment (#access_token=...)
-          const hashIdx = res.url.indexOf('#');
-          if (hashIdx !== -1) {
-            const hashStr = res.url.substring(hashIdx + 1);
-            const hashParams = new URLSearchParams(hashStr);
-            accessToken = hashParams.get('access_token') ?? undefined;
-            refreshToken = hashParams.get('refresh_token') ?? undefined;
-          }
-
-          // 3. Fallback to query params (?access_token=...)
-          if (!accessToken || !refreshToken) {
-            accessToken = (parsed.queryParams?.access_token as string) || accessToken;
-            refreshToken = (parsed.queryParams?.refresh_token as string) || refreshToken;
-          }
-
-          if (accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (sessionError) throw sessionError;
-          }
-        }
+      // 1. PKCE: the normal path for `flowType: 'pkce'`.
+      if (parsed.queryParams?.code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+          String(parsed.queryParams.code)
+        );
+        if (exchangeError) throw exchangeError;
+        return;
       }
-    } catch (err: any) {
-      toast(err.message || 'Google authentication failed.');
+
+      // 2. Implicit fallback: tokens in the hash, then in the query string.
+      let accessToken: string | undefined;
+      let refreshToken: string | undefined;
+
+      const hashIdx = res.url.indexOf('#');
+      if (hashIdx !== -1) {
+        const hashParams = new URLSearchParams(res.url.substring(hashIdx + 1));
+        accessToken = hashParams.get('access_token') ?? undefined;
+        refreshToken = hashParams.get('refresh_token') ?? undefined;
+      }
+      if (!accessToken || !refreshToken) {
+        accessToken = (parsed.queryParams?.access_token as string) || accessToken;
+        refreshToken = (parsed.queryParams?.refresh_token as string) || refreshToken;
+      }
+
+      if (!accessToken || !refreshToken) {
+        // Previously this fell through silently: the sheet closed, the spinner
+        // stopped, and the user was left on the login form with no session and
+        // no idea why.
+        throw new Error(C.googleNoSession);
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (sessionError) throw sessionError;
+    } catch (err) {
+      if (alive.current) toast(describeAuthError(err).message);
     } finally {
-      setLoading(false);
+      if (alive.current) setLoading(false);
     }
   };
 
@@ -243,18 +405,36 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               <Text style={styles.confirmBody}>
                 {C.confirmBody}
                 {'\n'}
-                <Text style={styles.confirmEmail}>{email}</Text>
+                <Text style={styles.confirmEmail}>{pendingEmail}</Text>
               </Text>
+              <Text style={styles.confirmHint}>{C.confirmHint}</Text>
+
               <Button
-                label={C.backToLogin}
+                label={C.continueAfterConfirm}
                 variant="primary"
                 size="lg"
                 fullWidth
-                onPress={() => {
-                  setNeedsEmailConfirmation(false);
-                  setMode('login');
-                }}
+                loading={loading}
+                onPress={handleConfirmedContinue}
               />
+              <Button
+                label={resendIn > 0 ? C.resendIn(resendIn) : C.resend}
+                variant="secondary"
+                size="lg"
+                icon={RefreshCw}
+                fullWidth
+                disabled={loading || resendIn > 0}
+                onPress={handleResend}
+              />
+              <Press
+                onPress={leaveConfirmation}
+                accessibilityLabel={C.backToLogin}
+                scale={1}
+                dim={0.6}
+                style={styles.confirmBackPress}
+              >
+                <Text style={styles.switchText}>{C.backToLogin}</Text>
+              </Press>
             </View>
           ) : (
             <View style={styles.form}>
@@ -267,17 +447,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                   editable={!loading}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                 />
               </Enter>
 
               <Enter index={3} {...beat}>
                 <Field
+                  inputRef={passwordRef}
                   icon={Lock}
                   placeholder={C.password}
                   value={password}
                   onChangeText={setPassword}
                   editable={!loading}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  /* Lets a password manager offer to save a new credential on
+                     signup, and to fill an existing one on login. */
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                  returnKeyType="go"
+                  onSubmitEditing={handleEmailAuth}
                   trailing={
                     <Press
                       onPress={() => setShowPassword((s) => !s)}
@@ -368,6 +560,11 @@ const Field: React.FC<{
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: KeyboardTypeOptions;
   trailing?: React.ReactNode;
+  inputRef?: React.RefObject<TextInput | null>;
+  autoComplete?: TextInputProps['autoComplete'];
+  textContentType?: TextInputProps['textContentType'];
+  returnKeyType?: TextInputProps['returnKeyType'];
+  onSubmitEditing?: () => void;
 }> = ({
   icon: Icon,
   placeholder,
@@ -378,6 +575,11 @@ const Field: React.FC<{
   autoCapitalize,
   keyboardType,
   trailing,
+  inputRef,
+  autoComplete,
+  textContentType,
+  returnKeyType,
+  onSubmitEditing,
 }) => {
   const focus = useRef(new Animated.Value(0)).current;
 
@@ -398,6 +600,7 @@ const Field: React.FC<{
     <Animated.View style={[styles.field, { borderColor }]}>
       <Icon size={18} color={COLORS.textMuted} strokeWidth={2} />
       <TextInput
+        ref={inputRef}
         style={styles.input}
         placeholder={placeholder}
         placeholderTextColor={COLORS.textMuted}
@@ -407,6 +610,12 @@ const Field: React.FC<{
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        /* Enter submits instead of inserting a newline. */
+        blurOnSubmit={false}
         onFocus={() => ramp(1)}
         onBlur={() => ramp(0)}
       />
@@ -556,7 +765,16 @@ const styles = StyleSheet.create({
     ...TYPE.bodySm,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  confirmHint: {
+    ...TYPE.caption,
+    color: COLORS.textMuted,
+    textAlign: 'center',
     marginBottom: SPACE.xs,
+  },
+  confirmBackPress: {
+    alignItems: 'center',
+    paddingVertical: SPACE.xs,
   },
   confirmEmail: {
     ...TYPE.label,

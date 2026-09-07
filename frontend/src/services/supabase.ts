@@ -16,6 +16,17 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
+    /**
+     * On web, supabase-js is the *only* thing allowed to consume the `?code=`
+     * in the address bar. App.tsx therefore skips its own deep-link exchange on
+     * web — a PKCE code is single-use, and both consumers racing for it meant
+     * whichever lost threw "invalid flow state" and the sign-in silently failed.
+     *
+     * On native there is no address bar to read, so the app handles the
+     * `bolkhata://` callback itself and this stays off.
+     */
     detectSessionInUrl: Platform.OS === 'web',
+    /** Stated explicitly: the callback handling on both platforms assumes PKCE. */
+    flowType: 'pkce',
   },
 });
