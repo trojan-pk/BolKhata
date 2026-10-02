@@ -242,3 +242,8 @@ Honest state of the code — these are deliberate hackathon shortcuts, not hidde
 ## 📄 License
 
 See [LICENSE](LICENSE).
+
+## 🤝 Community
+
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Contributing Guide](./CONTRIBUTING.md)
