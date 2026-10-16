@@ -5,9 +5,12 @@ import { supabase } from './supabase';
 
 // Dynamically resolve API URL for Web, LAN IP, and Mobile Expo Go
 export const getApiBaseUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  let envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl) {
+    envUrl = envUrl.replace('0.0.0.0', 'localhost').replace(/\/+$/, '');
+  }
   if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl.replace(/\/+$/, '');
+    return envUrl;
   }
 
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
