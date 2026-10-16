@@ -6,7 +6,7 @@
       "bolkhata",
       "veldger"
     ],
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/BKS-01-01.png",
     "userInterfaceStyle": "light",
@@ -24,7 +24,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.bolkhata.app"
+      "package": "com.bolkhata.app",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/BKS-01-01.png"
