@@ -1,0 +1,16 @@
+# Root EAS ignore
+backend/
+docs/
+node_modules/
+.git/
+.expo/
+*.log
+bun.lock
+bun.lockb
+frontend/bun.lock
+frontend/bun.lockb
+frontend/android/
+frontend/ios/
+frontend/dist/
+frontend/web-build/
+build_log.bin
