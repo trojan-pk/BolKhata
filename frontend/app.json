@@ -29,10 +29,10 @@
     "web": {
       "favicon": "./assets/BKS-01-01.png"
     },
-    "owner": "trojans01",
+    "owner": "ahmmikun",
     "extra": {
       "eas": {
-        "projectId": "604bf042-a515-44a0-a8b9-02da71a1f247"
+        "projectId": "bf3933c2-90e7-4475-916d-388c547ee427"
       }
     }
   }
