@@ -8,14 +8,16 @@
       "developmentClient": true,
       "distribution": "internal",
       "node": "22.14.0",
-      "image": "latest"
+      "android": {
+        "image": "latest"
+      }
     },
     "preview": {
       "distribution": "internal",
       "node": "22.14.0",
-      "image": "latest",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://bolkhata-api-241d1d60fc07.herokuapp.com",
@@ -27,9 +29,9 @@
     "production": {
       "distribution": "internal",
       "node": "22.14.0",
-      "image": "latest",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://bolkhata-api-241d1d60fc07.herokuapp.com",
