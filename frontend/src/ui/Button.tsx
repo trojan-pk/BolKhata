@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   spinner: {
-    ...(StyleSheet.absoluteFill as object),
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
