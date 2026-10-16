@@ -25,6 +25,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "@types/react": "~19.1.10",
     "babel-plugin-transform-imports": "^2.0.0",
     "eas-cli": "^22.6.0",
