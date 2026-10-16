@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stepLineFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     backgroundColor: COLORS.ink,
   },
   stepOneCards: {
