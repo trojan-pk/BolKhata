@@ -1,3 +1,5 @@
+// Must run before supabase-js loads (see the file for why).
+import './src/polyfills/webcrypto';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

@@ -79,7 +79,9 @@ const getAuthRedirectUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return `${window.location.origin}${window.location.pathname}`;
   }
-  return Linking.createURL('auth/callback');
+  // app.json declares two schemes (bolkhata, veldger) and dev builds add the
+  // package id; naming one stops Linking guessing and warning on every call.
+  return Linking.createURL('auth/callback', { scheme: 'bolkhata' });
 };
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onBackToWelcome }) => {
