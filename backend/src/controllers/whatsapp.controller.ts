@@ -9,6 +9,9 @@ import {
     addScheduledReminder,
     getScheduledReminders,
     cancelScheduledReminder,
+    cancelPendingSession,
+    getPendingSessionId,
+    normalizePairingPhone,
 } from '../services/whatsapp.service'
 
 // Stub user — same as rest of app for now
@@ -17,7 +20,7 @@ const USER_ID = '00000000-0000-0000-0000-000000000000'
 // Helper: Express params can be string | string[] — always resolve to string
 const param = (v: string | string[]): string => (Array.isArray(v) ? v[0] : v)
 
-// ─── GET /wa/link/:userId — SSE stream: qr | connected | error ───────────────
+// ─── GET /wa/link/:userId?phone=92XXXXXXXXXX — SSE: pairing_code | connected | error
 
 export const linkQr = async (req: Request, res: Response): Promise<void> => {
     const userId = param(req.params.userId) ?? USER_ID
@@ -42,12 +45,43 @@ export const linkQr = async (req: Request, res: Response): Promise<void> => {
         return
     }
 
+    const phone = normalizePairingPhone(String(req.query.phone ?? ''))
+    if (!phone) {
+        send('error', { error: 'Enter your WhatsApp number with country code, e.g. 923001234567' })
+        res.end()
+        return
+    }
+
+    let completed = false
+    // Comment-only frames keep the stream from looking idle. iOS (NSURLSession)
+    // drops a request after 60s without bytes, and typing a code into WhatsApp
+    // takes longer than that.
+    const heartbeat = setInterval(() => {
+        if (!res.writableEnded) res.write(': ping\n\n')
+    }, 15_000)
+
     startSession(userId, send, () => {
+        completed = true
+        clearInterval(heartbeat)
+        if (!res.writableEnded) res.end()
+    }, phone).catch((err) => {
+        completed = true
+        clearInterval(heartbeat)
+        send('error', { error: err instanceof Error ? err.message : 'Failed to start WhatsApp session' })
         if (!res.writableEnded) res.end()
     })
 
-    req.on('close', () => {
-        if (!res.writableEnded) res.end()
+    // Client went away before linking. Keep the socket alive for a while: the
+    // app may have dropped the stream while the user is still entering the
+    // code, and falls back to polling /wa/status. Only this attempt is
+    // cancelled — a newer one started meanwhile is left alone.
+    // (`res`, not `req`: req 'close' fires as soon as a bodyless GET is read.)
+    res.on('close', () => {
+        clearInterval(heartbeat)
+        if (completed) return
+        const sessionId = getPendingSessionId(userId)
+        if (sessionId === undefined) return
+        setTimeout(() => cancelPendingSession(userId, sessionId), 5 * 60_000).unref()
     })
 }
 
@@ -89,6 +123,7 @@ export const sendReminder = async (
             balance: bodyBalance,
             message: bodyMessage,
             storeName = 'BolKhata Store',
+            kind = 'reminder',
         } = req.body as {
             userId?: string
             customerId?: string
@@ -97,6 +132,8 @@ export const sendReminder = async (
             balance?: number
             message?: string
             storeName?: string
+            /** `entry` = alert about one ledger entry; allowed at any balance. */
+            kind?: 'reminder' | 'entry'
         }
 
         let phone = bodyPhone
@@ -123,7 +160,14 @@ export const sendReminder = async (
             return
         }
 
-        if (balance === undefined || balance <= 0) {
+        const isEntryAlert = kind === 'entry'
+
+        if (isEntryAlert && !bodyMessage?.trim()) {
+            res.status(400).json({ error: 'Entry alert message is required' })
+            return
+        }
+
+        if (!isEntryAlert && (balance === undefined || balance <= 0)) {
             res.status(400).json({ error: 'No outstanding balance for this customer' })
             return
         }
@@ -144,13 +188,13 @@ export const sendReminder = async (
 
         const text = rawTemplate
             .replace(/{customer_name}/g, customerName)
-            .replace(/{amount}/g, balance.toLocaleString())
+            .replace(/{amount}/g, (balance ?? 0).toLocaleString())
             .replace(/{store_name}/g, storeName)
 
         await sendTextMessage(userId, phone, text)
 
         // Try inserting into Supabase reminders table (ignore errors if customerId is mock/local ID)
-        if (customerId) {
+        if (customerId && !isEntryAlert) {
             try {
                 await supabase.from('reminders').insert({
                     customer_id: customerId,

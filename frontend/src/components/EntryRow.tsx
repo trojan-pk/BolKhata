@@ -3,9 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ArrowDownLeft, ArrowUpRight, Mic } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
-import { TYPE } from '../theme/tokens';
+import { SPACE, TYPE } from '../theme/tokens';
 import { Transaction } from '../types';
-import { IconWell, Money, Row } from '../ui';
+import { IconWell, Money, Press, Row } from '../ui';
+import { WhatsAppIcon } from './WhatsAppIcon';
 import { formatRelativeDate, groupDigits } from '../utils/format';
 
 /**
@@ -20,7 +21,19 @@ export const EntryRow: React.FC<{
   onPress?: () => void;
   /** Balance after this entry, shown in statements. */
   runningBalance?: number;
-}> = ({ transaction, currency, context = 'feed', onPress, runningBalance }) => {
+  /** Shows a WhatsApp button that alerts the customer about this entry. */
+  onWhatsApp?: () => void;
+  /** Dims the WhatsApp button while an alert for this entry is in flight. */
+  whatsAppBusy?: boolean;
+}> = ({
+  transaction,
+  currency,
+  context = 'feed',
+  onPress,
+  runningBalance,
+  onWhatsApp,
+  whatsAppBusy,
+}) => {
   const isGave = transaction.type === 'gave';
   const directionLabel = isGave ? COPY.ledger.youGave : COPY.ledger.youGot;
   const note = transaction.note?.trim();
@@ -38,9 +51,10 @@ export const EntryRow: React.FC<{
           Boolean
         );
 
-  return (
+  const row = (
     <Row
       onPress={onPress}
+      style={onWhatsApp ? styles.rowFlex : undefined}
       accessibilityLabel={`${title}, ${directionLabel} ${currency} ${transaction.amount}, ${when}`}
       leading={
         <IconWell
@@ -50,6 +64,10 @@ export const EntryRow: React.FC<{
       }
       title={title}
       subtitle={subtitleParts.join(' · ')}
+      // Inside a customer's statement the note *is* the entry — show it whole.
+      // The home feed stays one line per entry for scanning.
+      titleLines={context === 'statement' ? 0 : 1}
+      subtitleLines={context === 'statement' ? 0 : 1}
       meta={
         transaction.source === 'voice' ? (
           <View style={styles.voiceTag}>
@@ -76,6 +94,25 @@ export const EntryRow: React.FC<{
       }
     />
   );
+
+  if (!onWhatsApp) return row;
+
+  // Sibling, not nested: a pressable inside the row's pressable fights it for
+  // the touch on native and nests <button>s on web.
+  return (
+    <View style={styles.withAction}>
+      {row}
+      <Press
+        onPress={onWhatsApp}
+        disabled={whatsAppBusy}
+        accessibilityLabel={`Send WhatsApp alert for ${title}, ${currency} ${transaction.amount}`}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        style={[styles.waBtn, whatsAppBusy && styles.waBtnBusy]}
+      >
+        <WhatsAppIcon size={18} color="#25D366" />
+      </Press>
+    </View>
+  );
 };
 
 function capitalise(value: string): string {
@@ -84,6 +121,27 @@ function capitalise(value: string): string {
 }
 
 const styles = StyleSheet.create({
+  withAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+  },
+  rowFlex: {
+    flex: 1,
+  },
+  waBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F9F0',
+    borderWidth: 1,
+    borderColor: '#BDEFD3',
+  },
+  waBtnBusy: {
+    opacity: 0.5,
+  },
   direction: {
     color: COLORS.textFaint,
   },

@@ -54,6 +54,7 @@ import {
 } from '../ui';
 import { EntryRow } from './EntryRow';
 import {
+  formatDate,
   formatMoney,
   formatPhone,
   groupByDate,
@@ -62,6 +63,41 @@ import {
 import { ApiService } from '../services/api';
 import { getActiveTemplateText } from '../services/reminderTemplates';
 import { WaScheduleModal, getTimeRemainingText } from './WaScheduleModal';
+
+/**
+ * WhatsApp text telling a customer about one entry, written from their side:
+ * the shop "gave" = credit to them, the shop "got" = their payment.
+ */
+function buildEntryAlert({
+  name,
+  storeName,
+  currency,
+  txn,
+  balance,
+}: {
+  name: string;
+  storeName: string;
+  currency: string;
+  txn: Transaction;
+  /** Customer's current balance (positive = they owe the shop). */
+  balance: number;
+}): string {
+  const what = txn.type === 'gave' ? 'Credit given to you' : 'Payment received from you';
+  const note = txn.note?.trim() ? ` for ${txn.note.trim()}` : '';
+  const owed =
+    balance > 0
+      ? `Your total balance due is *${formatMoney(balance, currency)}*.`
+      : balance < 0
+      ? `You have an advance of *${formatMoney(Math.abs(balance), currency)}* with us.`
+      : 'Your account is fully settled.';
+  return (
+    `Hello ${name},\n\n` +
+    `*${storeName}* recorded an entry in your account:\n` +
+    `• ${what}: *${formatMoney(txn.amount, currency)}*${note}\n` +
+    `• Date: ${formatDate(txn.date)}\n\n` +
+    `${owed}\n\nThank you! 🙏`
+  );
+}
 
 /**
  * A customer's full account: what they owe, and every entry that got them
@@ -115,6 +151,7 @@ export const CustomerLedgerPanel: React.FC<{
   const [lastReminderAt, setLastReminderAt] = useState<string | null>(null);
   const [cooldownSecs, setCooldownSecs] = useState<number>(0);
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingEntryId, setSendingEntryId] = useState<string | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [pendingSchedule, setPendingSchedule] = useState<any | null>(null);
 
@@ -249,6 +286,13 @@ export const CustomerLedgerPanel: React.FC<{
     }
     if (!party?.id || cooldownSecs > 0) return;
 
+    const ok = await confirm({
+      title: 'Send WhatsApp reminder?',
+      body: `A payment reminder for ${formatMoney(party.currentBalance, currency)} will be sent to ${party.name} on WhatsApp (${formatPhone(party.mobile)}).`,
+      confirmLabel: 'Send reminder',
+    });
+    if (!ok) return;
+
     setSendingReminder(true);
     try {
       const activeTemplate = await getActiveTemplateText();
@@ -273,6 +317,58 @@ export const CustomerLedgerPanel: React.FC<{
       toast('Could not reach server', 'error');
     } finally {
       setSendingReminder(false);
+    }
+  };
+
+  /** WhatsApp alert about a single entry: confirm with a preview, then send. */
+  const alertEntry = async (txn: Transaction) => {
+    if (!phone) {
+      toast('Add a phone number for this customer first', 'error');
+      setEditOpen(true);
+      return;
+    }
+    if (!waLinked) {
+      toast('Link your WhatsApp in Settings first', 'error');
+      return;
+    }
+    if (sendingEntryId) return;
+
+    const message = buildEntryAlert({
+      name: party.name,
+      storeName,
+      currency,
+      txn,
+      balance: party.currentBalance,
+    });
+
+    const ok = await confirm({
+      title: 'Send WhatsApp alert?',
+      // Preview without WhatsApp's *bold* markers, which would show literally here.
+      body: `To ${party.name} · ${formatPhone(party.mobile)}\n\n${message.replace(/\*/g, '')}`,
+      confirmLabel: 'Send on WhatsApp',
+    });
+    if (!ok) return;
+
+    setSendingEntryId(txn.id);
+    try {
+      const result = await ApiService.sendWaReminder(WA_USER_ID, {
+        id: party.id,
+        phone: party.mobile,
+        name: party.name,
+        balance: party.currentBalance,
+        message,
+        storeName,
+        kind: 'entry',
+      });
+      if (result.success) {
+        toast('Alert sent on WhatsApp ✓');
+      } else {
+        toast(result.error ?? 'Failed to send alert', 'error');
+      }
+    } catch {
+      toast('Could not reach server', 'error');
+    } finally {
+      setSendingEntryId(null);
     }
   };
 
@@ -341,7 +437,7 @@ export const CustomerLedgerPanel: React.FC<{
             >
               <Avatar name={party.name} size={36} />
               <View style={styles.identityText}>
-                <Text style={[TYPE.title3, styles.name]} numberOfLines={1}>
+                <Text style={[TYPE.title3, styles.name]} numberOfLines={2}>
                   {party.name}
                 </Text>
                 <Text style={[TYPE.caption, styles.sub]} numberOfLines={1}>
@@ -533,6 +629,8 @@ export const CustomerLedgerPanel: React.FC<{
                               ? () => onEditTransaction(item.txn)
                               : undefined
                           }
+                          onWhatsApp={() => alertEntry(item.txn)}
+                          whatsAppBusy={sendingEntryId === item.txn.id}
                         />
                       </Enter>
                     ))}

@@ -212,6 +212,9 @@ export const CashbookScreen: React.FC<{
                         }
                         title={entry.category || 'Other'}
                         subtitle={entry.note || formatRelativeDate(entry.date)}
+                        // Notes are the point of a cash record — show them whole.
+                        titleLines={0}
+                        subtitleLines={0}
                         trailing={
                           <View style={styles.entryTrailing}>
                             <Money

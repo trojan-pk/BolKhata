@@ -490,9 +490,15 @@ function BolKhata() {
   );
 
   const addTransaction = useCallback(
-    async (data: { amount: number; note: string; paymentMode: PaymentMode }) => {
-      const party = parties.find((p) => p.id === composer.partyId);
-      if (!party) return;
+    async (data: { amount: number; note: string; paymentMode: PaymentMode; mobile: string }) => {
+      const found = parties.find((p) => p.id === composer.partyId);
+      if (!found) return;
+      // A number typed into the entry sheet is saved onto the customer, so
+      // reminders and alerts can reach them from then on.
+      const party =
+        data.mobile && data.mobile !== found.mobile ? { ...found, mobile: data.mobile } : found;
+      const partiesWithMobile =
+        party === found ? parties : parties.map((p) => (p.id === party.id ? party : p));
 
       const txn: Transaction = {
         id: uid('t'),
@@ -508,7 +514,7 @@ function BolKhata() {
       };
 
       const nextTxns = [txn, ...transactions];
-      const nextParties = withRecalculatedBalance(parties, nextTxns, party.id);
+      const nextParties = withRecalculatedBalance(partiesWithMobile, nextTxns, party.id);
       await commit(nextParties, nextTxns);
 
       if (selectedParty?.id === party.id) {
@@ -952,6 +958,7 @@ function BolKhata() {
         visible={composer.visible}
         type={composer.type}
         partyName={composer.partyName || ''}
+        partyMobile={parties.find((p) => p.id === composer.partyId)?.mobile || ''}
         currency={storeProfile.currency}
         onClose={() => setComposer((prev) => ({ ...prev, visible: false }))}
         onSubmit={addTransaction}

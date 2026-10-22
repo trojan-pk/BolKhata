@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
 import { COPY } from '../i18n/copy';
 import { ApiService } from '../services/api';
 import { Party } from '../types';
@@ -28,8 +33,14 @@ export function useVoiceRecording({
   const webRecorderRef = useRef<MediaRecorder | null>(null);
   const webChunksRef = useRef<Blob[]>([]);
   const webStreamRef = useRef<MediaStream | null>(null);
-  const nativeRecordingRef = useRef<Audio.Recording | null>(null);
+  // expo-audio: the recorder is owned by the hook (released on unmount);
+  // the ref tracks whether a native capture is currently in progress.
+  const nativeRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const nativeRecordingRef = useRef(false);
   const capturingRef = useRef(false);
+  // Pending start (permission prompt / prepare). Stop must wait on it, or a
+  // release during start leaves an orphaned recorder running.
+  const startingRef = useRef<Promise<void> | null>(null);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopRef = useRef<() => void>(() => {});
@@ -71,8 +82,9 @@ export function useVoiceRecording({
       releaseWebStream();
 
       if (nativeRecordingRef.current) {
-        nativeRecordingRef.current.stopAndUnloadAsync().catch(() => {});
-        nativeRecordingRef.current = null;
+        nativeRecorder.stop().catch(() => {});
+        nativeRecordingRef.current = false;
+        setAudioModeAsync({ allowsRecording: false }).catch(() => {});
       }
       if (webRecorderRef.current && webRecorderRef.current.state !== 'inactive') {
         try {
@@ -84,7 +96,7 @@ export function useVoiceRecording({
         onError(message);
       }
     },
-    [onError]
+    [onError, nativeRecorder]
   );
 
   const sendForParsing = useCallback(
@@ -102,8 +114,13 @@ export function useVoiceRecording({
         } else {
           onError(COPY.voice.failed);
         }
-      } catch {
-        onError(COPY.voice.failed);
+      } catch (err) {
+        console.warn('[Voice] processing failed:', err);
+        // Server errors carry a readable message (401, 429, "No speech detected");
+        // network failures surface as TypeError and get the generic copy.
+        const serverMessage =
+          err instanceof Error && !(err instanceof TypeError) ? err.message : '';
+        onError(serverMessage || COPY.voice.failed);
       } finally {
         setVoiceState('idle');
         setDurationSeconds(0);
@@ -119,23 +136,36 @@ export function useVoiceRecording({
     cleanupTimers();
     setVoiceState('processing');
 
+    // Released while the mic was still starting up: let start finish so the
+    // recorder is in a known state before we stop it.
+    if (startingRef.current) {
+      await startingRef.current;
+    }
+
     try {
       if (Platform.OS === 'web') {
         const recorder = webRecorderRef.current;
-        if (!recorder) {
+        if (!recorder || recorder.state === 'inactive') {
+          // Start failed or never got going — onstop would never fire.
+          releaseWebStream();
           setVoiceState('idle');
           return;
         }
 
         recorder.onstop = async () => {
           releaseWebStream();
+          webRecorderRef.current = null;
           if (webChunksRef.current.length === 0) {
             setVoiceState('idle');
             onError(COPY.voice.tooShort);
             return;
           }
 
-          const blob = new Blob(webChunksRef.current, { type: 'audio/webm' });
+          // Use the browser's actual container (Safari records audio/mp4).
+          const mimeType = (recorder.mimeType || 'audio/webm').split(';')[0];
+          const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+          const blob = new Blob(webChunksRef.current, { type: mimeType });
+          webChunksRef.current = [];
           if (blob.size < 500) {
             setVoiceState('idle');
             onError(COPY.voice.tooShort);
@@ -143,25 +173,24 @@ export function useVoiceRecording({
           }
 
           const body = new FormData();
-          body.append('audio', blob, 'entry.webm');
+          body.append('audio', blob, `entry.${ext}`);
           await sendForParsing(body);
         };
 
-        if (recorder.state !== 'inactive') {
-          recorder.stop();
-        }
+        recorder.stop();
         return;
       }
 
-      const recording = nativeRecordingRef.current;
-      if (!recording) {
+      if (!nativeRecordingRef.current) {
         setVoiceState('idle');
         return;
       }
 
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      nativeRecordingRef.current = null;
+      await nativeRecorder.stop();
+      const uri = nativeRecorder.uri;
+      nativeRecordingRef.current = false;
+      // Leave record mode so TTS playback isn't routed to the earpiece on iOS.
+      setAudioModeAsync({ allowsRecording: false }).catch(() => {});
 
       if (!uri) {
         setVoiceState('idle');
@@ -176,72 +205,85 @@ export function useVoiceRecording({
         type: 'audio/m4a',
       } as unknown as Blob);
       await sendForParsing(body);
-    } catch {
+    } catch (err) {
+      console.warn('[Voice] stop failed:', err);
       setVoiceState('idle');
       onError(COPY.voice.failed);
     }
-  }, [sendForParsing, onError]);
+  }, [sendForParsing, onError, nativeRecorder]);
 
   useEffect(() => {
     stopRef.current = stopRecording;
   }, [stopRecording]);
 
-  const startRecording = useCallback(async () => {
-    if (capturingRef.current) return;
-
-    try {
-      capturingRef.current = true;
-      setDurationSeconds(0);
-      setVoiceState('recording');
-
-      sessionTimerRef.current = setTimeout(() => {
-        if (capturingRef.current) stopRef.current();
-      }, MAX_SESSION_MS);
-
-      durationTimerRef.current = setInterval(() => {
-        setDurationSeconds((prev) => prev + 1);
-      }, 1000);
-
-      if (Platform.OS === 'web') {
-        const media =
-          typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
-        if (!media?.getUserMedia) {
-          abortRecording(COPY.voice.micUnavailable);
-          return;
-        }
-        const stream = await media.getUserMedia({ audio: true });
-        webStreamRef.current = stream;
-        webChunksRef.current = [];
-        const recorder = new MediaRecorder(stream);
-        webRecorderRef.current = recorder;
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) webChunksRef.current.push(event.data);
-        };
-        recorder.start();
+  const beginCapture = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      const media =
+        typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+      if (!media?.getUserMedia) {
+        abortRecording(COPY.voice.micUnavailable);
         return;
       }
-
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
-        abortRecording(COPY.voice.micDenied);
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      await recording.startAsync();
-      nativeRecordingRef.current = recording;
-    } catch {
-      abortRecording(COPY.voice.micDenied);
+      const stream = await media.getUserMedia({ audio: true });
+      webStreamRef.current = stream;
+      webChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      webRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) webChunksRef.current.push(event.data);
+      };
+      recorder.start();
+      return;
     }
-  }, [abortRecording]);
+
+    const permission = await requestRecordingPermissionsAsync();
+    if (!permission.granted) {
+      abortRecording(COPY.voice.micDenied);
+      return;
+    }
+
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
+    });
+
+    // A recorder orphaned by an earlier interrupted session would make
+    // prepareToRecordAsync throw; stop it first.
+    if (nativeRecorder.isRecording) {
+      await nativeRecorder.stop().catch(() => {});
+    }
+
+    await nativeRecorder.prepareToRecordAsync();
+    nativeRecorder.record();
+    nativeRecordingRef.current = true;
+  }, [abortRecording, nativeRecorder]);
+
+  const startRecording = useCallback(async () => {
+    if (capturingRef.current || startingRef.current) return;
+
+    capturingRef.current = true;
+    setDurationSeconds(0);
+    setVoiceState('recording');
+
+    sessionTimerRef.current = setTimeout(() => {
+      if (capturingRef.current) stopRef.current();
+    }, MAX_SESSION_MS);
+
+    durationTimerRef.current = setInterval(() => {
+      setDurationSeconds((prev) => prev + 1);
+    }, 1000);
+
+    const starting = beginCapture().catch((err) => {
+      console.warn('[Voice] start failed:', err);
+      abortRecording(COPY.voice.micDenied);
+    });
+    startingRef.current = starting;
+    try {
+      await starting;
+    } finally {
+      startingRef.current = null;
+    }
+  }, [abortRecording, beginCapture]);
 
   const pressStartRef = useRef<number>(0);
   const isTapRecordingRef = useRef<boolean>(false);

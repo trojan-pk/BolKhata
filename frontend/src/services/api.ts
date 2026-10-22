@@ -169,7 +169,7 @@ export const ApiService = {
 
   sendWaReminder: async (
     userId: string,
-    customer: { id: string; name: string; phone: string; balance: number; message?: string; storeName?: string }
+    customer: { id: string; name: string; phone: string; balance: number; message?: string; storeName?: string; kind?: 'reminder' | 'entry' }
   ): Promise<{ success: boolean; sentAt?: string; error?: string }> => {
     const res = await fetch(`${getApiBaseUrl()}/wa/remind`, {
       method: 'POST',
@@ -182,6 +182,7 @@ export const ApiService = {
         balance: customer.balance,
         message: customer.message,
         storeName: customer.storeName,
+        kind: customer.kind,
       }),
     });
     return res.json();

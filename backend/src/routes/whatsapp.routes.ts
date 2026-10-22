@@ -12,7 +12,7 @@ import {
 
 const router = Router()
 
-// SSE stream — browser EventSource opens this to get QR image
+// SSE stream — pairing code for "Link with phone number" (?phone=92XXXXXXXXXX)
 router.get('/link/:userId', linkQr)
 
 // Linked status

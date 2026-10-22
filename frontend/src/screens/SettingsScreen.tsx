@@ -297,6 +297,7 @@ export const SettingsScreen: React.FC<{
       <WhatsAppLinkModal
         visible={waModalOpen}
         userId={WA_USER_ID}
+        defaultPhone={storeProfile.mobile}
         onClose={() => setWaModalOpen(false)}
         onLinked={(phone) => { setWaLinked(true); setWaPhone(phone); }}
         onUnlinked={() => { setWaLinked(false); setWaPhone(undefined); }}
