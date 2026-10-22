@@ -1,0 +1,58 @@
+name: Deploy backend to Heroku
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: heroku-backend-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy backend subtree
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP: bolkhata-api
+        run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+
+          # Heroku's buildpack needs package.json at the repo root, so deploy
+          # only the backend/ subtree instead of the monorepo root.
+          split_sha=$(git subtree split --prefix backend HEAD)
+          echo "Deploying backend subtree $split_sha to $HEROKU_APP"
+
+          git push --force \
+            "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git" \
+            "$split_sha:refs/heads/main"
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          url="https://bolkhata-api-241d1d60fc07.herokuapp.com/health"
+          for attempt in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "Health check passed (attempt $attempt)"
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP $code, retrying..."
+            sleep 5
+          done
+          echo "Health check failed"
+          exit 1
