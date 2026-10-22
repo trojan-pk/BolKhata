@@ -23,13 +23,13 @@ Welcome! This document provides architectural, functional, and technical context
 | Layer | Technology | Details |
 | :--- | :--- | :--- |
 | **Monorepo** | Flat Package Structure | `frontend/` (Expo client), `backend/` (Express API) |
-| **Mobile Runtime** | **Expo SDK ~54.0.0** (React Native `0.81.5`) | Managed workflow with clean EAS prebuilds |
-| **Web Runtime** | React `19.1.0`, React Native Web `^0.21.0` | Metro runtime with static export support |
+| **Mobile Runtime** | **Expo SDK ~58.0.0** (React Native `0.88.0`) | Managed workflow with clean EAS prebuilds |
+| **Web Runtime** | React `19.3.0`, React Native Web `^0.21.0` | Metro runtime with static export support |
 | **Backend Runtime** | **Node.js 22** + Express `5.2.1` | Native ESM loader for Baileys, TypeScript `^7.0.2` |
-| **Language** | **TypeScript Strict** | Frontend `^5.3.3`, Backend `^7.0.2` |
+| **Language** | **TypeScript Strict** | Frontend `~6.0.3`, Backend `^7.0.2` |
 | **Authentication** | **Supabase Auth** (`@supabase/supabase-js ^2.112.3`) | Email & password, PKCE deep links (`bolkhata://`, `veldger://`), session cache via AsyncStorage |
 | **Persistence** | `@react-native-async-storage/async-storage` + Supabase PostgreSQL | User-scoped local storage (`userKey(key, userId)`) + cloud sync (`schema_v2.sql`) |
-| **Audio Capture** | `expo-av` (`useVoiceRecording` hook) | Cross-platform recording, mic permission handling |
+| **Audio Capture** | `expo-audio` (`useVoiceRecording` hook) | Cross-platform recording, mic permission handling |
 | **STT Pipeline** | Groq `whisper-large-v3` + ElevenLabs Scribe | Fast, accurate South Asian speech recognition |
 | **Intent Parser** | Groq Llama 3 / Google Gemini / Alibaba Qwen | 5 ledger intents (`create_transaction`, `update_transaction`, `delete_transaction`, `delete_customer`, `get_balance`) |
 | **TTS Generation** | Alibaba DashScope `qwen3-tts-flash` + ElevenLabs | Spoken confirmation wav audio generation |
@@ -172,7 +172,7 @@ BolKhata/
 - When a user signs in, their user-scoped local cache is loaded and merged with their Supabase cloud data. When signed out, state is cleared.
 
 ### 3. Voice Processing Pipeline
-1. `useVoiceRecording` hook records audio via `expo-av`.
+1. `useVoiceRecording` hook records audio via `expo-audio`.
 2. Audio is uploaded to `POST /voice/process` with `Authorization: Bearer <token>`.
 3. `voiceLimitMiddleware` enforces a daily limit (default 50) with developer bypass (`DEVELOPER_EMAILS` or `is_developer` metadata).
 4. `voice.controller.ts` transcribes via Groq Whisper / ElevenLabs, parses financial intent via Groq Llama / Gemini / Qwen, and runs a Levenshtein fuzzy match on existing customer names.

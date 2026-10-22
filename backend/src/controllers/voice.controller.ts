@@ -206,6 +206,9 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
           const scribeFormData = new FormData();
           scribeFormData.append('file', audioBlob, `recording.${extension}`);
           scribeFormData.append('model_id', 'scribe_v1');
+          // Auto-detect misreads short Roman-Urdu clips (e.g. as German) and
+          // splits words; pinning Urdu keeps Roman-script output intact.
+          scribeFormData.append('language_code', process.env.STT_LANGUAGE_CODE || 'urd');
 
           const scribeRes = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
             method: 'POST',
@@ -219,7 +222,7 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
             transcribedSuccessfully = true;
             sttProvider = 'ElevenLabs Scribe';
           } else {
-            console.warn(`⚠️ [Voice API] ElevenLabs Scribe status: ${scribeRes.status}`);
+            console.warn(`⚠️ [Voice API] ElevenLabs Scribe status (${scribeRes.status}):`, await scribeRes.text());
           }
         } catch (err) {
           console.warn('⚠️ [Voice API] ElevenLabs Scribe exception:', err);
@@ -233,7 +236,8 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
           const formData = new FormData();
           formData.append('file', audioBlob, `recording.${extension}`);
           formData.append('model', 'whisper-large-v3-turbo');
-          formData.append('language', 'en');
+          // No `language`: forcing 'en' makes Whisper mistranscribe Urdu/Hindi speech.
+          // The LLM brain handles Urdu, Devanagari and Roman script alike.
           formData.append('temperature', '0');
 
           const whisperResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -247,6 +251,8 @@ export const processVoice = async (req: Request, res: Response, next: NextFuncti
             text = (whisperData.text || '').trim();
             transcribedSuccessfully = true;
             sttProvider = 'Groq Whisper Turbo';
+          } else {
+            console.warn(`⚠️ [Voice API] Groq Whisper status (${whisperResponse.status}):`, await whisperResponse.text());
           }
         } catch (e) {
           console.error('❌ [Voice API] Groq STT fallback failed:', e);

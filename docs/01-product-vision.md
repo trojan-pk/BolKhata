@@ -14,7 +14,7 @@ Our AI-powered voice assistant helps small shopkeepers manage credit (*udhaar*) 
 ```text
 Shopkeeper Speaks (Tap or Hold Mic on Dock)
       ↓
-Audio Captured via expo-av
+Audio Captured via expo-audio
       ↓
 POST /voice/process (Bearer Auth + Rate Limit)
       ↓

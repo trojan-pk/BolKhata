@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   TextInputProps,
   View,
 } from 'react-native';
@@ -78,7 +79,9 @@ const getAuthRedirectUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return `${window.location.origin}${window.location.pathname}`;
   }
-  return Linking.createURL('auth/callback');
+  // app.json declares two schemes (bolkhata, veldger) and dev builds add the
+  // package id; naming one stops Linking guessing and warning on every call.
+  return Linking.createURL('auth/callback', { scheme: 'bolkhata' });
 };
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onBackToWelcome }) => {
@@ -114,7 +117,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     return () => clearTimeout(timer);
   }, [resendIn]);
 
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
 
   /** Moves the user into the "check your inbox" state for a known address. */
   const enterConfirmation = useCallback((address: string, startCooldown: boolean) => {
@@ -560,7 +563,7 @@ const Field: React.FC<{
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: KeyboardTypeOptions;
   trailing?: React.ReactNode;
-  inputRef?: React.RefObject<TextInput | null>;
+  inputRef?: React.RefObject<TextInputInstance | null>;
   autoComplete?: TextInputProps['autoComplete'];
   textContentType?: TextInputProps['textContentType'];
   returnKeyType?: TextInputProps['returnKeyType'];

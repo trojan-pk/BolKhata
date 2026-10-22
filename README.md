@@ -16,7 +16,7 @@ Built for the **Alibaba Cloud AI Hackathon Pakistan 2026** (Alkhidmat Foundation
 🎙️  "Ahmed ne 500 ka saman udhaar liya"
          │
          ├─ Bottom dock mic button (tap or hold-and-release)
-         ├─ expo-av records mic → audio file (m4a / webm)
+         ├─ expo-audio records mic → audio file (m4a / webm)
          ▼
    POST /voice/process  (multipart audio, Bearer token auth)
          │
@@ -43,7 +43,7 @@ Built for the **Alibaba Cloud AI Hackathon Pakistan 2026** (Alkhidmat Foundation
 
 ```
 BolKhata/
-├── frontend/                       # React Native app — Expo SDK 54 / React 19
+├── frontend/                       # React Native app — Expo SDK 58 / React 19
 │   ├── App.tsx                     # App bootstrap, Supabase auth gate, routing, modals, ledger math
 │   ├── index.ts                    # Application root entry point
 │   ├── app.json                    # Expo config (version 1.1.0, slug: bolkhata, scheme: bolkhata/veldger)
@@ -154,11 +154,11 @@ BolKhata/
 
 | Layer | Technology | Details |
 | :--- | :--- | :--- |
-| **Mobile Runtime** | React Native `0.81.5` on **Expo SDK 54** | Managed workflow with clean EAS prebuilds |
-| **Web Runtime** | React `19.1.0`, React Native Web `0.21.0` | Metro runtime with static export support |
-| **Language** | TypeScript (Strict) | Frontend `^5.3.3`, Backend `^7.0.2` |
+| **Mobile Runtime** | React Native `0.88.0` on **Expo SDK 58** | Managed workflow with clean EAS prebuilds |
+| **Web Runtime** | React `19.3.0`, React Native Web `0.21.0` | Metro runtime with static export support |
+| **Language** | TypeScript (Strict) | Frontend `~6.0.3`, Backend `^7.0.2` |
 | **Authentication** | **Supabase Auth** (`@supabase/supabase-js ^2.112.3`) | Email & password, PKCE deep links (`bolkhata://`), session cache via AsyncStorage |
-| **Audio Capture** | `expo-av` | High-fidelity audio recording, mic permission handling, web & mobile compatibility |
+| **Audio Capture** | `expo-audio` | High-fidelity audio recording, mic permission handling, web & mobile compatibility |
 | **Voice STT** | Groq `whisper-large-v3` / ElevenLabs Scribe | High-accuracy South Asian speech-to-text |
 | **Intent Extraction** | Groq Llama 3 / Google Gemini / Alibaba Qwen | JSON schema extraction for 5 financial intents |
 | **Voice TTS** | Alibaba DashScope `qwen3-tts-flash` / ElevenLabs | Spoken Roman Urdu / Urdu confirmation generation |

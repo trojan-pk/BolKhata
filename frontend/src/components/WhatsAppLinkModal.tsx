@@ -1,46 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { Link2Off } from 'lucide-react-native';
+import { Link2Off, Phone as PhoneIcon } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
-import { Button, Press } from '../ui';
-import { getApiBaseUrl } from '../services/api';
+import { Button, Press, TextField } from '../ui';
+import { ApiService, getApiBaseUrl, getAuthHeaders } from '../services/api';
 
 type WaStatus = 'idle' | 'connecting' | 'linked' | 'error';
 
 interface Props {
   visible: boolean;
-  userId: string;
+  /** Prefills the number field (e.g. the store's mobile). */
+  defaultPhone?: string;
   onClose: () => void;
   onLinked?: (phone: string) => void;
   onUnlinked?: () => void;
 }
 
+/**
+ * Same rules as the backend's normalizePairingPhone: digits only, `00` / local
+ * `0` prefixes rewritten to a Pakistani country code. Returns null if invalid.
+ */
+function normalizePhone(raw: string): string | null {
+  let digits = String(raw || '').replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0')) digits = '92' + digits.slice(1);
+  return digits.length >= 10 && digits.length <= 15 ? digits : null;
+}
+
 export const WhatsAppLinkModal: React.FC<Props> = ({
   visible,
-  userId,
+  defaultPhone,
   onClose,
   onLinked,
   onUnlinked,
 }) => {
   const [status, setStatus] = useState<WaStatus>('idle');
-  const [qrBase64, setQrBase64] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState(defaultPhone ?? '');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  /** Phone accepted the code; WhatsApp is finishing the login. */
+  const [paired, setPaired] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use 'any' for EventSource — it's a Web API not typed in React Native's lib
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const esRef = useRef<any | null>(null);
-  // Track status in a ref so the onerror closure always reads the latest value
+  /** Active event stream (fetch on web, XHR on native); `close` aborts it. */
+  const streamRef = useRef<{ close: () => void } | null>(null);
+  // Track status in a ref so async callbacks always read the latest value
   const statusRef = useRef<WaStatus>('idle');
 
   function updateStatus(s: WaStatus) {
@@ -48,7 +63,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setStatus(s);
   }
 
-  // ─── check status or start SSE stream when modal opens ────────────────────
+  // ─── check status when modal opens ────────────────────────────────────────
   useEffect(() => {
     if (!visible) {
       cleanup();
@@ -57,23 +72,102 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     initModal();
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, userId]);
+  }, [visible]);
+
+  useEffect(() => {
+    if (defaultPhone && !phoneInput) setPhoneInput(defaultPhone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPhone]);
+
+  function closeStream() {
+    const stream = streamRef.current;
+    streamRef.current = null;
+    stream?.close();
+  }
 
   function cleanup() {
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
+    clearCodeTimeout();
+    stopPolling();
+    closeStream();
+  }
+
+  // If no code arrives, say so instead of spinning forever (e.g. the server is
+  // an old build, or WhatsApp is unreachable from it).
+  const codeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function clearCodeTimeout() {
+    if (codeTimeoutRef.current) {
+      clearTimeout(codeTimeoutRef.current);
+      codeTimeoutRef.current = null;
     }
+  }
+
+  // Fallback when the event stream drops after a code was shown: the pairing
+  // keeps running on the server, so ask it directly until it finishes.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasCodeRef = useRef(false);
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function onTransportLost() {
+    // Deliberately not reconnecting the stream: a new /wa/link request would
+    // restart pairing and invalidate the code the user is typing.
+    streamRef.current = null;
+    if (statusRef.current !== 'connecting') return;
+    if (!hasCodeRef.current) {
+      clearCodeTimeout();
+      setError('Lost connection to server');
+      updateStatus('error');
+      return;
+    }
+    if (pollRef.current) return;
+
+    const startedAt = Date.now();
+    const tick = async () => {
+      if (Date.now() - startedAt > 5 * 60_000) {
+        stopPolling();
+        setError('WhatsApp did not confirm in time. Request a new code and try again.');
+        updateStatus('error');
+        return;
+      }
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.linked && !data.connecting && data.phone) {
+          stopPolling();
+          handleEvent('connected', { phone: data.phone });
+        } else if (data.linked) {
+          setPaired(true);
+        } else if (!data.pairing) {
+          stopPolling();
+          setError('Pairing stopped before WhatsApp confirmed. Request a new code.');
+          setPairingCode(null);
+          updateStatus('error');
+        }
+      } catch {
+        // Server briefly unreachable — keep trying until the deadline.
+      }
+    };
+    pollRef.current = setInterval(tick, 3000);
+    void tick();
   }
 
   async function initModal() {
     updateStatus('connecting');
-    setQrBase64(null);
+    setPairingCode(null);
     setError(null);
 
-    // 1. First check if backend session is ALREADY active & linked
     try {
-      const res = await fetch(`${getApiBaseUrl()}/wa/status/${userId}`);
+      const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
+      if (res.status === 401) {
+        setError('Your session has expired. Sign in again to link WhatsApp.');
+        updateStatus('error');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.linked && data.phone) {
@@ -84,145 +178,187 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         }
       }
     } catch {
-      // Proceed to SSE linking if status check fails
+      // Fall through to the number form
     }
 
-    // 2. Not linked, start QR SSE stream
-    startLinking();
+    // Not linked — pairing needs the user's number first.
+    updateStatus('idle');
   }
 
-  function startLinking() {
+  /** Shared handler for SSE events from either transport. */
+  function handleEvent(eventType: string, data: any) {
+    if (eventType === 'pairing_code' || eventType === 'connected' || eventType === 'error') {
+      clearCodeTimeout();
+    }
+    if (eventType === 'pairing_code' && data.code) {
+      hasCodeRef.current = true;
+      setPaired(false);
+      setPairingCode(data.code);
+      updateStatus('connecting');
+    } else if (eventType === 'status' && data.stage === 'paired') {
+      setPaired(true);
+    } else if (eventType === 'connected') {
+      stopPolling();
+      closeStream();
+      setPhone(data.phone ?? null);
+      setPairingCode(null);
+      setPaired(false);
+      updateStatus('linked');
+      if (onLinked && data.phone) onLinked(data.phone);
+    } else if (eventType === 'error') {
+      stopPolling();
+      closeStream();
+      setError(data.error ?? 'Connection failed');
+      setPairingCode(null);
+      setPaired(false);
+      updateStatus('error');
+    }
+  }
+
+  /** Incremental SSE parser: feed it raw text chunks, it dispatches events. */
+  function makeSseParser() {
+    let buffer = '';
+    return (chunk: string) => {
+      buffer += chunk.replace(/\r\n/g, '\n');
+      // SSE event blocks are delimited by a blank line
+      let boundary: number;
+      while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.substring(0, boundary);
+        buffer = buffer.substring(boundary + 2);
+        let eventType = 'message';
+        let dataStr = '';
+        for (const line of block.split('\n')) {
+          if (!line || line.startsWith(':')) continue; // comments / heartbeats
+          if (line.startsWith('event:')) eventType = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) continue;
+        try {
+          handleEvent(eventType, JSON.parse(dataStr));
+        } catch (parseErr) {
+          console.warn('[WhatsAppLinkModal] Error parsing SSE payload:', parseErr);
+        }
+      }
+    };
+  }
+
+  /**
+   * Web: `fetch` with a streamed body. Browser `EventSource` can't send an
+   * Authorization header, and the server identifies the user by that token.
+   */
+  function openFetchStream(url: string, headers: Record<string, string>) {
+    const controller = new AbortController();
+    streamRef.current = { close: () => controller.abort() };
+    const feed = makeSseParser();
+
+    (async () => {
+      try {
+        const res = await fetch(url, { headers, signal: controller.signal });
+        if (res.status === 401) {
+          handleEvent('error', { error: 'Your session has expired. Sign in again to link WhatsApp.' });
+          return;
+        }
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          feed(decoder.decode(value, { stream: true }));
+        }
+        // Server closed the stream without a final event.
+        if (!controller.signal.aborted) onTransportLost();
+      } catch {
+        if (!controller.signal.aborted) onTransportLost();
+      }
+    })();
+  }
+
+  /** Native: XMLHttpRequest exposes the response progressively and takes headers. */
+  function openXhrStream(url: string, headers: Record<string, string>) {
+    const xhr = new XMLHttpRequest();
+    let aborted = false;
+    streamRef.current = {
+      close: () => {
+        aborted = true;
+        xhr.abort();
+      },
+    };
+    const feed = makeSseParser();
+    let lastIndex = 0;
+
+    const pump = () => {
+      const text = xhr.responseText || '';
+      if (text.length <= lastIndex) return;
+      const chunk = text.substring(lastIndex);
+      lastIndex = text.length;
+      feed(chunk);
+    };
+    const lost = () => {
+      if (!aborted) onTransportLost();
+    };
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) pump();
+    };
+    xhr.onprogress = pump;
+    // Stream ended or failed without a final event (iOS idle timeout, Wi-Fi
+    // hiccup, server restart) — hand over to status polling.
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        handleEvent('error', { error: 'Your session has expired. Sign in again to link WhatsApp.' });
+        return;
+      }
+      pump();
+      lost();
+    };
+    xhr.onerror = lost;
+    xhr.ontimeout = lost;
+
+    xhr.open('GET', url);
+    xhr.setRequestHeader('Accept', 'text/event-stream');
+    xhr.setRequestHeader('Cache-Control', 'no-cache');
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.send();
+  }
+
+  async function startLinking() {
+    const normalized = normalizePhone(phoneInput);
+    if (!normalized) {
+      setPhoneError('Enter your WhatsApp number, e.g. 0300 1234567 or +92 300 1234567');
+      updateStatus('idle');
+      return;
+    }
+    setPhoneError(null);
+    cleanup();
+    hasCodeRef.current = false;
+    setPaired(false);
     updateStatus('connecting');
-    setQrBase64(null);
+    setPairingCode(null);
     setError(null);
 
-    const url = `${getApiBaseUrl()}/wa/link/${userId}`;
-
-    // On Web, use browser EventSource if available
-    if (typeof (globalThis as any).EventSource !== 'undefined') {
-      const es = new (globalThis as any).EventSource(url);
-      esRef.current = es;
-
-      es.addEventListener('qr', (e: { data: string }) => {
-        try {
-          const data = JSON.parse(e.data) as { qr: string };
-          setQrBase64(data.qr);
-          updateStatus('connecting');
-        } catch {}
-      });
-
-      es.addEventListener('connected', (e: { data: string }) => {
-        try {
-          const data = JSON.parse(e.data) as { phone?: string };
-          setPhone(data.phone ?? null);
-          updateStatus('linked');
-          es.close();
-          if (onLinked && data.phone) onLinked(data.phone);
-        } catch {}
-      });
-
-      es.addEventListener('error', (e: { data?: string }) => {
-        try {
-          const data = JSON.parse(e.data ?? '{}') as { error?: string };
-          setError(data.error ?? 'Connection failed');
-        } catch {
-          setError('Connection failed');
-        }
-        updateStatus('error');
-        es.close();
-      });
-
-      es.onerror = () => {
-        if (statusRef.current !== 'linked') {
-          setError('Lost connection to server');
-          updateStatus('error');
-        }
-      };
+    const headers = await getAuthHeaders();
+    if (!headers.Authorization) {
+      setError('Sign in again to link WhatsApp.');
+      updateStatus('error');
       return;
     }
 
-    // On React Native (mobile), EventSource is undefined on globalThis.
-    // Use XMLHttpRequest streaming to parse SSE chunks safely.
+    const url = `${getApiBaseUrl()}/wa/link?phone=${encodeURIComponent(normalized)}`;
+
+    codeTimeoutRef.current = setTimeout(() => {
+      codeTimeoutRef.current = null;
+      if (statusRef.current !== 'connecting' || hasCodeRef.current) return;
+      cleanup();
+      setError("The server didn't send a pairing code. Check the backend is running the latest build, then try again.");
+      updateStatus('error');
+    }, 25000);
+
     try {
-      const xhr = new XMLHttpRequest();
-      esRef.current = { close: () => xhr.abort() };
-
-      let lastIndex = 0;
-      let buffer = '';
-
-      const processBuffer = () => {
-        const text = xhr.responseText || '';
-        if (text.length > lastIndex) {
-          const newChunk = text.substring(lastIndex);
-          lastIndex = text.length;
-          buffer += newChunk;
-
-          // SSE event messages are delimited by double newline \n\n
-          let boundaryIndex: number;
-          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-            const eventBlock = buffer.substring(0, boundaryIndex);
-            buffer = buffer.substring(boundaryIndex + 2);
-
-            const lines = eventBlock.split(/\r?\n/);
-            let eventType = 'message';
-            let dataStr = '';
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || trimmed.startsWith(':')) continue; // Skip comments/keepalives
-
-              if (trimmed.startsWith('event:')) {
-                eventType = trimmed.replace(/^event:\s*/, '').trim();
-              } else if (trimmed.startsWith('data:')) {
-                dataStr += trimmed.replace(/^data:\s*/, '');
-              }
-            }
-
-            if (dataStr) {
-              try {
-                const data = JSON.parse(dataStr);
-                if (eventType === 'qr' && data.qr) {
-                  setQrBase64(data.qr);
-                  updateStatus('connecting');
-                } else if (eventType === 'connected') {
-                  setPhone(data.phone ?? null);
-                  updateStatus('linked');
-                  xhr.abort();
-                  if (onLinked && data.phone) onLinked(data.phone);
-                } else if (eventType === 'error') {
-                  setError(data.error ?? 'Connection failed');
-                  updateStatus('error');
-                  xhr.abort();
-                }
-              } catch (parseErr) {
-                console.warn('[WhatsAppLinkModal] Error parsing SSE payload:', parseErr);
-              }
-            }
-          }
-        }
-      };
-
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 3 || xhr.readyState === 4) {
-          processBuffer();
-        }
-      };
-      xhr.onprogress = processBuffer;
-      xhr.onload = () => {
-        processBuffer();
-      };
-      xhr.onerror = () => {
-        if (statusRef.current !== 'linked') {
-          setError('Lost connection to server');
-          updateStatus('error');
-        }
-      };
-
-      xhr.open('GET', url);
-      xhr.setRequestHeader('Accept', 'text/event-stream');
-      xhr.setRequestHeader('Cache-Control', 'no-cache');
-      xhr.send();
+      if (Platform.OS === 'web') openFetchStream(url, headers);
+      else openXhrStream(url, headers);
     } catch (err: any) {
+      clearCodeTimeout();
       setError(err?.message || 'Failed to initialize connection');
       updateStatus('error');
     }
@@ -230,14 +366,22 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
 
   async function handleUnlink() {
     try {
-      await fetch(`${getApiBaseUrl()}/wa/link/${userId}`, { method: 'DELETE' });
+      await ApiService.unlinkWa();
       updateStatus('idle');
       setPhone(null);
-      setQrBase64(null);
+      setPairingCode(null);
       if (onUnlinked) onUnlinked();
     } catch {
       setError('Failed to unlink');
+      updateStatus('error');
     }
+  }
+
+  function backToNumber() {
+    cleanup();
+    setPairingCode(null);
+    setError(null);
+    updateStatus('idle');
   }
 
   // ─── render ─────────────────────────────────────────────────────────────────
@@ -252,6 +396,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         style={styles.root}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* header */}
         <View style={styles.header}>
@@ -290,62 +435,101 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
                 onPress={handleUnlink}
                 style={styles.linkedBtn}
               />
-              <Button
-                label="Scan New Device"
-                variant="secondary"
-                size="md"
-                onPress={startLinking}
-                style={styles.linkedBtn}
-              />
             </View>
           </View>
         ) : null}
 
-        {/* ── instructions + qr ── */}
+        {/* ── step 1: number ── */}
+        {status === 'idle' ? (
+          <View style={styles.linkContainer}>
+            <TextField
+              label="Your WhatsApp number"
+              hint="The number on the phone you'll link. Include the country code if outside Pakistan."
+              error={phoneError}
+              value={phoneInput}
+              onChangeText={(next) => {
+                setPhoneInput(next);
+                if (phoneError) setPhoneError(null);
+              }}
+              placeholder="0300 1234567"
+              icon={PhoneIcon}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              returnKeyType="done"
+              onSubmitEditing={startLinking}
+            />
+            <Button
+              label="Get Pairing Code"
+              variant="primary"
+              size="lg"
+              onPress={startLinking}
+              fullWidth
+            />
+          </View>
+        ) : null}
+
+        {/* ── step 2: pairing code ── */}
         {status === 'connecting' ? (
           <View style={styles.linkContainer}>
-            {/* Steps card */}
-            <View style={styles.stepsCard}>
-              <Text style={[TYPE.label, styles.stepsTitle]}>How to link your WhatsApp:</Text>
-              
-              <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>1</Text></View>
-                <Text style={styles.stepText}>Open <Text style={styles.boldText}>WhatsApp</Text> on your phone</Text>
-              </View>
+            {pairingCode ? (
+              <>
+                <View style={styles.codeSection}>
+                  <Text style={[TYPE.overline, styles.codeLabel]}>Your pairing code</Text>
+                  <View
+                    style={styles.codeFrame}
+                    accessible
+                    accessibilityLabel={`Pairing code ${pairingCode.split('').join(' ')}`}
+                  >
+                    <Text selectable style={styles.codeText}>{pairingCode}</Text>
+                  </View>
+                  <Text style={[TYPE.caption, styles.hint]}>
+                    {paired
+                      ? 'Code accepted — finishing login with WhatsApp…'
+                      : 'Waiting for you to enter it in WhatsApp…'}
+                  </Text>
+                </View>
 
-              <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>2</Text></View>
-                <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Menu ⋮</Text> or <Text style={styles.boldText}>Settings ⚙</Text> → <Text style={styles.boldText}>Linked Devices</Text></Text>
-              </View>
+                <View style={styles.stepsCard}>
+                  <Text style={[TYPE.label, styles.stepsTitle]}>Enter the code in WhatsApp:</Text>
 
-              <View style={styles.stepRow}>
-                <View style={styles.stepBadge}><Text style={styles.stepNum}>3</Text></View>
-                <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Link a Device</Text> and scan the QR code below</Text>
-              </View>
-            </View>
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepBadge}><Text style={styles.stepNum}>1</Text></View>
+                    <Text style={styles.stepText}>Open <Text style={styles.boldText}>WhatsApp</Text> on the phone with this number</Text>
+                  </View>
 
-            {/* QR box */}
-            {qrBase64 ? (
-              <View style={styles.qrSection}>
-                <View style={styles.qrFrame}>
-                  <Image
-                    source={{ uri: `data:image/png;base64,${qrBase64}` }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepBadge}><Text style={styles.stepNum}>2</Text></View>
+                    <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Menu ⋮</Text> or <Text style={styles.boldText}>Settings ⚙</Text> → <Text style={styles.boldText}>Linked Devices</Text> → <Text style={styles.boldText}>Link a Device</Text></Text>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepBadge}><Text style={styles.stepNum}>3</Text></View>
+                    <Text style={styles.stepText}>Tap <Text style={styles.boldText}>Link with phone number instead</Text> and type the code above</Text>
+                  </View>
+                </View>
+
+                <View style={styles.linkedActions}>
+                  <Button
+                    label="Change Number"
+                    variant="secondary"
+                    size="sm"
+                    onPress={backToNumber}
+                    style={styles.linkedBtn}
+                  />
+                  <Button
+                    label="New Code"
+                    variant="secondary"
+                    size="sm"
+                    onPress={startLinking}
+                    style={styles.linkedBtn}
                   />
                 </View>
-                <Button
-                  label="Refresh QR Code"
-                  variant="secondary"
-                  size="sm"
-                  onPress={startLinking}
-                  style={styles.refreshBtn}
-                />
-              </View>
+              </>
             ) : (
               <View style={styles.center}>
                 <ActivityIndicator size="large" color="#25D366" />
-                <Text style={[TYPE.caption, styles.hint]}>Generating QR code…</Text>
+                <Text style={[TYPE.caption, styles.hint]}>Getting your pairing code…</Text>
               </View>
             )}
           </View>
@@ -355,25 +539,22 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         {status === 'error' ? (
           <View style={styles.errorCard}>
             <Text style={[TYPE.body, styles.errorText]}>{error}</Text>
-            <Button
-              label="Try Again"
-              variant="secondary"
-              size="sm"
-              onPress={startLinking}
-              style={styles.retryBtn}
-            />
-          </View>
-        ) : null}
-
-        {/* ── idle (initial) ── */}
-        {status === 'idle' ? (
-          <View style={styles.center}>
-            <Button
-              label="Start Linking"
-              variant="primary"
-              size="lg"
-              onPress={startLinking}
-            />
+            <View style={styles.linkedActions}>
+              <Button
+                label="Change Number"
+                variant="secondary"
+                size="sm"
+                onPress={backToNumber}
+                style={styles.linkedBtn}
+              />
+              <Button
+                label="Try Again"
+                variant="secondary"
+                size="sm"
+                onPress={startLinking}
+                style={styles.linkedBtn}
+              />
+            </View>
           </View>
         ) : null}
       </ScrollView>
@@ -458,7 +639,7 @@ const styles = StyleSheet.create({
   linkedBtn: {
     flex: 1,
   },
-  // instructions & qr
+  // number form, code & instructions
   linkContainer: {
     gap: SPACE.xl,
   },
@@ -503,33 +684,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
-  qrSection: {
+  codeSection: {
     alignItems: 'center',
     gap: SPACE.md,
   },
-  qrFrame: {
-    padding: SPACE.lg,
-    borderRadius: RADIUS.xxl,
+  codeLabel: {
+    color: COLORS.textMuted,
+  },
+  codeFrame: {
+    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.xl,
+    borderRadius: RADIUS.xl,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#25D366',
-    shadowColor: '#25D366',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
-  qrImage: {
-    width: 230,
-    height: 230,
+  codeText: {
+    ...TYPE.title1,
+    color: COLORS.textPrimary,
+    fontWeight: '800',
+    letterSpacing: 4,
+    fontVariant: ['tabular-nums'],
   },
   hint: {
     color: COLORS.textMuted,
     textAlign: 'center',
     maxWidth: 280,
-  },
-  refreshBtn: {
-    marginTop: SPACE.sm,
   },
   // error
   errorCard: {
@@ -544,9 +724,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#C53030',
     textAlign: 'center',
-  },
-  retryBtn: {
-    marginTop: SPACE.xs,
   },
   // misc
   center: {

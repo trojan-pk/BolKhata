@@ -43,6 +43,8 @@ export const CustomerCard: React.FC<{
       accessibilityLabel={`${party.name}, ${label} ${currency} ${Math.abs(balance)}`}
       leading={<Avatar name={party.name} size={42} />}
       title={party.name}
+      // Long names wrap instead of being cut to "Muhammad Abdul…".
+      titleLines={0}
       subtitle={subtitle}
       trailing={
         <>

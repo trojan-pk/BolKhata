@@ -13,10 +13,13 @@ import { Button, Press, useFeedback } from '../ui';
 import { ApiService } from '../services/api';
 import { getActiveTemplateText } from '../services/reminderTemplates';
 import { WaMarkdownPreview } from './WaMarkdownPreview';
+import { TimeWheel } from './TimeWheel';
+
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
 interface Props {
   visible: boolean;
-  userId: string;
   customer: {
     id: string;
     name: string;
@@ -57,7 +60,6 @@ export function getTimeRemainingText(targetIso: string): string {
 
 export const WaScheduleModal: React.FC<Props> = ({
   visible,
-  userId,
   customer,
   storeName = 'BolKhata Store',
   onClose,
@@ -135,12 +137,7 @@ export const WaScheduleModal: React.FC<Props> = ({
   };
 
   const adjustMinute = (delta: number) => {
-    setMinute((m) => {
-      let next = m + delta;
-      if (next >= 60) next = 0;
-      if (next < 0) next = 45;
-      return next;
-    });
+    setMinute((m) => (m + delta + 60) % 60);
   };
 
   // Construct Target ISO Date
@@ -157,7 +154,7 @@ export const WaScheduleModal: React.FC<Props> = ({
     setSubmitting(true);
     try {
       const scheduledAt = calculateTargetIso();
-      const result = await ApiService.scheduleWaReminder(userId, {
+      const result = await ApiService.scheduleWaReminder({
         customerId: customer.id,
         name: customer.name,
         phone: customer.phone,
@@ -297,13 +294,11 @@ export const WaScheduleModal: React.FC<Props> = ({
           <View style={styles.timeDisplayRow}>
             {/* Hour Dial */}
             <View style={styles.digitCol}>
-              <Press onPress={() => adjustHour(1)} style={styles.stepBtn}>
+              <Press onPress={() => adjustHour(1)} style={styles.stepBtn} accessibilityLabel="Increase hour">
                 <Text style={styles.stepBtnTxt}>▲</Text>
               </Press>
-              <View style={styles.digitBox}>
-                <Text style={styles.digitTxt}>{hour < 10 ? '0' + hour : hour}</Text>
-              </View>
-              <Press onPress={() => adjustHour(-1)} style={styles.stepBtn}>
+              <TimeWheel values={HOURS} value={hour} onChange={setHour} label="hours" />
+              <Press onPress={() => adjustHour(-1)} style={styles.stepBtn} accessibilityLabel="Decrease hour">
                 <Text style={styles.stepBtnTxt}>▼</Text>
               </Press>
               <Text style={styles.unitLabel}>HOURS</Text>
@@ -313,13 +308,11 @@ export const WaScheduleModal: React.FC<Props> = ({
 
             {/* Minute Dial */}
             <View style={styles.digitCol}>
-              <Press onPress={() => adjustMinute(15)} style={styles.stepBtn}>
+              <Press onPress={() => adjustMinute(1)} style={styles.stepBtn} accessibilityLabel="Increase minute">
                 <Text style={styles.stepBtnTxt}>▲</Text>
               </Press>
-              <View style={styles.digitBox}>
-                <Text style={styles.digitTxt}>{minute < 10 ? '0' + minute : minute}</Text>
-              </View>
-              <Press onPress={() => adjustMinute(-15)} style={styles.stepBtn}>
+              <TimeWheel values={MINUTES} value={minute} onChange={setMinute} label="minutes" />
+              <Press onPress={() => adjustMinute(-1)} style={styles.stepBtn} accessibilityLabel="Decrease minute">
                 <Text style={styles.stepBtnTxt}>▼</Text>
               </Press>
               <Text style={styles.unitLabel}>MINS</Text>
@@ -571,21 +564,6 @@ const styles = StyleSheet.create({
   stepBtnTxt: {
     fontSize: 12,
     color: '#475569',
-  },
-  digitBox: {
-    width: 60,
-    height: 52,
-    borderRadius: RADIUS.lg,
-    backgroundColor: '#E8F9F0',
-    borderWidth: 1.5,
-    borderColor: '#128C7E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  digitTxt: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#075E54',
   },
   unitLabel: {
     ...TYPE.caption,

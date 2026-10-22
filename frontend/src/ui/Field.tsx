@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   TextInputProps,
   View,
   ViewStyle,
@@ -73,7 +74,7 @@ export const TextField: React.FC<TextFieldProps> = ({
   ...inputProps
 }) => {
   const [focused, setFocused] = useState(false);
-  const input = useRef<TextInput>(null);
+  const input = useRef<TextInputInstance>(null);
 
   const borderColor = error
     ? COLORS.debit
@@ -233,7 +234,7 @@ export const AmountField: React.FC<{
   label,
 }) => {
   const [focused, setFocused] = useState(false);
-  const input = useRef<TextInput>(null);
+  const input = useRef<TextInputInstance>(null);
   const tint =
     tone === 'credit' ? COLORS.credit : tone === 'debit' ? COLORS.debit : COLORS.textPrimary;
 

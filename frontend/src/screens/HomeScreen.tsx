@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   View,
 } from 'react-native';
@@ -54,7 +55,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectTransaction,
 }) => {
   const [feedExpanded, setFeedExpanded] = useState(false);
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (scrollTopSignal > 0) {

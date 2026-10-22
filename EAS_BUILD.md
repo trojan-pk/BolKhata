@@ -78,7 +78,7 @@ The EAS build profiles are defined in `frontend/eas.json`:
 
 ### Key Profile Parameters
 1. **`node: "22.14.0"`**: Matches our backend and frontend Node.js 22 LTS environment.
-2. **`android.image: "latest"`**: Placed inside the `android` block to ensure EAS cloud runners use Android Build Image Ubuntu 22.04 with Java 17, which is required by Expo SDK 54 / React Native 0.81.
+2. **`android.image: "latest"`**: Placed inside the `android` block to ensure EAS cloud runners use Android Build Image Ubuntu 22.04 with Java 17, which is required by Expo SDK 58 / React Native 0.88.
 3. **`android.buildType: "apk"`**: Direct APK output (instead of `.aab` Android App Bundle), enabling instant sideloading and testing on Android physical devices.
 4. **Environment Variables**: Inlined production endpoints for the Heroku Express API and Supabase project.
 

@@ -25,7 +25,7 @@ When recording starts, an elevated floating HUD overlay animates above the dock:
 - **Controls**: Check button to complete recording; X button to abort/cancel without submitting.
 
 ### 3. Voice Recording Hook (`useVoiceRecording.ts`)
-Manages audio permissions, cross-platform audio recording (`expo-av`), file serialization, and dispatch to the Express backend API.
+Manages audio permissions, cross-platform audio recording (`expo-audio`), file serialization, and dispatch to the Express backend API.
 
 ---
 

@@ -17,6 +17,9 @@ interface RowProps {
   trailing?: React.ReactNode;
   onPress?: () => void;
   chevron?: boolean;
+  /** Max lines before truncating; `0` wraps fully. Defaults keep lists one-line. */
+  titleLines?: number;
+  subtitleLines?: number;
   /** `card` stands alone; `plain` sits inside a card with dividers between rows. */
   variant?: 'card' | 'plain';
   disabled?: boolean;
@@ -37,6 +40,8 @@ export const Row: React.FC<RowProps> = ({
   trailing,
   onPress,
   chevron = false,
+  titleLines = 1,
+  subtitleLines = 1,
   variant = 'card',
   disabled,
   accessibilityLabel,
@@ -47,11 +52,11 @@ export const Row: React.FC<RowProps> = ({
       {leading}
 
       <View style={styles.body}>
-        <Text style={[TYPE.title3, styles.title]} numberOfLines={1}>
+        <Text style={[TYPE.title3, styles.title]} numberOfLines={titleLines}>
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[TYPE.caption, styles.subtitle]} numberOfLines={1}>
+          <Text style={[TYPE.caption, styles.subtitle]} numberOfLines={subtitleLines}>
             {subtitle}
           </Text>
         ) : null}

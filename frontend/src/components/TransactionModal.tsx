@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { Check, Phone } from 'lucide-react-native';
 import { COPY } from '../i18n/copy';
 import { SPACE } from '../theme/tokens';
 import { PaymentMode, TransactionType } from '../types';
@@ -31,14 +31,22 @@ export const TransactionModal: React.FC<{
   visible: boolean;
   type: TransactionType;
   partyName: string;
+  /** Customer's saved number; editable here so it can be added mid-entry. */
+  partyMobile?: string;
   currency?: string;
   onClose: () => void;
-  onSubmit: (data: { amount: number; note: string; paymentMode: PaymentMode }) => void;
-}> = ({ visible, type, partyName, currency = 'Rs', onClose, onSubmit }) => {
+  onSubmit: (data: {
+    amount: number;
+    note: string;
+    paymentMode: PaymentMode;
+    mobile: string;
+  }) => void;
+}> = ({ visible, type, partyName, partyMobile = '', currency = 'Rs', onClose, onSubmit }) => {
   const isGave = type === 'gave';
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [mobile, setMobile] = useState(partyMobile);
   const [method, setMethod] = useState<PaymentMode>('cash');
   const [error, setError] = useState<string | null>(null);
 
@@ -47,10 +55,11 @@ export const TransactionModal: React.FC<{
     if (visible) {
       setAmount('');
       setNote('');
+      setMobile(partyMobile);
       setMethod('cash');
       setError(null);
     }
-  }, [visible]);
+  }, [visible, partyMobile]);
 
   const bump = (delta: number) => {
     setAmount(String(parseAmount(amount) + delta));
@@ -72,7 +81,12 @@ export const TransactionModal: React.FC<{
       setError(COPY.txn.invalidAmount);
       return;
     }
-    onSubmit({ amount: amountValue, note: note.trim(), paymentMode: method });
+    onSubmit({
+      amount: amountValue,
+      note: note.trim(),
+      paymentMode: method,
+      mobile: mobile.trim(),
+    });
     onClose();
   };
 
@@ -144,6 +158,19 @@ export const TransactionModal: React.FC<{
         counter
         returnKeyType="done"
         onSubmitEditing={submit}
+      />
+
+      <TextField
+        label={COPY.party.phoneLabel}
+        optional
+        hint={partyMobile ? undefined : 'Add it to send WhatsApp alerts for this entry'}
+        value={mobile}
+        onChangeText={setMobile}
+        placeholder={COPY.party.phonePlaceholder}
+        icon={Phone}
+        keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
       />
     </Sheet>
   );

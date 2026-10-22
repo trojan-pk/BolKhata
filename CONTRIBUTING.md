@@ -20,7 +20,7 @@ Thanks for your interest in contributing to **BolKhata**! We welcome bug reports
 ## 2. Tech Stack & Repository Structure
 
 BolKhata is a TypeScript monorepo consisting of:
-- **`frontend/`**: React Native mobile app powered by Expo SDK `~54.0.0` (React `19.1.0`, React Native `0.81.5`), featuring a floating bottom tab bar with an elevated voice dock button, real-time waveform recording HUD, and user-scoped local storage.
+- **`frontend/`**: React Native mobile app powered by Expo SDK `~58.0.0` (React `19.3.0`, React Native `0.88.0`), featuring a floating bottom tab bar with an elevated voice dock button, real-time waveform recording HUD, and user-scoped local storage.
 - **`backend/`**: Node.js 22 + Express `5.2.1` microservice orchestrating multi-tier speech-to-text (ElevenLabs Scribe / Groq Whisper), multi-model intent parsing (Gemini 2.5 Flash Lite / DashScope Qwen / Groq Llama 3.3), DashScope TTS, and a Baileys v7 WhatsApp engine.
 - **`docs/`**: Comprehensive system design and architectural specification guides.
 

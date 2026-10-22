@@ -3,11 +3,11 @@
 ## 1. Production Technical Stack
 
 ### Mobile & Web Frontend
-- **Framework**: **React Native 0.81.5** on **Expo SDK ~54.0.0** (Managed Workflow with clean EAS prebuilds).
-- **Web Engine**: **React Native Web 0.21.0** on **React 19.1.0** and `@expo/metro-runtime`.
-- **Language**: **TypeScript ^5.3.3** in strict mode (extending `expo/tsconfig.base`).
+- **Framework**: **React Native 0.88.0** on **Expo SDK ~58.0.0** (Managed Workflow with clean EAS prebuilds).
+- **Web Engine**: **React Native Web 0.21.0** on **React 19.3.0** and `@expo/metro-runtime`.
+- **Language**: **TypeScript ~6.0.3** in strict mode (extending `expo/tsconfig.base`).
 - **Authentication**: **Supabase Auth** (`@supabase/supabase-js ^2.112.3`) with PKCE deep links (`bolkhata://`, `veldger://`) and token cache via `@react-native-async-storage/async-storage`.
-- **Audio Capture & Playback**: `expo-av` for audio recording; native speech synthesis via `expo-speech` with DashScope/ElevenLabs TTS audio stream playback.
+- **Audio Capture & Playback**: `expo-audio` for audio recording; native speech synthesis via `expo-speech` with DashScope/ElevenLabs TTS audio stream playback.
 - **UI & Design Tokens**: Handcrafted design system in `src/ui` (Button, Card, Money, Row, Sheet, Chip, EmptyState, Feedback toast), `lucide-react-native` icons, and custom SVG primitives.
 - **Typography**: Plus Jakarta Sans (figures & headings) and Inter (body) injected dynamically on web with native system font fallbacks.
 
@@ -132,7 +132,7 @@ To ensure shopkeepers can record sales even during connectivity drops, `frontend
 ## 4. Voice & AI Processing Pipeline
 
 1. **Audio Recording**:
-   - Captured via `expo-av` at 16kHz/44.1kHz sample rate.
+   - Captured via `expo-audio` at 16kHz/44.1kHz sample rate.
    - Formatted as `audio/m4a` on native iOS/Android or `audio/webm` on web.
 2. **Speech-to-Text (STT)**:
    - Primary: Groq `whisper-large-v3` (sub-second transcription with multilingual Urdu/Hindi capability).

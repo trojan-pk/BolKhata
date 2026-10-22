@@ -7,6 +7,7 @@ import transactionRoutes from './routes/transaction.routes';
 import voiceRoutes from './routes/voice.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import waRoutes from './routes/whatsapp.routes';
+import { resumeAllSessions } from './services/whatsapp.service';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -60,6 +61,9 @@ app.use(errorHandler);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [BolKhata Backend] Running on http://0.0.0.0:${PORT} (Ready for Mobile & Web)`);
+  // Dyno restarts (daily on Heroku) drop every WhatsApp socket; reconnect
+  // linked users from Supabase so scheduled reminders keep sending.
+  resumeAllSessions().catch((err) => console.error('[WA] resume on boot failed:', err));
 });
 
 // Graceful Shutdown
