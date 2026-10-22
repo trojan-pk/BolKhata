@@ -35,6 +35,18 @@
       "eas": {
         "projectId": "bf3933c2-90e7-4475-916d-388c547ee427"
       }
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-web-browser",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice entries.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-status-bar"
+    ]
   }
 }

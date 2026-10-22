@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  RefreshControl,
+  ScrollView,
+  type ScrollViewInstance,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { ArrowDownLeft, ArrowUpRight, Search, SearchX, UserPlus, Users, X } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { COPY } from '../i18n/copy';
@@ -51,7 +58,7 @@ export const CustomersScreen: React.FC<{
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>(initialFilter);
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (scrollTopSignal > 0) {

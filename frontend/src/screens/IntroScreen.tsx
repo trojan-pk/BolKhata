@@ -6,6 +6,7 @@ import {
   NativeSyntheticEvent,
   Platform,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
@@ -43,7 +44,7 @@ const SLIDE_ICONS: IconComponent[] = [Mic, Send, Cloud];
  */
 export const IntroScreen: React.FC<IntroScreenProps> = ({ onDone }) => {
   const insets = useSafeAreaInsets();
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
 
   /**
    * Measured rather than taken from the window: content is capped at
