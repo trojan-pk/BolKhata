@@ -28,7 +28,6 @@
     "jetdb": "^1.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
-    "qr-image": "^3.2.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

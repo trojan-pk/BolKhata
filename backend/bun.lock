@@ -14,7 +14,6 @@
         "jetdb": "^1.1.0",
         "jsonwebtoken": "^9.0.3",
         "multer": "^2.5.0",
-        "qr-image": "^3.2.0",
         "zod": "^4.6.7",
       },
       "devDependencies": {
@@ -519,8 +518,6 @@
     "pstree.remy": ["pstree.remy@1.1.8", "", {}, ""],
 
     "qified": ["qified@0.10.1", "", { "dependencies": { "hookified": "^2.1.1" } }, ""],
-
-    "qr-image": ["qr-image@3.2.0", "", {}, ""],
 
     "qs": ["qs@6.16.1", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg=="],
 
