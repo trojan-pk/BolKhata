@@ -20,7 +20,6 @@ const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
 interface Props {
   visible: boolean;
-  userId: string;
   customer: {
     id: string;
     name: string;
@@ -61,7 +60,6 @@ export function getTimeRemainingText(targetIso: string): string {
 
 export const WaScheduleModal: React.FC<Props> = ({
   visible,
-  userId,
   customer,
   storeName = 'BolKhata Store',
   onClose,
@@ -156,7 +154,7 @@ export const WaScheduleModal: React.FC<Props> = ({
     setSubmitting(true);
     try {
       const scheduledAt = calculateTargetIso();
-      const result = await ApiService.scheduleWaReminder(userId, {
+      const result = await ApiService.scheduleWaReminder({
         customerId: customer.id,
         name: customer.name,
         phone: customer.phone,

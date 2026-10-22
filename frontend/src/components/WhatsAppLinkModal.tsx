@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,13 +13,12 @@ import { Link2Off, Phone as PhoneIcon } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Button, Press, TextField } from '../ui';
-import { getApiBaseUrl } from '../services/api';
+import { ApiService, getApiBaseUrl, getAuthHeaders } from '../services/api';
 
 type WaStatus = 'idle' | 'connecting' | 'linked' | 'error';
 
 interface Props {
   visible: boolean;
-  userId: string;
   /** Prefills the number field (e.g. the store's mobile). */
   defaultPhone?: string;
   onClose: () => void;
@@ -39,7 +39,6 @@ function normalizePhone(raw: string): string | null {
 
 export const WhatsAppLinkModal: React.FC<Props> = ({
   visible,
-  userId,
   defaultPhone,
   onClose,
   onLinked,
@@ -54,10 +53,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   const [phone, setPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use 'any' for EventSource — it's a Web API not typed in React Native's lib
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const esRef = useRef<any | null>(null);
-  // Track status in a ref so the onerror closure always reads the latest value
+  /** Active event stream (fetch on web, XHR on native); `close` aborts it. */
+  const streamRef = useRef<{ close: () => void } | null>(null);
+  // Track status in a ref so async callbacks always read the latest value
   const statusRef = useRef<WaStatus>('idle');
 
   function updateStatus(s: WaStatus) {
@@ -74,24 +72,27 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     initModal();
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, userId]);
+  }, [visible]);
 
   useEffect(() => {
     if (defaultPhone && !phoneInput) setPhoneInput(defaultPhone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultPhone]);
 
+  function closeStream() {
+    const stream = streamRef.current;
+    streamRef.current = null;
+    stream?.close();
+  }
+
   function cleanup() {
     clearCodeTimeout();
     stopPolling();
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
+    closeStream();
   }
 
   // If no code arrives, say so instead of spinning forever (e.g. the server is
-  // an old build that only emits `qr`, or WhatsApp is unreachable from it).
+  // an old build, or WhatsApp is unreachable from it).
   const codeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function clearCodeTimeout() {
     if (codeTimeoutRef.current) {
@@ -112,12 +113,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   }
 
   function onTransportLost() {
-    if (esRef.current) {
-      // Also stops the browser's EventSource auto-reconnect, which would hit
-      // /wa/link again and restart pairing with a brand-new code.
-      esRef.current.close();
-      esRef.current = null;
-    }
+    // Deliberately not reconnecting the stream: a new /wa/link request would
+    // restart pairing and invalidate the code the user is typing.
+    streamRef.current = null;
     if (statusRef.current !== 'connecting') return;
     if (!hasCodeRef.current) {
       clearCodeTimeout();
@@ -136,12 +134,12 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         return;
       }
       try {
-        const res = await fetch(`${getApiBaseUrl()}/wa/status/${userId}`);
+        const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
         if (!res.ok) return;
         const data = await res.json();
         if (data.linked && !data.connecting && data.phone) {
           stopPolling();
-          handleEvent('connected', { phone: data.phone }, () => {});
+          handleEvent('connected', { phone: data.phone });
         } else if (data.linked) {
           setPaired(true);
         } else if (!data.pairing) {
@@ -164,7 +162,12 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setError(null);
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/wa/status/${userId}`);
+      const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
+      if (res.status === 401) {
+        setError('Your session has expired. Sign in again to link WhatsApp.');
+        updateStatus('error');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.linked && data.phone) {
@@ -183,7 +186,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   }
 
   /** Shared handler for SSE events from either transport. */
-  function handleEvent(eventType: string, data: any, close: () => void) {
+  function handleEvent(eventType: string, data: any) {
     if (eventType === 'pairing_code' || eventType === 'connected' || eventType === 'error') {
       clearCodeTimeout();
     }
@@ -196,23 +199,130 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
       setPaired(true);
     } else if (eventType === 'connected') {
       stopPolling();
+      closeStream();
       setPhone(data.phone ?? null);
       setPairingCode(null);
       setPaired(false);
       updateStatus('linked');
-      close();
       if (onLinked && data.phone) onLinked(data.phone);
     } else if (eventType === 'error') {
       stopPolling();
+      closeStream();
       setError(data.error ?? 'Connection failed');
       setPairingCode(null);
       setPaired(false);
       updateStatus('error');
-      close();
     }
   }
 
-  function startLinking() {
+  /** Incremental SSE parser: feed it raw text chunks, it dispatches events. */
+  function makeSseParser() {
+    let buffer = '';
+    return (chunk: string) => {
+      buffer += chunk.replace(/\r\n/g, '\n');
+      // SSE event blocks are delimited by a blank line
+      let boundary: number;
+      while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.substring(0, boundary);
+        buffer = buffer.substring(boundary + 2);
+        let eventType = 'message';
+        let dataStr = '';
+        for (const line of block.split('\n')) {
+          if (!line || line.startsWith(':')) continue; // comments / heartbeats
+          if (line.startsWith('event:')) eventType = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) continue;
+        try {
+          handleEvent(eventType, JSON.parse(dataStr));
+        } catch (parseErr) {
+          console.warn('[WhatsAppLinkModal] Error parsing SSE payload:', parseErr);
+        }
+      }
+    };
+  }
+
+  /**
+   * Web: `fetch` with a streamed body. Browser `EventSource` can't send an
+   * Authorization header, and the server identifies the user by that token.
+   */
+  function openFetchStream(url: string, headers: Record<string, string>) {
+    const controller = new AbortController();
+    streamRef.current = { close: () => controller.abort() };
+    const feed = makeSseParser();
+
+    (async () => {
+      try {
+        const res = await fetch(url, { headers, signal: controller.signal });
+        if (res.status === 401) {
+          handleEvent('error', { error: 'Your session has expired. Sign in again to link WhatsApp.' });
+          return;
+        }
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          feed(decoder.decode(value, { stream: true }));
+        }
+        // Server closed the stream without a final event.
+        if (!controller.signal.aborted) onTransportLost();
+      } catch {
+        if (!controller.signal.aborted) onTransportLost();
+      }
+    })();
+  }
+
+  /** Native: XMLHttpRequest exposes the response progressively and takes headers. */
+  function openXhrStream(url: string, headers: Record<string, string>) {
+    const xhr = new XMLHttpRequest();
+    let aborted = false;
+    streamRef.current = {
+      close: () => {
+        aborted = true;
+        xhr.abort();
+      },
+    };
+    const feed = makeSseParser();
+    let lastIndex = 0;
+
+    const pump = () => {
+      const text = xhr.responseText || '';
+      if (text.length <= lastIndex) return;
+      const chunk = text.substring(lastIndex);
+      lastIndex = text.length;
+      feed(chunk);
+    };
+    const lost = () => {
+      if (!aborted) onTransportLost();
+    };
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) pump();
+    };
+    xhr.onprogress = pump;
+    // Stream ended or failed without a final event (iOS idle timeout, Wi-Fi
+    // hiccup, server restart) — hand over to status polling.
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        handleEvent('error', { error: 'Your session has expired. Sign in again to link WhatsApp.' });
+        return;
+      }
+      pump();
+      lost();
+    };
+    xhr.onerror = lost;
+    xhr.ontimeout = lost;
+
+    xhr.open('GET', url);
+    xhr.setRequestHeader('Accept', 'text/event-stream');
+    xhr.setRequestHeader('Cache-Control', 'no-cache');
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.send();
+  }
+
+  async function startLinking() {
     const normalized = normalizePhone(phoneInput);
     if (!normalized) {
       setPhoneError('Enter your WhatsApp number, e.g. 0300 1234567 or +92 300 1234567');
@@ -227,111 +337,28 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setPairingCode(null);
     setError(null);
 
-    const url = `${getApiBaseUrl()}/wa/link/${userId}?phone=${encodeURIComponent(normalized)}`;
-
-    codeTimeoutRef.current = setTimeout(() => {
-      codeTimeoutRef.current = null;
-      if (statusRef.current !== 'connecting') return;
-      cleanup();
-      setError(
-        "The server didn't send a pairing code. Restart the backend so it runs the latest build, then try again."
-      );
+    const headers = await getAuthHeaders();
+    if (!headers.Authorization) {
+      setError('Sign in again to link WhatsApp.');
       updateStatus('error');
-    }, 25000);
-
-    // On Web, use browser EventSource if available
-    if (typeof (globalThis as any).EventSource !== 'undefined') {
-      const es = new (globalThis as any).EventSource(url);
-      esRef.current = es;
-      const close = () => es.close();
-
-      for (const name of ['pairing_code', 'status', 'connected']) {
-        es.addEventListener(name, (e: { data: string }) => {
-          try {
-            handleEvent(name, JSON.parse(e.data), close);
-          } catch {}
-        });
-      }
-
-      // Server-sent `error` events carry data; native connection errors don't.
-      es.addEventListener('error', (e: { data?: string }) => {
-        if (!e.data) return;
-        try {
-          handleEvent('error', JSON.parse(e.data), close);
-        } catch {
-          handleEvent('error', {}, close);
-        }
-      });
-
-      es.onerror = (e: { data?: string }) => {
-        if (e?.data) return;
-        onTransportLost();
-      };
       return;
     }
 
-    // On React Native (mobile), EventSource is undefined on globalThis.
-    // Use XMLHttpRequest streaming to parse SSE chunks safely.
+    const url = `${getApiBaseUrl()}/wa/link?phone=${encodeURIComponent(normalized)}`;
+
+    codeTimeoutRef.current = setTimeout(() => {
+      codeTimeoutRef.current = null;
+      if (statusRef.current !== 'connecting' || hasCodeRef.current) return;
+      cleanup();
+      setError("The server didn't send a pairing code. Check the backend is running the latest build, then try again.");
+      updateStatus('error');
+    }, 25000);
+
     try {
-      const xhr = new XMLHttpRequest();
-      esRef.current = { close: () => xhr.abort() };
-      const close = () => xhr.abort();
-
-      let lastIndex = 0;
-      let buffer = '';
-
-      const processBuffer = () => {
-        const text = xhr.responseText || '';
-        if (text.length <= lastIndex) return;
-        buffer += text.substring(lastIndex);
-        lastIndex = text.length;
-
-        // SSE event messages are delimited by double newline \n\n
-        let boundaryIndex: number;
-        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-          const eventBlock = buffer.substring(0, boundaryIndex);
-          buffer = buffer.substring(boundaryIndex + 2);
-
-          let eventType = 'message';
-          let dataStr = '';
-          for (const line of eventBlock.split(/\r?\n/)) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(':')) continue; // Skip comments/keepalives
-            if (trimmed.startsWith('event:')) {
-              eventType = trimmed.replace(/^event:\s*/, '').trim();
-            } else if (trimmed.startsWith('data:')) {
-              dataStr += trimmed.replace(/^data:\s*/, '');
-            }
-          }
-
-          if (dataStr) {
-            try {
-              handleEvent(eventType, JSON.parse(dataStr), close);
-            } catch (parseErr) {
-              console.warn('[WhatsAppLinkModal] Error parsing SSE payload:', parseErr);
-            }
-          }
-        }
-      };
-
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 3 || xhr.readyState === 4) processBuffer();
-      };
-      xhr.onprogress = processBuffer;
-      // Stream ended or failed without a final event (iOS idle timeout, Wi-Fi
-      // hiccup, server restart) — hand over to status polling.
-      xhr.onload = () => {
-        processBuffer();
-        onTransportLost();
-      };
-      xhr.onerror = onTransportLost;
-      xhr.ontimeout = onTransportLost;
-
-      xhr.open('GET', url);
-      xhr.setRequestHeader('Accept', 'text/event-stream');
-      xhr.setRequestHeader('Cache-Control', 'no-cache');
-      xhr.send();
+      if (Platform.OS === 'web') openFetchStream(url, headers);
+      else openXhrStream(url, headers);
     } catch (err: any) {
+      clearCodeTimeout();
       setError(err?.message || 'Failed to initialize connection');
       updateStatus('error');
     }
@@ -339,13 +366,14 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
 
   async function handleUnlink() {
     try {
-      await fetch(`${getApiBaseUrl()}/wa/link/${userId}`, { method: 'DELETE' });
+      await ApiService.unlinkWa();
       updateStatus('idle');
       setPhone(null);
       setPairingCode(null);
       if (onUnlinked) onUnlinked();
     } catch {
       setError('Failed to unlink');
+      updateStatus('error');
     }
   }
 

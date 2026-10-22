@@ -38,7 +38,7 @@ export const getApiBaseUrl = () => {
 };
 
 // Helper to retrieve active Supabase Authorization Bearer header
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
@@ -160,22 +160,26 @@ export const ApiService = {
   saveCashbook: async (entries: CashbookEntry[]) => {},
 
   // ── WhatsApp integration ──────────────────────────────────────────────────
+  // Every /wa route acts on the signed-in user's own session, identified by
+  // the Supabase bearer token — so none of these take a user id.
 
-  checkWaStatus: async (userId: string): Promise<{ linked: boolean; phone?: string }> => {
-    const res = await fetch(`${getApiBaseUrl()}/wa/status/${userId}`);
-    if (!res.ok) return { linked: false };
-    return res.json();
+  checkWaStatus: async (): Promise<{ linked: boolean; phone?: string; connecting?: boolean; pairing?: boolean }> => {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
+      if (!res.ok) return { linked: false };
+      return res.json();
+    } catch {
+      return { linked: false };
+    }
   },
 
   sendWaReminder: async (
-    userId: string,
     customer: { id: string; name: string; phone: string; balance: number; message?: string; storeName?: string; kind?: 'reminder' | 'entry' }
   ): Promise<{ success: boolean; sentAt?: string; error?: string }> => {
     const res = await fetch(`${getApiBaseUrl()}/wa/remind`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
-        userId,
         customerId: customer.id,
         phone: customer.phone,
         name: customer.name,
@@ -185,42 +189,52 @@ export const ApiService = {
         kind: customer.kind,
       }),
     });
-    return res.json();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: body?.error || `Server error (${res.status})` };
+    return body;
   },
 
-  unlinkWa: async (userId: string): Promise<void> => {
-    await fetch(`${getApiBaseUrl()}/wa/link/${userId}`, { method: 'DELETE' });
+  unlinkWa: async (): Promise<void> => {
+    const res = await fetch(`${getApiBaseUrl()}/wa/link`, {
+      method: 'DELETE',
+      headers: await getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`Unlink failed (${res.status})`);
   },
 
-  scheduleWaReminder: async (
-    userId: string,
-    payload: {
-      customerId: string;
-      name: string;
-      phone: string;
-      balance: number;
-      scheduledAt: string;
-      message?: string;
-      storeName?: string;
-    }
-  ): Promise<{ success: boolean; schedule?: any; error?: string }> => {
+  scheduleWaReminder: async (payload: {
+    customerId: string;
+    name: string;
+    phone: string;
+    balance: number;
+    scheduledAt: string;
+    message?: string;
+    storeName?: string;
+  }): Promise<{ success: boolean; schedule?: any; error?: string }> => {
     const res = await fetch(`${getApiBaseUrl()}/wa/schedule`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, ...payload }),
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+      body: JSON.stringify(payload),
     });
-    return res.json();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: body?.error || `Server error (${res.status})` };
+    return body;
   },
 
-  getScheduledWaReminders: async (userId: string): Promise<any[]> => {
-    const res = await fetch(`${getApiBaseUrl()}/wa/schedule/${userId}`);
-    if (!res.ok) return [];
-    return res.json();
+  getScheduledWaReminders: async (): Promise<any[]> => {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/wa/schedule`, { headers: await getAuthHeaders() });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
   },
 
-  cancelScheduledWaReminder: async (userId: string, scheduleId: string): Promise<void> => {
-    await fetch(`${getApiBaseUrl()}/wa/schedule/${userId}/${scheduleId}`, {
+  cancelScheduledWaReminder: async (scheduleId: string): Promise<void> => {
+    await fetch(`${getApiBaseUrl()}/wa/schedule/${encodeURIComponent(scheduleId)}`, {
       method: 'DELETE',
+      headers: await getAuthHeaders(),
     });
   },
 };

@@ -1,5 +1,20 @@
-import fs from 'fs'
-import path from 'path'
+import { supabase } from './supabase.service'
+import {
+    clearSupabaseAuthState,
+    getLinkedPhone,
+    listLinkedUsers,
+    useSupabaseAuthState,
+} from './whatsappAuthStore'
+
+/**
+ * One Baileys socket per app user. Everything persistent — the linked-device
+ * login, scheduled reminders, message history — lives in Supabase
+ * (database/whatsapp.sql), because Heroku wipes the filesystem on every dyno
+ * restart (at least daily). Only live sockets are kept in memory.
+ *
+ * Runs on a single dyno by design: two processes opening the same WhatsApp
+ * session would knock each other offline.
+ */
 
 // ─── lazy ESM loader ─────────────────────────────────────────────────────────
 // Baileys (ESM) cannot be statically imported from a CJS module under Node16.
@@ -9,17 +24,7 @@ async function getBaileys(): Promise<any> {
     return Function('return import("baileys")')()
 }
 
-// ─── paths ────────────────────────────────────────────────────────────────────
-
-const sessionDir = (userId: string) => path.join(process.cwd(), 'wa', userId)
-const credsPath  = (userId: string) => path.join(sessionDir(userId), 'creds.json')
-const msgsPath   = (userId: string) => path.join(sessionDir(userId), 'messages.json')
-
-function ensureDir(userId: string) {
-    fs.mkdirSync(sessionDir(userId), { recursive: true })
-}
-
-// ─── message history (nel-whatsapp addMessage pattern) ────────────────────────
+// ─── message history ─────────────────────────────────────────────────────────
 
 export interface StoredMessage {
     id: string
@@ -29,31 +34,36 @@ export interface StoredMessage {
     timestamp: number
 }
 
-type MessageStore = Record<string, StoredMessage[]>
+const HISTORY_LIMIT = 200
 
-function readMessages(userId: string): MessageStore {
-    try { return JSON.parse(fs.readFileSync(msgsPath(userId), 'utf-8')) } catch { return {} }
+export async function addToHistory(userId: string, jid: string, msg: StoredMessage): Promise<void> {
+    const { error } = await supabase.from('wa_messages').upsert({
+        user_id: userId,
+        jid,
+        id: msg.id,
+        text: msg.text,
+        from_me: msg.fromMe,
+        ts: msg.timestamp,
+    })
+    if (error) console.error('[WA] saving message failed:', error.message)
 }
 
-function writeMessages(userId: string, store: MessageStore) {
-    fs.writeFileSync(msgsPath(userId), JSON.stringify(store, null, 2))
+export async function getHistory(userId: string, jid: string): Promise<StoredMessage[]> {
+    const { data, error } = await supabase
+        .from('wa_messages')
+        .select('id, jid, text, from_me, ts')
+        .eq('user_id', userId)
+        .eq('jid', jid)
+        .order('ts', { ascending: false })
+        .limit(HISTORY_LIMIT)
+    if (error) throw new Error(error.message)
+    // Oldest first, as the file store returned it.
+    return (data ?? [])
+        .map((r) => ({ id: r.id, jid: r.jid, text: r.text, fromMe: r.from_me, timestamp: Number(r.ts) }))
+        .reverse()
 }
 
-export function addToHistory(userId: string, jid: string, msg: StoredMessage) {
-    ensureDir(userId)
-    const store = readMessages(userId)
-    const msgs = store[jid] ?? []
-    if (msgs.length >= 200) msgs.shift()   // same as nel-whatsapp addMessage
-    msgs.push(msg)
-    store[jid] = msgs
-    writeMessages(userId, store)
-}
-
-export function getHistory(userId: string, jid: string): StoredMessage[] {
-    return readMessages(userId)[jid] ?? []
-}
-
-const schedulesPath = (userId: string) => path.join(sessionDir(userId), 'schedules.json')
+// ─── scheduled reminders ─────────────────────────────────────────────────────
 
 export interface ScheduledReminder {
     id: string
@@ -66,81 +76,140 @@ export interface ScheduledReminder {
     storeName?: string
     scheduledAt: string
     status: 'PENDING' | 'SENT' | 'CANCELLED' | 'FAILED'
+    error?: string | null
+    sentAt?: string | null
     createdAt: string
 }
 
-function readSchedules(userId: string): ScheduledReminder[] {
-    try { return JSON.parse(fs.readFileSync(schedulesPath(userId), 'utf-8')) } catch { return [] }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToReminder = (r: any): ScheduledReminder => ({
+    id: r.id,
+    userId: r.user_id,
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    phone: r.phone,
+    balance: Number(r.balance),
+    message: r.message ?? undefined,
+    storeName: r.store_name ?? undefined,
+    scheduledAt: r.scheduled_at,
+    status: r.status,
+    error: r.error,
+    sentAt: r.sent_at,
+    createdAt: r.created_at,
+})
+
+export async function addScheduledReminder(reminder: ScheduledReminder): Promise<ScheduledReminder> {
+    const { data, error } = await supabase
+        .from('wa_schedules')
+        .insert({
+            id: reminder.id,
+            user_id: reminder.userId,
+            customer_id: reminder.customerId,
+            customer_name: reminder.customerName,
+            phone: reminder.phone,
+            balance: reminder.balance ?? 0,
+            message: reminder.message ?? null,
+            store_name: reminder.storeName ?? null,
+            scheduled_at: reminder.scheduledAt,
+            status: 'PENDING',
+        })
+        .select()
+        .single()
+    if (error) throw new Error(error.message)
+    return rowToReminder(data)
 }
 
-function writeSchedules(userId: string, list: ScheduledReminder[]) {
-    ensureDir(userId)
-    fs.writeFileSync(schedulesPath(userId), JSON.stringify(list, null, 2))
+export async function getScheduledReminders(userId: string): Promise<ScheduledReminder[]> {
+    const { data, error } = await supabase
+        .from('wa_schedules')
+        .select('*')
+        .eq('user_id', userId)
+        .order('scheduled_at', { ascending: true })
+        .limit(500)
+    if (error) throw new Error(error.message)
+    return (data ?? []).map(rowToReminder)
 }
 
-export function addScheduledReminder(reminder: ScheduledReminder): ScheduledReminder {
-    const list = readSchedules(reminder.userId)
-    list.push(reminder)
-    writeSchedules(reminder.userId, list)
-    return reminder
+export async function cancelScheduledReminder(userId: string, scheduleId: string): Promise<boolean> {
+    const { data, error } = await supabase
+        .from('wa_schedules')
+        .update({ status: 'CANCELLED' })
+        .eq('user_id', userId)
+        .eq('id', scheduleId)
+        .eq('status', 'PENDING')
+        .select('id')
+    if (error) throw new Error(error.message)
+    return (data?.length ?? 0) > 0
 }
 
-export function getScheduledReminders(userId: string): ScheduledReminder[] {
-    return readSchedules(userId)
-}
+const DEFAULT_TEMPLATE =
+    `Hello {customer_name},\n\n` +
+    `This is a payment reminder from your shopkeeper at *{store_name}*.\n` +
+    `Your outstanding balance is *Rs {amount}*.\n\n` +
+    `Please arrange payment at your earliest convenience. Thank you! 🙏`
 
-export function cancelScheduledReminder(userId: string, scheduleId: string): boolean {
-    const list = readSchedules(userId)
-    const item = list.find((s) => s.id === scheduleId)
-    if (!item) return false
-    item.status = 'CANCELLED'
-    writeSchedules(userId, list)
-    return true
-}
+/** Give up on a reminder whose sender stays unlinked this long past its time. */
+const UNLINKED_GRACE_MS = 24 * 60 * 60 * 1000
+
+let schedulerBusy = false
 
 async function checkAndRunScheduledReminders() {
+    if (schedulerBusy) return // a slow send must not overlap the next tick
+    schedulerBusy = true
     try {
-        const waDir = path.join(process.cwd(), 'wa')
-        if (!fs.existsSync(waDir)) return
-        const userDirs = fs.readdirSync(waDir)
-        const now = new Date()
+        const { data, error } = await supabase
+            .from('wa_schedules')
+            .select('*')
+            .eq('status', 'PENDING')
+            .lte('scheduled_at', new Date().toISOString())
+            .order('scheduled_at', { ascending: true })
+            .limit(50)
+        if (error) {
+            console.error('[WA] scheduler query failed:', error.message)
+            return
+        }
 
-        for (const userId of userDirs) {
-            const list = readSchedules(userId)
-            let updated = false
+        for (const item of (data ?? []).map(rowToReminder)) {
+            const finish = (status: 'SENT' | 'FAILED', err?: string) =>
+                supabase
+                    .from('wa_schedules')
+                    .update({
+                        status,
+                        error: err ?? null,
+                        sent_at: status === 'SENT' ? new Date().toISOString() : null,
+                    })
+                    .eq('id', item.id)
+                    .eq('status', 'PENDING') // cancelled meanwhile → leave it
 
-            for (const item of list) {
-                if (item.status === 'PENDING' && new Date(item.scheduledAt) <= now) {
-                    const status = getSessionStatus(userId)
-                    if (status.linked) {
-                        try {
-                            const rawTemplate = item.message || (
-                                `Hello {customer_name},\n\n` +
-                                `This is a payment reminder from your shopkeeper at *{store_name}*.\n` +
-                                `Your outstanding balance is *Rs {amount}*.\n\n` +
-                                `Please arrange payment at your earliest convenience. Thank you! 🙏`
-                            )
-                            const text = rawTemplate
-                                .replace(/{customer_name}/g, item.customerName)
-                                .replace(/{amount}/g, item.balance.toLocaleString())
-                                .replace(/{store_name}/g, item.storeName || 'BolKhata Store')
-
-                            await sendTextMessage(userId, item.phone, text)
-                            item.status = 'SENT'
-                            updated = true
-                        } catch {
-                            item.status = 'FAILED'
-                            updated = true
-                        }
-                    }
+            if (!activeSockets.has(item.userId)) {
+                // Socket not open (dyno just restarted, or reconnecting): keep
+                // the reminder pending and retry next tick. Only fail it once
+                // the user has clearly been unlinked for a long time.
+                const linked = await getLinkedPhone(item.userId)
+                if (linked) {
+                    void ensureSessionRunning(item.userId)
+                } else if (Date.now() - new Date(item.scheduledAt).getTime() > UNLINKED_GRACE_MS) {
+                    await finish('FAILED', 'WhatsApp is not linked')
                 }
+                continue
             }
 
-            if (updated) {
-                writeSchedules(userId, list)
+            try {
+                const text = (item.message || DEFAULT_TEMPLATE)
+                    .replace(/{customer_name}/g, item.customerName)
+                    .replace(/{amount}/g, item.balance.toLocaleString())
+                    .replace(/{store_name}/g, item.storeName || 'BolKhata Store')
+                await sendTextMessage(item.userId, item.phone, text)
+                await finish('SENT')
+            } catch (err) {
+                await finish('FAILED', err instanceof Error ? err.message : String(err))
             }
         }
-    } catch { /* ignore runner errors */ }
+    } catch (err) {
+        console.error('[WA] scheduler error:', err)
+    } finally {
+        schedulerBusy = false
+    }
 }
 
 setInterval(checkAndRunScheduledReminders, 30000)
@@ -158,21 +227,6 @@ export interface SessionStatus {
     connecting?: boolean
     /** Not linked, a pairing attempt is in flight. */
     pairing?: boolean
-}
-
-function getSavedPhone(userId: string): string | null {
-    try {
-        const p = credsPath(userId)
-        if (!fs.existsSync(p)) return null
-        const content = fs.readFileSync(p, 'utf-8')
-        const parsed = JSON.parse(content)
-        // `requestPairingCode` writes `me` before the phone confirms, so `me`
-        // alone doesn't mean linked. `account` is only set on pair-success.
-        if (!parsed?.account) return null
-        const meId = parsed?.me?.id
-        if (meId) return meId.split(':')[0].split('@')[0]
-    } catch { /* ignore */ }
-    return null
 }
 
 /** Normalises user input to WhatsApp's E.164-without-plus format (PK default). */
@@ -215,24 +269,46 @@ const PAIRING_REF_TIMEOUT_MS = 90_000
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const disconnectCode = (err: any): number => Number(err?.output?.statusCode ?? 0)
 
-export function getSessionStatus(userId: string): SessionStatus {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const socketPhone = (sock: any): string | undefined => {
+    const me = sock?.user ?? sock?.authState?.creds?.me
+    return me?.id?.split(':')[0]?.split('@')[0]
+}
+
+/** Opens the saved session in the background if it isn't already. */
+function ensureSessionRunning(userId: string): void {
+    if (activeSockets.has(userId) || connectingUsers.has(userId)) return
+    startSession(userId, () => {}, () => {}).catch((err) =>
+        console.error(`[WA] resume failed for ${userId}:`, err)
+    )
+}
+
+export async function getSessionStatus(userId: string): Promise<SessionStatus> {
     const sock = activeSockets.get(userId)
-    if (sock) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const me = (sock as any).user ?? (sock as any).authState?.creds?.me
-        return { linked: true, phone: me?.id?.split(':')[0] ?? me?.id }
-    }
-    const savedPhone = getSavedPhone(userId)
+    if (sock) return { linked: true, phone: socketPhone(sock) }
+
+    const savedPhone = await getLinkedPhone(userId)
     if (savedPhone) {
-        // Auto-connect socket in background if creds exist on disk and not already connecting
-        if (!connectingUsers.has(userId)) {
-            startSession(userId, () => {}, () => {}).catch(() => {})
-        }
+        ensureSessionRunning(userId)
         // Paired, but the socket isn't open yet (just after pair-success, or
-        // resuming after a server restart). Sending would fail until it is.
+        // resuming after a dyno restart). Sending would fail until it is.
         return { linked: true, phone: savedPhone, connecting: true }
     }
     return { linked: false, pairing: pendingSessions.has(userId) }
+}
+
+/**
+ * Reconnects every linked user after a dyno (re)start, so scheduled reminders
+ * keep going without anyone opening the app. Staggered to avoid a burst of
+ * logins from one IP.
+ */
+export async function resumeAllSessions(): Promise<void> {
+    const users = await listLinkedUsers()
+    if (users.length) console.log(`📱 [WA] Resuming ${users.length} linked WhatsApp session(s)…`)
+    for (const { userId } of users) {
+        ensureSessionRunning(userId)
+        await new Promise((r) => setTimeout(r, 1500))
+    }
 }
 
 // ─── start session (pairing code, or resume saved creds) ────────────────────
@@ -249,8 +325,7 @@ export async function startSession(
     // If already active and connected, return immediately
     const existingSock = activeSockets.get(userId)
     if (existingSock) {
-        const me = existingSock.user ?? existingSock.authState?.creds?.me
-        const phone: string | undefined = me?.id?.split(':')[0] ?? me?.id
+        const phone = socketPhone(existingSock)
         send('connected', { phone })
         onComplete({ success: true, phone })
         return
@@ -260,8 +335,8 @@ export async function startSession(
         // A fresh link request supersedes any half-finished attempt, and creds
         // left by an unconfirmed pairing would pin the old number.
         cancelPendingSession(userId)
-        if (!getSavedPhone(userId)) {
-            fs.rmSync(sessionDir(userId), { recursive: true, force: true })
+        if (!(await getLinkedPhone(userId))) {
+            await clearSupabaseAuthState(userId)
         }
     }
 
@@ -293,36 +368,35 @@ export async function startSession(
     })
     const cancelSelf = () => cancelPendingSession(userId, sessionId)
 
-    const {
-        default: baileys,
-        useMultiFileAuthState,
-        fetchLatestBaileysVersion,
-        makeCacheableSignalKeyStore,
-        Browsers,
-    } = await getBaileys()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const P = ((await Function('return import("pino")')()) as any).default
-    const logger = P({ level: process.env.WA_LOG_LEVEL || 'silent' })
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async function clearSocket(sock?: any) {
-        isFinished = true
-        connectingUsers.delete(userId)
-        if (pendingSessions.get(userId)?.id === sessionId) pendingSessions.delete(userId)
-        activeSockets.delete(userId)
-        if (sock) {
-            sock.ev.removeAllListeners('creds.update')
-            try { await sock.logout() } catch { /* ignore */ }
-            try { sock.end(undefined) } catch { /* ignore */ }
-        }
+    const fail = (error: string, userMessage = error) => {
+        cancelSelf()
+        send('error', { error: userMessage })
+        onComplete({ success: false, error })
     }
 
-    // Loaded once per session and reused across reconnects. The 515 restart
-    // that follows pair-success reconnects immediately, and re-reading
-    // creds.json then could race the async write of the freshly paired creds.
-    ensureDir(userId)
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir(userId))
-    const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
+    let baileysModule
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let state: any
+    let saveCreds: () => Promise<void>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let logger: any
+    let version: number[] | undefined
+    try {
+        baileysModule = await getBaileys()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const P = ((await Function('return import("pino")')()) as any).default
+        logger = P({ level: process.env.WA_LOG_LEVEL || 'silent' })
+        // Loaded once per session and reused across reconnects. The 515
+        // restart that follows pair-success reconnects immediately; reloading
+        // then could race the write of the freshly paired creds.
+        ;({ state, saveCreds } = await useSupabaseAuthState(userId, baileysModule))
+        ;({ version } = await baileysModule.fetchLatestBaileysVersion().catch(() => ({ version: undefined })))
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fail(message, `Could not start WhatsApp: ${message}`)
+        return
+    }
+    const { default: baileys, makeCacheableSignalKeyStore, Browsers } = baileysModule
 
     function scheduleReconnect(ms: number) {
         setTimeout(() => {
@@ -330,10 +404,8 @@ export async function startSession(
             connect().catch((err) => {
                 connectFailures += 1
                 if (connectFailures >= 5) {
-                    cancelSelf()
                     const message = err instanceof Error ? err.message : String(err)
-                    send('error', { error: `Could not reach WhatsApp: ${message}` })
-                    onComplete({ success: false, error: message })
+                    fail(message, `Could not reach WhatsApp: ${message}`)
                     return
                 }
                 scheduleReconnect(Math.min(2000 * connectFailures, 10_000))
@@ -348,6 +420,8 @@ export async function startSession(
             browser: Browsers.windows('Chrome'),
             auth: {
                 creds: state.creds,
+                // In-memory cache in front of Supabase: signal key reads
+                // happen on every message, so this avoids a DB round trip each.
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
             },
             printQRInTerminal: false,
@@ -374,17 +448,13 @@ export async function startSession(
                 codeRequested = true
                 if (!pairingPhone) {
                     // Resuming saved creds that WhatsApp no longer accepts.
-                    cancelSelf()
-                    fs.rmSync(sessionDir(userId), { recursive: true, force: true })
-                    send('error', { error: 'WhatsApp session expired. Link again with a pairing code.' })
-                    onComplete({ success: false, error: 'Session expired' })
+                    fail('Session expired', 'WhatsApp session expired. Link again with a pairing code.')
+                    await clearSupabaseAuthState(userId)
                     return
                 }
                 pairingAttempts += 1
                 if (pairingAttempts > MAX_PAIRING_ATTEMPTS) {
-                    cancelSelf()
-                    send('error', { error: 'Pairing code expired. Request a new code to try again.' })
-                    onComplete({ success: false, error: 'Pairing code expired' })
+                    fail('Pairing code expired', 'Pairing code expired. Request a new code to try again.')
                     return
                 }
                 try {
@@ -392,10 +462,8 @@ export async function startSession(
                     const code = raw.length === 8 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw
                     send('pairing_code', { code, phone: pairingPhone })
                 } catch (err) {
-                    cancelSelf()
                     const message = err instanceof Error ? err.message : String(err)
-                    send('error', { error: `Could not get a pairing code: ${message}` })
-                    onComplete({ success: false, error: message })
+                    fail(message, `Could not get a pairing code: ${message}`)
                 }
                 return
             }
@@ -406,9 +474,11 @@ export async function startSession(
             if (connection === 'open') {
                 connectingUsers.delete(userId)
                 if (pendingSessions.get(userId)?.id === sessionId) pendingSessions.delete(userId)
-                const me = sock.user ?? sock.authState?.creds?.me
-                const phone: string | undefined = me?.id?.split(':')[0] ?? me?.id
+                const phone = socketPhone(sock)
                 activeSockets.set(userId, sock)
+                // Make sure the registered flag/phone are persisted before we
+                // report success, so /wa/status agrees immediately.
+                await saveCreds()
                 send('connected', { phone })
                 onComplete({ success: true, phone })
             }
@@ -416,10 +486,15 @@ export async function startSession(
                 activeSockets.delete(userId)
                 const code = disconnectCode(lastDisconnect?.error)
 
-                // 401 loggedOut, 403 forbidden: credentials are dead.
+                // 401 loggedOut (user removed the device), 403 forbidden:
+                // credentials are dead.
                 if (code === 401 || code === 403) {
-                    await clearSocket(sock)
-                    fs.rmSync(sessionDir(userId), { recursive: true, force: true })
+                    isFinished = true
+                    connectingUsers.delete(userId)
+                    if (pendingSessions.get(userId)?.id === sessionId) pendingSessions.delete(userId)
+                    sock.ev.removeAllListeners('creds.update')
+                    try { sock.end(undefined) } catch { /* ignore */ }
+                    await clearSupabaseAuthState(userId)
                     send('error', { error: 'WhatsApp logged out' })
                     onComplete({ success: false, error: 'WhatsApp logged out' })
                     return
@@ -434,7 +509,7 @@ export async function startSession(
         })
 
         // Track incoming messages in history. Only live ones: `append`
-        // batches arrive by the hundred on first login and each write is sync.
+        // batches arrive by the hundred on first login.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sock.ev.on('messages.upsert', ({ messages, type }: any) => {
             if (type !== 'notify') return
@@ -444,7 +519,7 @@ export async function startSession(
                 const text: string =
                     msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
                 if (!text) continue
-                addToHistory(userId, jid, {
+                void addToHistory(userId, jid, {
                     id: msg.key?.id ?? String(Date.now()),
                     jid, text,
                     fromMe: msg.key?.fromMe ?? false,
@@ -470,7 +545,7 @@ export async function sendTextMessage(userId: string, phone: string, text: strin
     const jid = toWaJid(phone)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sent: any = await sock.sendMessage(jid, { text })
-    addToHistory(userId, jid, {
+    await addToHistory(userId, jid, {
         id: sent?.key?.id ?? String(Date.now()),
         jid, text, fromMe: true,
         timestamp: Math.floor(Date.now() / 1000),
@@ -483,9 +558,11 @@ export async function removeSession(userId: string): Promise<void> {
     cancelPendingSession(userId)
     const sock = activeSockets.get(userId)
     activeSockets.delete(userId)
+    connectingUsers.delete(userId)
     if (sock) {
+        sock.ev.removeAllListeners('connection.update')
         try { await sock.logout() } catch { /* ignore */ }
         try { sock.end(undefined) } catch { /* ignore */ }
     }
-    fs.rmSync(sessionDir(userId), { recursive: true, force: true })
+    await clearSupabaseAuthState(userId)
 }

@@ -144,8 +144,7 @@ export const CustomerLedgerPanel: React.FC<{
   const progress = useRef(new Animated.Value(0)).current;
   const [editOpen, setEditOpen] = useState(false);
 
-  // WhatsApp backend, schedule & cooldown state
-  const WA_USER_ID = '00000000-0000-0000-0000-000000000000';
+  // WhatsApp schedule & cooldown state (session is the signed-in user's own)
   const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
   const [waLinked, setWaLinked] = useState(false);
   const [lastReminderAt, setLastReminderAt] = useState<string | null>(null);
@@ -157,7 +156,7 @@ export const CustomerLedgerPanel: React.FC<{
 
   const fetchSchedules = () => {
     if (!party?.id) return;
-    ApiService.getScheduledWaReminders(WA_USER_ID)
+    ApiService.getScheduledWaReminders()
       .then((list) => {
         const found = list.find(
           (s: any) => s.customerId === party.id && s.status === 'PENDING'
@@ -168,7 +167,7 @@ export const CustomerLedgerPanel: React.FC<{
   };
 
   useEffect(() => {
-    ApiService.checkWaStatus(WA_USER_ID)
+    ApiService.checkWaStatus()
       .then((s) => setWaLinked(s.linked))
       .catch(() => {});
     fetchSchedules();
@@ -296,7 +295,7 @@ export const CustomerLedgerPanel: React.FC<{
     setSendingReminder(true);
     try {
       const activeTemplate = await getActiveTemplateText();
-      const result = await ApiService.sendWaReminder(WA_USER_ID, {
+      const result = await ApiService.sendWaReminder({
         id: party.id,
         phone: party.mobile,
         name: party.name,
@@ -351,7 +350,7 @@ export const CustomerLedgerPanel: React.FC<{
 
     setSendingEntryId(txn.id);
     try {
-      const result = await ApiService.sendWaReminder(WA_USER_ID, {
+      const result = await ApiService.sendWaReminder({
         id: party.id,
         phone: party.mobile,
         name: party.name,
@@ -592,7 +591,7 @@ export const CustomerLedgerPanel: React.FC<{
               </View>
               <Press
                 onPress={async () => {
-                  await ApiService.cancelScheduledWaReminder(WA_USER_ID, pendingSchedule.id);
+                  await ApiService.cancelScheduledWaReminder(pendingSchedule.id);
                   toast('Schedule cancelled');
                   fetchSchedules();
                 }}
@@ -672,7 +671,6 @@ export const CustomerLedgerPanel: React.FC<{
 
       <WaScheduleModal
         visible={scheduleModalOpen}
-        userId={WA_USER_ID}
         customer={
           party
             ? {
