@@ -1,281 +1,57 @@
-# BolKhata Execution, Security, and Roadmap
-
-## 25. Qoder / Agentic IDE Strategy
-
-The team has many Qoder credits.
-
-Do not simply ask the agent:
-
-```text
-"Build the entire BolKhata app."
-```
-
-Instead work in phases:
-
-1. Architecture
-2. Backend foundation
-3. Database schema
-4. Authentication
-5. Customer + transaction CRUD
-6. Voice pipeline
-7. LLM extraction
-8. Flutter/Expo UI
-9. API integration
-10. WhatsApp
-11. Testing
-12. Polish + demo
-
-After every phase:
-
-```text
-Implement
- ↓
-Run
- ↓
-Test
- ↓
-Inspect errors
- ↓
-Fix
- ↓
-Review
- ↓
-Commit
-```
-
-Do not let the AI generate thousands of unverified lines in one shot.
-
-## 26. MCP / AI Tooling Discussion
-
-The team discussed using MCPs and skills with Claude Code / agentic IDEs.
-
-### Recommended focused tooling
-
-#### High priority
-
-- Flutter/Dart MCP if Flutter is selected
-- GitHub MCP
-- Filesystem/project tools
-- Git tooling
-- Documentation/context tool such as Context7
-- Playwright if web/browser testing is needed
-- Database MCP if useful and safely configured
-
-#### Optional
-
-- Figma MCP if UI is designed in Figma
-- Vercel MCP if Vercel is used
-- Sentry MCP for error monitoring
-- Docker tooling if containers are used
-
-#### Baileys MCP
-
-- Baileys will be used by the backend for WhatsApp messaging and reminders.
-- Use the [Baileys MCP](https://baileys.wiki/mcp) as a read-only documentation search and retrieval tool during development.
-- The MCP helps the team and coding agents look up Baileys APIs and guides; it does not replace the backend Baileys service or send WhatsApp messages itself.
-
-Do not install dozens of MCPs just because they exist.
-
-More MCPs do not automatically make an agent better.
-
-## 27. Suggested Custom AI Development Skills
-
-Potential skills/rules:
-
-- Flutter/Expo architecture
-- Mobile UI/UX
-- Voice UX
-- Voice → transaction extraction
-- Financial/Khata business logic
-- WhatsApp reminders
-- AI/API integration
-- Security
-- Testing
-- Agentic development workflow
-
-Important custom rule:
-
-The LLM extracts intent and structured data. The backend validates it and performs all authoritative business/financial operations.
-
-## 28. Security Rules
-
-Never expose the following inside the mobile app:
-
-- MongoDB/PostgreSQL credentials
-- AI provider API keys
-- WhatsApp secrets
-- JWT signing secrets
-
-Use environment variables on the backend:
-
-```text
-DATABASE_URL=
-JWT_SECRET=
-AI_API_KEY=
-WHATSAPP_TOKEN=
-```
-
-Mobile only communicates with authenticated backend APIs.
-
-Other important rules:
-
-- Validate all user input.
-- Validate all AI output.
-- Never trust LLM-generated amounts blindly.
-- Never let the LLM directly execute database mutations.
-- Use authorization per shopkeeper/user.
-- Avoid logging sensitive customer data.
-- Use HTTPS.
-
-## 29. Final Recommended Stack for Expo Version
-
-### 📱 MOBILE
-
-- Expo
-- React Native
-- TypeScript
-- Expo Router
-
-### 🎨 UI
-
-- NativeWind / StyleSheet
-
-### 🔄 STATE
-
-- Zustand
-
-### 🎙️ AUDIO
-
-- Expo audio/recording
-
-### 🔐 STORAGE
-
-- Expo SecureStore
-
-### 🔙 BACKEND
-
-- Node.js
-- TypeScript
-- Express
-
-### DATABASE
-
-- Supabase PostgreSQL
-- Supabase Auth
-- Supabase Row Level Security
-- Supabase Storage when needed
-
-### AI
-
-- STT: Groq + Whisper primary, Deepgram fallback, self-hosted Whisper emergency
-- LLM: hosted provider behind the Express API
-- TTS: Alibaba Qwen primary, Gemini and Deepgram Aura fallbacks, ElevenLabs optional, Qwen/CosyVoice emergency
-
-### VOICE PROVIDER RULE
-
-- Express owns the Voice Service and provider abstraction.
-- The Expo app never calls Groq, Deepgram, Alibaba, Gemini, ElevenLabs, or local models directly.
-- A failed provider automatically moves the request to the next configured provider.
-
-### 💬 COMMUNICATION
-
-- Baileys for backend WhatsApp messaging and reminders
-- Baileys MCP for development-time documentation lookup: https://baileys.wiki/mcp
-
-### 🔑 AUTH
-
-- JWT
-
-### 🧪 TESTING
-
-- Vitest/Jest
-- React Native Testing Library
-- Expo integration testing
-- API tests
-
-### 🚀 DEPLOYMENT
-
-- Railway / Render
-- Supabase
-
-### 🧑‍💻 DEVELOPMENT
-
-- Git
-- GitHub
-- Qoder
-
-### 🤖 AI DEVELOPMENT
-
-- Qoder + focused MCPs/skills
-
-## 30. Recommended 8-Day Priority
-
-### DAY 1
-
-Project setup  
-Architecture  
-Database  
-Auth foundation
-
-### DAY 2
-
-Customers  
-Transactions  
-Khata
-
-### DAY 3
-
-Dashboard  
-Mobile UI  
-Navigation
-
-### DAY 4
-
-Voice recording  
-STT integration
-
-### DAY 5
-
-LLM extraction  
-Intent system  
-Confirmation flow
-
-### DAY 6
-
-TTS  
-WhatsApp reminders  
-End-to-end voice flow
-
-### DAY 7
-
-Testing  
-Bug fixing  
-Real-device testing  
-UI polish
-
-### DAY 8
-
-Demo preparation  
-Presentation  
-Demo script  
-Final bug fixes
-
-The most important objective is not to build every possible feature.
-
-The target is a polished end-to-end demo:
-
-```text
-🎙️ Speak
- ↓
-🧠 AI understands
- ↓
-📒 Khata updates
- ↓
-💰 Balance changes
- ↓
-🔔 Due payment detected
- ↓
-💬 WhatsApp voice reminder
-```
-
-That is the core BolKhata story and should remain the highest priority throughout the 8-day build.
+# BolKhata Execution, Security Architecture, and Roadmap
+
+## 1. Security Architecture & Threat Model
+
+Financial ledger systems require stringent security, multi-tenant isolation, and resilient rate limiting. BolKhata implements defense-in-depth across the mobile client, Express API, and Supabase database.
+
+### 1. Multi-Tenant Data Isolation
+- **Row Level Security (RLS)**: Enforced in `schema_v2.sql` across `stores`, `customers`, `transactions`, and `cashbook` tables.
+- **Tenant Scoping**: All queries are filtered by `user_id` and `store_id` constraints.
+- **Client Storage Scoping**: Local `AsyncStorage` keys are scoped via `userKey(key, userId)` so multiple users on a single device cannot access each other's cached data.
+
+### 2. Authentication & Credential Boundaries
+- **Client Bundle Protection**: Only non-sensitive public keys (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_URL`) are embedded in the mobile bundle.
+- **Secret Isolation**: Sensitive administrative credentials (`SUPABASE_SERVICE_ROLE_KEY`, `GROQ_API_KEY`, `DASHSCOPE_API_KEY`, `GEMINI_API_KEY`, `ELEVENLABS_API_KEY`) reside exclusively in backend environment variables.
+- **Session Tokens**: Client requests to protected backend routes (`/voice/process`, `/voice/tts`) pass the authenticated session JWT in the `Authorization: Bearer <token>` header, verified server-side via `supabase.auth.getUser(token)`.
+- **WhatsApp Credential Security**: Baileys session keys, tokens, and encryption materials are stored exclusively on the backend under `wa/<userId>/` and are never exposed over API endpoints.
+
+### 3. API Quota & Rate Limiting (`voiceLimit.middleware.ts`)
+- To prevent abuse of costly LLM and STT API credits, requests to `/voice/process` are metered by user ID.
+- Default quota: 50 requests per user per calendar day.
+- **Developer Bypass**: Developer and admin accounts listed in `DEVELOPER_EMAILS` or flagged with `is_developer: true` in user metadata are granted unrestricted access for development and testing.
+
+---
+
+## 2. Delivered Features & Current Status
+
+BolKhata has accomplished all key hackathon deliverables:
+
+| Feature Area | Status | Implementation Details |
+| :--- | :--- | :--- |
+| **Voice Entry Dock** | Complete | Persistent bottom navigation dock (`TabBar.tsx`) with central pulsing mic button supporting tap and hold-and-release workflows. |
+| **Voice Recording HUD** | Complete | Elevated animated HUD (`VoiceRecordingHUD.tsx`) with real-time timer, pulse waveform, prompt suggestions, and cancel/stop controls. |
+| **Speech-to-Text (STT)** | Complete | Groq `whisper-large-v3` with ElevenLabs Scribe fallback for accurate South Asian speech transcription. |
+| **Intent Extraction** | Complete | 5 financial intents (`create_transaction`, `update_transaction`, `delete_transaction`, `delete_customer`, `get_balance`) parsed into structured JSON. |
+| **Levenshtein Matching** | Complete | Tolerant fuzzy name matching prevents duplicate customer records across phonetically similar names. |
+| **Spoken TTS Feedback** | Complete | Alibaba DashScope `qwen3-tts-flash` / ElevenLabs generates spoken confirmation audio played prior to ledger commitment. |
+| **Authentication Flow** | Complete | Supabase Auth with PKCE deep links (`bolkhata://`), first-run carousel, store setup wizard, and celebratory animations. |
+| **Offline-First Storage** | Complete | User-scoped `AsyncStorage` cache paired with automatic cloud reconciliation against Supabase PostgreSQL. |
+| **WhatsApp Automation** | Complete | Baileys v7 WhatsApp Web engine: SSE QR pairing, reminder templates with formatting preview, and scheduled reminder dispatch. |
+| **Cashbook (Rokar)** | Complete | Daily shop cash sales and business expense tracking with date filtering and category breakdown. |
+| **Business Analytics** | Complete | Analytics dashboard with credit ratios, receivables/payables, and printable PDF statement preview. |
+| **Cloud Deployments** | Complete | Heroku and Railway backend deployments, and EAS Cloud Android APK generation (`npm run build:apk`). |
+
+---
+
+## 3. Future Roadmap
+
+1. **Regional Language Expansion**:
+   - Add specialized fine-tuned models for regional languages (Pashto, Sindhi, Punjabi, Balochi).
+2. **Offline On-Device STT**:
+   - Integrate quantized on-device Whisper models via ONNX Runtime for zero-network speech recognition.
+3. **Bluetooth Thermal Receipt Printing**:
+   - Direct ESC/POS printing for 58mm/80mm thermal receipt printers over Bluetooth.
+4. **SMS Gateway Fallback**:
+   - Automated GSM/SMS fallback reminders for customers who do not use WhatsApp.
+5. **Inventory & Barcode Scanning**:
+   - Camera-based barcode scanner for tracking stock quantities alongside ledger sales.

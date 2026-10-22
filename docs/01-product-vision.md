@@ -1,231 +1,106 @@
-# BolKhata Product Vision
+# BolKhata Product Vision & Specification
 
 ## 1. Project Overview
 
-Project: BolKhata  
-Team: Trojan  
-Hackathon: Alibaba Cloud AI Hackathon Pakistan 2026, hosted through Alkhidmat Foundation Pakistan / Bano Qabil ecosystem.
+- **Project**: BolKhata (بول کھاتا / बोल खाता)  
+- **Team**: Trojan  
+- **Hackathon**: Alibaba Cloud AI Hackathon Pakistan 2026, hosted through Alkhidmat Foundation Pakistan / Bano Qabil ecosystem.
 
-### Original idea submitted to the hackathon
+### Hackathon Mission
+Our AI-powered voice assistant helps small shopkeepers manage credit (*udhaar*) effortlessly. They simply speak to record customer purchases in their everyday language (Urdu, Roman Urdu, Hindi, or English), and the app automatically transcribes the audio, parses the intent, speaks back a confirmation, and maintains a multi-tenant digital ledger. Furthermore, BolKhata connects to WhatsApp to send polite voice and text reminders for overdue balances, eliminating awkward manual collection conversations and improving cash recovery.
 
-Our AI-powered voice assistant helps small shopkeepers manage credit (udhaar) effortlessly. They simply speak to record customer purchases, and the app automatically creates a digital ledger. It also sends polite WhatsApp voice reminders for overdue payments, reducing manual work and improving timely collections without awkward conversations.
-
-### Core product idea
-
-BolKhata is a voice-first digital Khata for small shopkeepers.
-
-The central experience is:
+### Core Product Flow
 
 ```text
-Shopkeeper speaks
+Shopkeeper Speaks (Tap or Hold Mic on Dock)
       ↓
-Speech-to-Text
+Audio Captured via expo-av
       ↓
-AI understands intent + transaction
+POST /voice/process (Bearer Auth + Rate Limit)
       ↓
-Structured transaction
+Speech-to-Text (Groq Whisper large-v3 / ElevenLabs)
       ↓
-Shopkeeper confirms
+LLM Intent Extraction (Groq Llama 3 / Gemini / Qwen)
       ↓
-Digital Khata updated
+Levenshtein Fuzzy Customer Matching
       ↓
-Due payment tracking
+Text-to-Speech Confirmation (DashScope qwen3-tts-flash / ElevenLabs)
       ↓
-WhatsApp reminder
+VoiceAssistantModal: Spoken Confirmation + Visual Review
+      ↓
+Shopkeeper Confirms
+      ↓
+Immutable Ledger Update (Recalculated Running Balance)
+      ↓
+User-Scoped AsyncStorage + Supabase PostgreSQL Cloud Sync
+      ↓
+Polite WhatsApp Payment Reminder (Instant Send / Scheduled via Baileys v7)
 ```
 
-The product should solve a familiar Pakistani small-business problem: manually maintaining udhaar records and awkwardly asking customers for overdue payments.
+BolKhata solves a ubiquitous South Asian small-business challenge: tedious manual paper register maintenance (*khatas*), unrecorded credit sales, and uncomfortable payment collection follow-ups.
 
-## 2. Core User Experience
+---
 
-The most important demo flow is:
+## 2. Core User Experience & Demo Scenarios
 
-```text
-🎙️ "Ahmed ne 500 ka saman udhaar liya"
-                    ↓
-                  STT
-                    ↓
-             AI understands
-                    ↓
-       Ahmed — Rs. 500 — Udhaar
-                    ↓
-                Confirm
-                    ↓
-              Khata updated
-                    ↓
-          Payment becomes due
-                    ↓
-       WhatsApp voice reminder
-```
+### Scenario A: Recording Credit (Udhaar Diya / Gave)
+- **Voice Input**: *"Ahmed ne 500 ka saman udhaar liya"*
+- **Parsed Intent**: `create_transaction`
+- **Fields**: Person: Ahmed | Direction: `gave` | Amount: Rs. 500 | Reason: "saman"
+- **Spoken Confirmation**: *"Theek hai, Ahmed ko 500 rupay udhaar likh diye gaye hain."*
+- **Action**: Ahmed's balance increases by Rs. 500 (Gave / Crimson Red).
 
-The app should feel like an AI voice assistant rather than a normal CRUD ledger.
+### Scenario B: Recording Payment (Wapas Diye / Got)
+- **Voice Input**: *"Ahmed ne 300 rupay wapas de diye"*
+- **Parsed Intent**: `create_transaction`
+- **Fields**: Person: Ahmed | Direction: `got` | Amount: Rs. 300 | Reason: "Payment received"
+- **Spoken Confirmation**: *"Theek hai, Ahmed se 300 rupay wasool likh liye gaye hain."*
+- **Action**: Ahmed's balance decreases by Rs. 300 (Got / Emerald Green).
 
-A second useful voice interaction:
+### Scenario C: Balance Query (Hisaab Maloom Karna)
+- **Voice Input**: *"Ahmed ka kitna hisaab baqi hai?"*
+- **Parsed Intent**: `get_balance`
+- **Action**: Assistant speaks current outstanding balance back to the shopkeeper without modifying the ledger.
 
-```text
-"Ahmed ka kitna udhaar hai?"
-```
+### Scenario D: Updating or Deleting an Entry
+- **Voice Input**: *"Ahmed ki pichli entry 2000 kardo"* or *"Ahmed ka aakhri hisaab delete kardo"*
+- **Parsed Intent**: `update_transaction` or `delete_transaction`
+- **Action**: Modifies previous entry or removes it, triggering an immutable recalculation of the customer's net balance.
 
-AI should understand this as a balance query and return the customer's current outstanding balance.
+### Scenario E: Polite WhatsApp Payment Follow-up
+- Shopkeeper opens the customer's ledger panel.
+- Taps **Remind via WhatsApp**.
+- Selects a polite pre-written template (Roman Urdu/English) with automatic amount and store name placeholders.
+- Can send immediately through the linked WhatsApp Web session or schedule it for a future date/time.
 
-Another:
+---
 
-```text
-"Ahmed ne 500 rupay wapas de diye."
-```
+## 3. Core Architectural & Financial Principles
 
-Should become:
+### 1. Deterministic Ledger Math
+- **The LLM never directly touches the database.**
+- The LLM's only role is converting unstructured speech into structured JSON:
+  ```json
+  {
+    "intent": "create_transaction",
+    "person": { "name": "Ahmed" },
+    "transaction": { "direction": "gave", "amount": 500, "reason": "saman" }
+  }
+  ```
+- All financial balances are computed deterministically by backend and frontend mathematical engines:
+  $$\text{Current Balance} = \sum (\text{Gave Entries}) - \sum (\text{Got Entries})$$
+- Opening balances are recorded as genuine transactions so that edits or deletions preserve historical accuracy.
 
-```json
-{
-  "intent": "ADD_PAYMENT",
-  "customerName": "Ahmed",
-  "amount": 500
-}
-```
+### 2. Levenshtein Fuzzy Matching
+Spoken names in Urdu/Hindi often vary in spelling (e.g. "Osama" vs "Usama", "Muhammad Ali" vs "Ali"). BolKhata runs a Levenshtein distance comparison against the store's existing customer directory to prevent duplicate customer profiles.
 
-## 3. Important Product Principle
+### 3. Graceful Error Handling & Clarification
+If the spoken input lacks a clear monetary amount or person name, the voice engine returns a polite Roman Urdu clarification prompt rather than fabricating financial records.
 
-The LLM should not directly control the database.
+---
 
-Correct architecture:
+## 4. Target Personas & Accessibility
 
-```text
-Voice
- ↓
-STT
- ↓
-LLM
- ↓
-Structured JSON / intent
- ↓
-Backend validation
- ↓
-Business logic
- ↓
-Database
-```
-
-Not:
-
-```text
-Voice
- ↓
-LLM
- ↓
-Direct database mutation
-```
-
-Financial calculations must be performed by deterministic backend code.
-
-Example:
-
-Credit = customer owes shopkeeper  
-Payment = customer paid shopkeeper
-
-```text
-Balance = total credit - total payments
-```
-
-Example:
-
-```text
-Ahmed buys Rs. 500
-Ahmed buys Rs. 300
-Ahmed pays Rs. 400
-
-Balance = 500 + 300 - 400
-        = Rs. 400
-```
-
-The AI should extract data; the backend should calculate authoritative balances.
-
-If an amount is unclear, the assistant should ask for confirmation instead of guessing.
-
-Example:
-
-```text
-"Amount clear nahi hai. Kya aap 500 rupees keh rahe thay?"
-```
-
-## 4. Time Constraint
-
-The hackathon submission/prototype has approximately 8 days.
-
-The team has access to Qoder / agentic coding IDE credits and intends to use AI-assisted / vibe coding heavily.
-
-Therefore:
-
-- Avoid unnecessary complexity.
-- Avoid multiple backend services unless genuinely required.
-- Prefer reliable, fast-to-build technologies.
-- Use AI agents for boilerplate and iteration.
-- Manually verify critical financial, security, audio, and API logic.
-- Focus on a polished core demo instead of many unfinished features.
-
-## 5. Mobile vs Web Decision
-
-We discussed whether to build:
-
-- Mobile app
-- Website
-- Both
-
-### Final recommendation for an 8-day hackathon: Primary product: Mobile app
-
-Reason:
-
-- Target users are small shopkeepers.
-- Shopkeepers naturally use phones.
-- Voice interaction is more natural on mobile.
-- Microphone access and quick voice entry are central.
-- A mobile-first product makes the value proposition immediately understandable.
-
-Do not build two complete independent products in 8 days.
-
-If the main mobile app becomes stable early, a small web/admin dashboard can optionally be added, but it should not delay the mobile MVP.
-
-### Ideal optional architecture
-
-```text
-              Backend API
-                  │
-          ┌───────┴───────┐
-          ↓               ↓
-    Flutter/Expo App   Small Web Dashboard
-      Shopkeeper          Admin/Judge
-```
-
-## 6. Flutter vs Expo Discussion
-
-Flutter was initially strongly considered because:
-
-- Flutter has a mature UI framework.
-- There are many pre-built components/packages.
-- It is mobile-first.
-- It can be efficient for a polished hackathon app.
-- The team has access to AI coding agents, reducing the problem of learning Flutter from scratch.
-
-However, we later explored an Expo / React Native implementation workflow.
-
-Important context:
-
-- The user already has JavaScript/React/Node knowledge.
-- Expo can reduce the learning curve.
-- Qoder can generate a lot of mobile boilerplate.
-- Both Flutter and Expo can work with the same backend architecture.
-
-For the workflow documented in this chat, the selected example stack is Expo + React Native + TypeScript.
-
-If the team ultimately chooses Flutter, the backend architecture remains almost identical.
-
-## Chosen Platform Direction
-
-BolKhata will use Supabase for the managed backend foundation:
-
-- Supabase PostgreSQL for relational data and financial transactions
-- Supabase Auth for shopkeeper authentication
-- Supabase Row Level Security for tenant-level data protection
-- Supabase Storage when audio or other files need to be persisted
-
-The Express API remains the controlled business-logic layer for voice processing, validation, transaction confirmation, and WhatsApp integrations. The mobile app must not call AI providers directly.
+1. **Kirana / Grocery Store Owners**: Fast-paced transactions during morning and evening rush hours where typing on a screen is too slow.
+2. **Hardware & Repair Shops**: Often have dusty or grease-stained hands that make touching a phone screen inconvenient; 1-tap/hold voice entry solves this friction.
+3. **Wholesale & Supply Distributors**: Require separate customer vs supplier designations with clear running statements and PDF exports.
