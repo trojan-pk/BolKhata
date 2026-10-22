@@ -1,412 +1,143 @@
-# BolKhata — Supabase Auth Implementation
+# BolKhata — Supabase Authentication Architecture & Implementation Guide
 
-You are a **senior full-stack engineer** working inside my existing **BolKhata** application.
-
-## Context
-
-* I want to implement **Supabase Authentication** in the existing application.
-* **Supabase MCP is already connected** and available.
-* Coding model: **Gemini 3.1 Pro in Antigravity**.
-* Do not unnecessarily restructure or rewrite the existing application.
-* First inspect the existing codebase, architecture, routing, UI theme, logo, and current authentication-related code.
+This document describes the production implementation of **Supabase Authentication** in **BolKhata**, covering both the Expo/React Native frontend client and the Express 5 backend API.
 
 ---
 
-## 1. Create Feature Branch
+## 📌 Architecture Overview
 
-Before making any code changes, create and switch to:
-
-```bash
-git checkout -b feature/auth-implementation
-```
-
-All authentication changes must be implemented on this branch.
-
----
-
-## 2. Inspect the Existing Application
-
-Before implementing anything:
-
-* Identify the frontend framework and routing system.
-* Identify the current dashboard/application route.
-* Locate the existing **BolKhata logo**.
-* Understand the current UI design system and theme.
-* Check whether authentication logic already exists.
-* Check existing environment-variable conventions.
-* Inspect the existing component structure.
-* Use the connected **Supabase MCP** where appropriate to inspect/configure the Supabase project.
-
-Do not create duplicate infrastructure if something already exists.
-
----
-
-# 3. Implement Supabase Authentication
-
-Implement production-ready **Supabase Auth** using the existing project's architecture.
-
-Required functionality:
-
-* [ ] User signup
-* [ ] User login
-* [ ] User logout
-* [ ] Session persistence
-* [ ] Auth state handling
-* [ ] Protected dashboard/application routes
-* [ ] Redirect unauthenticated users to the auth page
-* [ ] Redirect authenticated users to the dashboard
-* [ ] Loading states
-* [ ] Authentication error handling
-* [ ] Form validation
-
-Use the appropriate official Supabase client/library for the existing framework.
-
-### Security
-
-* Never hardcode Supabase credentials.
-* Use environment variables.
-* Follow the project's existing `.env` conventions.
-* Never expose secret/service-role credentials in frontend code.
-
----
-
-# 4. Initial Logo Animation
-
-When the application initially loads, show the **BolKhata logo animation first**, then display the authentication page.
-
-### Flow
+Supabase Auth serves as the unified identity and access management layer across BolKhata:
 
 ```text
-Application Load
-      ↓
-BolKhata Logo Animation
-      ↓
-Login / Signup Page
-```
-
-### Requirements
-
-* Use the existing BolKhata logo.
-* Keep the animation short and professional.
-* Use a smooth fade/scale or similar subtle animation.
-* Avoid unnecessarily long splash screens.
-* Match the existing BolKhata visual identity.
-
----
-
-# 5. Login / Signup Page
-
-Create an attractive, modern, and simple authentication page that matches the existing **BolKhata theme**.
-
-The authentication UI should feel like a natural part of the application rather than a separate template.
-
-### Login
-
-Include:
-
-* Email input
-* Password input
-* Show/hide password
-* Login button
-* Loading state
-* Error messages
-* Link/button to switch to Signup
-
-### Signup
-
-Include:
-
-* Email input
-* Password input
-* Confirm password if appropriate
-* Signup button
-* Loading state
-* Validation errors
-* Authentication errors
-* Link/button to switch to Login
-
-### UI Requirements
-
-* Clean
-* Modern
-* Minimal
-* Attractive
-* Responsive
-* Mobile-friendly
-* Accessible
-* Consistent with BolKhata branding
-* Good spacing and typography
-* Clear CTA
-* Smooth but subtle interactions
-
-**Do not introduce a completely different design system.**
-
-First inspect the existing BolKhata UI and reuse its colors, typography, spacing, components, and visual language wherever possible.
-
----
-
-# 6. Successful Authentication Flow
-
-After a successful **login or signup**, do not immediately open the dashboard.
-
-Play the BolKhata logo animation again.
-
-### Flow
-
-```text
-Successful Login / Signup
-          ↓
-BolKhata Logo Animation
-          ↓
-Dashboard
-```
-
-The animation should be short enough that it does not feel like unnecessary waiting.
-
----
-
-# 7. Route Protection
-
-Implement proper authentication protection according to the existing framework.
-
-Expected behavior:
-
-```text
-                 Application
-                      ↓
-              Logo Animation
-                      ↓
-               Authenticated?
-                /          \
-              YES           NO
-               ↓             ↓
-          Dashboard     Login / Signup
-```
-
-### Required behavior
-
-#### Unauthenticated user
-
-If the user manually visits:
-
-```text
-/dashboard
-```
-
-or any protected application route:
-
-```text
-Protected Route
-      ↓
-Not authenticated
-      ↓
-Login / Signup
-```
-
-#### Authenticated user
-
-If an authenticated user visits the login/signup page:
-
-```text
-Login / Signup
-      ↓
-Already authenticated
-      ↓
-Dashboard
+                  User Opens App
+                        │
+                  SplashScreen (Animated Letter Reveal)
+                        │
+             ┌──────────┴──────────┐
+      Session Found?         No Session
+             │                     │
+      Load User Ledger       Intro Seen?
+      (AsyncStorage +        ├── No  → IntroScreen (Carousel)
+       Supabase Cloud)       └── Yes → WelcomeScreen
+             │                             │
+        HomeScreen                   AuthScreen (Login / Signup)
+                                           │
+                                    Supabase Auth API
+                                           │
+                                  Store Setup Wizard
+                               (OnboardingWizardModal)
+                                           │
+                                   SetupCelebration
+                                           │
+                                      HomeScreen
 ```
 
 ---
 
-# 8. Session Handling
+## 🛠️ Key Components & Implementation
 
-Ensure Supabase sessions work correctly.
+### 1. Supabase Client Configuration (`frontend/src/services/supabase.ts`)
+The client is initialized using `@supabase/supabase-js` with `@react-native-async-storage/async-storage` as the persistence engine:
 
-Test that:
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
-* Authentication persists after page refresh.
-* User remains logged in when reopening the application.
-* Logout properly clears the session.
-* Auth state changes are handled correctly.
-* Protected routes react correctly when authentication state changes.
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-Avoid unnecessary client-side hacks for authentication state.
-
----
-
-# 9. Error Handling
-
-Handle Supabase errors gracefully.
-
-Examples:
-
-* Invalid email
-* Invalid password
-* Incorrect credentials
-* Existing account
-* Weak password
-* Network errors
-* Session errors
-* Signup errors
-
-Do not expose raw technical errors directly to users.
-
-Convert them into clean, understandable messages where appropriate.
-
----
-
-# 10. Loading States
-
-Provide proper loading states for:
-
-* Initial authentication check
-* Login
-* Signup
-* Logout
-* Logo animation
-* Dashboard redirect
-
-Avoid flashing the login page while Supabase is still determining whether the user has an active session.
-
----
-
-# 11. Do Not Break Existing Application
-
-Important:
-
-**Do not rewrite the existing application.**
-
-Preserve:
-
-* Existing dashboard
-* Existing components
-* Existing API functionality
-* Existing database logic
-* Existing UI
-* Existing project structure
-
-Only modify what is necessary to introduce authentication and the required auth flow.
-
-Avoid unnecessary dependencies.
-
----
-
-# 12. Testing
-
-After implementation, actually run and test the application.
-
-### Test Checklist
-
-* [ ] Project starts successfully
-* [ ] No TypeScript errors
-* [ ] No build errors
-* [ ] No lint errors where applicable
-* [ ] Initial logo animation works
-* [ ] Login page renders correctly
-* [ ] Signup works
-* [ ] Login works
-* [ ] Logout works
-* [ ] Session persists after refresh
-* [ ] Unauthenticated users cannot access dashboard
-* [ ] Authenticated users are redirected away from login
-* [ ] Post-login logo animation works
-* [ ] Post-signup logo animation works
-* [ ] Dashboard opens after animation
-* [ ] Mobile UI works
-* [ ] Desktop UI works
-* [ ] Existing application functionality still works
-
-If you discover errors during testing, **fix them instead of only reporting them**.
-
----
-
-# 13. Supabase Configuration
-
-Use the connected **Supabase MCP** to determine what configuration is required.
-
-If Supabase dashboard configuration is required, clearly identify it.
-
-Check things such as:
-
-* Authentication provider configuration
-* Email authentication
-* Redirect URLs
-* Site URL
-* Required environment variables
-* Any required database/auth configuration
-
-Do not invent configuration values.
-
----
-
-# 14. Final Report
-
-After implementation, provide a concise final report containing:
-
-### Changed Files
-
-List all files created or modified.
-
-### Authentication
-
-Explain what authentication functionality was implemented.
-
-### Environment Variables
-
-List the required environment variables, without exposing any secret values.
-
-### Supabase Configuration
-
-Mention any configuration that must be completed in Supabase.
-
-### Testing
-
-Mention which authentication flows were tested successfully.
-
-### Remaining Issues
-
-Clearly mention anything that could not be completed or requires manual action.
-
----
-
-# Important Development Rules
-
-Follow this workflow:
-
-```text
-Inspect
-   ↓
-Understand Existing Architecture
-   ↓
-Create feature/auth-implementation
-   ↓
-Plan Auth Integration
-   ↓
-Implement Supabase Auth
-   ↓
-Implement Logo Animation
-   ↓
-Implement Login / Signup UI
-   ↓
-Implement Route Protection
-   ↓
-Test
-   ↓
-Fix Issues
-   ↓
-Final Verification
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: Platform.OS === 'web', // Consumes PKCE code automatically in browsers
+  },
+});
 ```
 
-### Critical Rules
+### 2. Deep Linking & PKCE Code Exchange (`frontend/App.tsx`)
+Native mobile platforms authenticate via OAuth or confirmation emails using deep linking schemes (`bolkhata://` and `veldger://` declared in `app.json`):
 
-1. **Do not blindly rewrite existing code.**
-2. **Reuse existing BolKhata components and styling where possible.**
-3. **Use Supabase MCP instead of guessing Supabase configuration.**
-4. **Never hardcode credentials or secrets.**
-5. **Do not add unnecessary dependencies.**
-6. **Keep animations short and professional.**
-7. **Do not show the dashboard before authentication is verified.**
-8. **Do not leave broken or untested code.**
-9. **Fix errors discovered during implementation.**
-10. **Keep the implementation production-ready but simple.**
+- **Web Platform**: `detectSessionInUrl: true` handles PKCE parameters. `App.tsx` scrubs the URL (`window.history.replaceState`) after session establishment to prevent replaying spent single-use codes on refresh.
+- **Native Platforms (Android/iOS)**: `Linking.addEventListener('url', handleDeepLink)` intercepts callback URLs:
+  1. **PKCE Exchange**: Extracts `?code=` from query parameters and calls `supabase.auth.exchangeCodeForSession(code)`.
+  2. **Implicit Token Hash**: Extracts `#access_token=...&refresh_token=...` from the URL fragment and calls `supabase.auth.setSession({ access_token, refresh_token })`.
 
-The final result should feel like **BolKhata's native authentication experience**, not a generic Supabase login template.
+### 3. User-Scoped Local Storage Isolation (`frontend/src/services/storage.ts`)
+To prevent data contamination between different accounts on shared mobile devices:
+
+```typescript
+const userKey = (baseKey: string, userId?: string) =>
+  userId ? `${baseKey}_${userId}` : baseKey;
+```
+
+All local keys for `STORE_PROFILE`, `PARTIES`, `TRANSACTIONS`, and `CASHBOOK` are dynamically scoped by the active `userId`. When a user logs out (`SIGNED_OUT` event):
+- The in-memory state is wiped.
+- The view resets to `WelcomeScreen`.
+- Another user logging in reads only their own isolated keys.
+
+### 4. Human-Friendly Error Translation (`frontend/src/services/authErrors.ts`)
+Raw technical errors from Supabase are mapped to user-friendly messages:
+- `Invalid login credentials` → *"Email ya password ghalat hai. Dobara koshish karein."* (Invalid email or password).
+- `User already registered` → *"Yeh email pehle se registered hai. Log in karein."* (Email already registered).
+- `Password should be at least 6 characters` → *"Password kam az kam 6 characters ka hona chahiye."* (Password must be 6+ chars).
+
+### 5. Backend Bearer Token Verification (`backend/src/middleware/auth.middleware.ts`)
+Protected Express endpoints (such as `POST /voice/process` and `POST /voice/tts`) validate incoming Bearer tokens using Supabase Admin:
+
+```typescript
+export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+    return;
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      return;
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Unauthorized: Internal Server Error' });
+  }
+};
+```
+
+### 6. Voice Quota & Developer Bypass (`backend/src/middleware/voiceLimit.middleware.ts`)
+- Standard authenticated users are granted a daily voice processing quota (default: 50 requests/day).
+- Unlimited developer/admin bypass is granted if the user's email is in `DEVELOPER_EMAILS` (e.g. `talhairfan1947@gmail.com`), ends with `@bolkhata.com`, or has `is_developer: true` in user metadata.
+
+---
+
+## 🗄️ Multi-Tenant Database Schema (`backend/src/database/schema_v2.sql`)
+
+PostgreSQL tables enforce user and store tenancy with foreign keys and Row Level Security (RLS):
+
+- **`stores`**: `id UUID PRIMARY KEY`, `user_id UUID NOT NULL`, `name TEXT`, `owner_name TEXT`, `phone TEXT`, `currency TEXT`.
+- **`customers`**: `id UUID PRIMARY KEY`, `store_id UUID REFERENCES stores(id)`, `user_id UUID NOT NULL`, `name TEXT`, `phone TEXT`, `balance NUMERIC`.
+- **`transactions`**: `id UUID PRIMARY KEY`, `store_id UUID`, `customer_id UUID REFERENCES customers(id)`, `type TEXT ('gave' | 'got')`, `amount NUMERIC`.
+- **`cashbook`**: `id UUID PRIMARY KEY`, `store_id UUID`, `user_id UUID`, `type TEXT ('in' | 'out')`, `amount NUMERIC`, `category TEXT`.
+
+Indexes on `customers(user_id)`, `transactions(customer_id)`, `transactions(created_at DESC)`, and `cashbook(user_id)` provide sub-millisecond querying during real-time speech reconciliation.
+
+---
+
+## ✅ Verified Testing Checklist
+
+- [x] Email + password user registration
+- [x] Email + password user login
+- [x] Session persistence across page reloads and native app restarts
+- [x] PKCE code exchange and URL scrubbing on web
+- [x] Deep link handling on Android and iOS (`bolkhata://`)
+- [x] First-run intro slides display and one-time flag persistence
+- [x] Post-login store setup wizard and celebratory animation
+- [x] User-scoped local storage isolation
+- [x] User logout and state cleanup
+- [x] Backend Bearer token validation on `/voice/process`
+- [x] Daily voice request quota and developer bypass execution
