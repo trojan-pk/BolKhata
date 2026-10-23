@@ -422,6 +422,7 @@ function BolKhata() {
       name: string;
       mobile: string;
       address: string;
+      reason?: string;
       type: PartyType;
       openingBalance: number;
     }) => {
@@ -430,6 +431,8 @@ function BolKhata() {
         name: data.name,
         mobile: data.mobile,
         address: data.address,
+        reason: data.reason?.trim() || '',
+        note: data.reason?.trim() || '',
         type: data.type,
         currentBalance: 0,
         lastUpdated: todayISO(),
@@ -447,7 +450,7 @@ function BolKhata() {
           type: data.openingBalance > 0 ? 'gave' : 'got',
           amount: Math.abs(data.openingBalance),
           date: todayISO(),
-          note: 'Opening balance',
+          note: data.reason?.trim() ? `Opening balance (${data.reason.trim()})` : 'Opening balance',
           paymentMode: 'cash',
           source: 'manual',
           createdAt: Date.now(),

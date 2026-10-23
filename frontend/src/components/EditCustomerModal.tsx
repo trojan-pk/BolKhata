@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Check, MapPin, Phone, Trash2, User } from 'lucide-react-native';
+import { Check, MapPin, Phone, Tag, Trash2, User } from 'lucide-react-native';
 import { COPY } from '../i18n/copy';
 import { SPACE } from '../theme/tokens';
 import { Party, PartyType } from '../types';
@@ -21,7 +21,7 @@ interface EditCustomerModalProps {
 }
 
 /**
- * Edit existing customer or supplier: Name, Phone number, Address, and Account type.
+ * Edit existing customer or supplier: Name, Phone number, Address, Reason, and Account type.
  */
 export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   visible,
@@ -36,6 +36,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [address, setAddress] = useState('');
+  const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
       setName(party.name || '');
       setMobile(party.mobile || '');
       setAddress(party.address || '');
+      setReason(party.reason || party.note || '');
       setError(null);
     }
   }, [party, visible]);
@@ -62,6 +64,8 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
       name: cleanName,
       mobile: mobile.trim(),
       address: address.trim(),
+      reason: reason.trim(),
+      note: reason.trim(),
       type,
     });
     onClose();
@@ -157,6 +161,15 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
         onChangeText={setAddress}
         placeholder={COPY.party.addressPlaceholder}
         icon={MapPin}
+      />
+
+      <TextField
+        label={COPY.party.reasonLabel}
+        optional
+        value={reason}
+        onChangeText={setReason}
+        placeholder={COPY.party.reasonPlaceholder}
+        icon={Tag}
       />
     </Sheet>
   );

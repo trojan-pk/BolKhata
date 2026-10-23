@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
     name TEXT NOT NULL,
     phone TEXT,
     address TEXT,
+    reason TEXT,
     type TEXT DEFAULT 'customer' CHECK (type IN ('customer', 'supplier')),
     balance NUMERIC DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,

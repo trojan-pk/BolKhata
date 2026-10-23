@@ -145,7 +145,7 @@ export const CustomerLedgerPanel: React.FC<{
   const [editOpen, setEditOpen] = useState(false);
 
   // WhatsApp schedule & cooldown state (session is the signed-in user's own)
-  const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown
+  const COOLDOWN_MS = 5 * 60 * 1000; // 5 minute cooldown
   const [waLinked, setWaLinked] = useState(false);
   const [lastReminderAt, setLastReminderAt] = useState<string | null>(null);
   const [cooldownSecs, setCooldownSecs] = useState<number>(0);
@@ -173,7 +173,7 @@ export const CustomerLedgerPanel: React.FC<{
     fetchSchedules();
   }, [party?.id]);
 
-  // Check 1-hour cooldown for active party
+  // Check 5-minute cooldown for active party
   useEffect(() => {
     if (!party?.id) return;
     const key = `@bolkhata_wa_last_sent_${party.id}`;
@@ -307,7 +307,7 @@ export const CustomerLedgerPanel: React.FC<{
         const now = Date.now();
         await AsyncStorage.setItem(`@bolkhata_wa_last_sent_${party.id}`, now.toString());
         setLastReminderAt(new Date(now).toISOString());
-        setCooldownSecs(3600); // 1-hour cooldown
+        setCooldownSecs(5 * 60); // 5-minute cooldown
         toast('Reminder sent via WhatsApp ✓');
       } else {
         toast(result.error ?? 'Failed to send reminder', 'error');
@@ -440,7 +440,12 @@ export const CustomerLedgerPanel: React.FC<{
                   {party.name}
                 </Text>
                 <Text style={[TYPE.caption, styles.sub]} numberOfLines={1}>
-                  {party.mobile ? formatPhone(party.mobile) : 'No phone · Tap to edit'}
+                  {[
+                    party.mobile ? formatPhone(party.mobile) : 'No phone · Tap to edit',
+                    party.reason || party.note,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </Text>
               </View>
             </Press>

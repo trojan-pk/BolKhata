@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { MapPin, Phone, UserPlus } from 'lucide-react-native';
+import { MapPin, Phone, Tag, UserPlus } from 'lucide-react-native';
 import { COPY } from '../i18n/copy';
 import { SPACE } from '../theme/tokens';
 import { PartyType } from '../types';
@@ -26,6 +26,7 @@ export const AddCustomerModal: React.FC<{
     name: string;
     mobile: string;
     address: string;
+    reason?: string;
     type: PartyType;
     openingBalance: number;
   }) => void;
@@ -34,6 +35,7 @@ export const AddCustomerModal: React.FC<{
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [address, setAddress] = useState('');
+  const [reason, setReason] = useState('');
   const [opening, setOpening] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +45,7 @@ export const AddCustomerModal: React.FC<{
       setName('');
       setMobile('');
       setAddress('');
+      setReason('');
       setOpening('');
       setError(null);
     }
@@ -57,6 +60,7 @@ export const AddCustomerModal: React.FC<{
       name: name.trim(),
       mobile: mobile.trim(),
       address: address.trim(),
+      reason: reason.trim(),
       type,
       openingBalance: parseAmount(opening),
     });
@@ -119,6 +123,15 @@ export const AddCustomerModal: React.FC<{
         onChangeText={setAddress}
         placeholder={COPY.party.addressPlaceholder}
         icon={MapPin}
+      />
+
+      <TextField
+        label={COPY.party.reasonLabel}
+        optional
+        value={reason}
+        onChangeText={setReason}
+        placeholder={COPY.party.reasonPlaceholder}
+        icon={Tag}
       />
 
       <View style={styles.opening}>

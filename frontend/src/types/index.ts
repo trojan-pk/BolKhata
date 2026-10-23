@@ -7,6 +7,8 @@ export interface Party {
   name: string;
   mobile: string;
   address?: string;
+  reason?: string; // Reason / Account note
+  note?: string; // Alias for reason
   type: PartyType;
   currentBalance: number; // Derived/cached sum of (gave - got)
   lastUpdated: string;

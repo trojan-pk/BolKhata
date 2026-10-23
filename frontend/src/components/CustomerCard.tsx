@@ -30,7 +30,7 @@ export const CustomerCard: React.FC<{
     : COPY.ledger.toPay;
 
   const subtitle = [
-    party.mobile ? formatPhone(party.mobile) : null,
+    party.mobile ? formatPhone(party.mobile) : party.reason || null,
     formatRelativeDate(party.lastUpdated),
   ]
     .filter(Boolean)

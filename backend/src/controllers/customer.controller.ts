@@ -16,10 +16,18 @@ export const getCustomers = async (req: Request, res: Response, next: NextFuncti
 
 export const createCustomer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, address, reason, type } = req.body;
     const { data, error } = await supabase
       .from('customers')
-      .insert({ user_id: USER_ID, name, phone, balance: 0 })
+      .insert({
+        user_id: USER_ID,
+        name,
+        phone,
+        address,
+        reason,
+        type: type || 'customer',
+        balance: 0,
+      })
       .select()
       .single();
     if (error) throw error;
@@ -42,10 +50,10 @@ export const getCustomerById = async (req: Request, res: Response, next: NextFun
 
 export const updateCustomer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, address, reason, type } = req.body;
     const { data, error } = await supabase
       .from('customers')
-      .update({ name, phone })
+      .update({ name, phone, address, reason, type })
       .eq('id', req.params.id)
       .eq('user_id', USER_ID)
       .select()
