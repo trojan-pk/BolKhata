@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "BolKhata",
-    "slug": "bolkhata",
+    "slug": "salman-ahmad",
     "scheme": [
       "bolkhata",
       "veldger"
@@ -30,10 +30,10 @@
     "web": {
       "favicon": "./assets/BKS-01-01.png"
     },
-    "owner": "ahmmikun",
+    "owner": "ahmmikuns-team",
     "extra": {
       "eas": {
-        "projectId": "bf3933c2-90e7-4475-916d-388c547ee427"
+        "projectId": "eea9a22d-3e21-4168-b71c-34e893c4ff04"
       }
     },
     "plugins": [
