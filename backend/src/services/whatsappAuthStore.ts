@@ -16,6 +16,20 @@ type Baileys = any
 const WRITE_CHUNK = 400
 const READ_CHUNK = 200
 
+/**
+ * Per-user generation of the stored login. It is bumped whenever the state is
+ * wiped. A socket captures the generation when it loads auth state; once the
+ * generation moves on, its writes are dropped. Without this, a socket being
+ * torn down (or an already-queued save) can write the old `registered` creds
+ * back *after* the wipe — and /wa/status then reports the previous number as
+ * linked again.
+ */
+const authGeneration = new Map<string, number>()
+/** Last queued creds write per user, awaited before a wipe deletes the row. */
+const credWrites = new Map<string, Promise<void>>()
+
+const generationOf = (userId: string): number => authGeneration.get(userId) ?? 0
+
 const chunk = <T>(arr: T[], size: number): T[][] => {
     const out: T[][] = []
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -24,6 +38,8 @@ const chunk = <T>(arr: T[], size: number): T[][] => {
 
 export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
     const { BufferJSON, initAuthCreds, proto } = baileys
+    const generation = generationOf(userId)
+    const isCurrent = () => generationOf(userId) === generation
 
     /** JSON-safe form for jsonb: Buffers become { type: 'Buffer', data: base64 }. */
     const encode = (value: unknown) => JSON.parse(JSON.stringify(value, BufferJSON.replacer))
@@ -43,9 +59,12 @@ export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
     let credsWrite: Promise<void> = Promise.resolve()
     let credsDirty = false
     const saveCreds = (): Promise<void> => {
+        // This socket's login was wiped (unlink / change number). Never write
+        // its old creds back over the new state.
+        if (!isCurrent()) return Promise.resolve()
         credsDirty = true
-        credsWrite = credsWrite.then(async () => {
-            if (!credsDirty) return
+        const write = credsWrite.then(async () => {
+            if (!isCurrent() || !credsDirty) return
             credsDirty = false
             const meId: string | undefined = creds.me?.id
             const registered = !!creds.account
@@ -60,12 +79,18 @@ export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
             })
             if (error) console.error('[WA] saving creds failed:', error.message)
         })
+        // Keep the chain alive after an unexpected encoding/DB error.
+        credsWrite = write.catch((err) => {
+            console.error('[WA] saving creds failed:', err instanceof Error ? err.message : String(err))
+        })
+        credWrites.set(userId, credsWrite)
         return credsWrite
     }
 
     const keys = {
         get: async (type: string, ids: string[]) => {
             const out: Record<string, unknown> = {}
+            if (!isCurrent()) return out
             for (const part of chunk(ids, READ_CHUNK)) {
                 const { data, error } = await supabase
                     .from('wa_auth_keys')
@@ -86,6 +111,7 @@ export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
         },
 
         set: async (data: Record<string, Record<string, unknown>>) => {
+            if (!isCurrent()) return
             const upserts: { user_id: string; type: string; key_id: string; value: unknown; updated_at: string }[] = []
             const deletes: Record<string, string[]> = {}
             const now = new Date().toISOString()
@@ -102,11 +128,13 @@ export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
             }
 
             for (const part of chunk(upserts, WRITE_CHUNK)) {
+                if (!isCurrent()) return
                 const { error } = await supabase.from('wa_auth_keys').upsert(part)
                 if (error) throw new Error(`Saving keys failed: ${error.message}`)
             }
             for (const type in deletes) {
                 for (const part of chunk(deletes[type], READ_CHUNK)) {
+                    if (!isCurrent()) return
                     const { error } = await supabase
                         .from('wa_auth_keys')
                         .delete()
@@ -124,6 +152,20 @@ export async function useSupabaseAuthState(userId: string, baileys: Baileys) {
 
 /** Wipes a user's WhatsApp login (unlink, logged out, expired pairing). */
 export async function clearSupabaseAuthState(userId: string): Promise<void> {
+    // Invalidate every writer that loaded the old state first, then let any
+    // already-running write finish, so it cannot recreate the row after the
+    // delete below (the classic "old number comes back" race).
+    authGeneration.set(userId, generationOf(userId) + 1)
+    const pending = credWrites.get(userId)
+    if (pending) {
+        try {
+            await pending
+        } catch {
+            // saveCreds already logged it.
+        }
+        if (credWrites.get(userId) === pending) credWrites.delete(userId)
+    }
+
     const [a, b] = await Promise.all([
         supabase.from('wa_auth_keys').delete().eq('user_id', userId),
         supabase.from('wa_auth_creds').delete().eq('user_id', userId),

@@ -47,20 +47,27 @@ export const linkQr = async (req: Request, res: Response): Promise<void> => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     }
 
-    // If already linked, immediately confirm
-    const current = await getSessionStatus(userId)
-    if (current.linked) {
-        send('connected', { phone: current.phone })
-        res.end()
-        return
-    }
-
     const phone = normalizePairingPhone(String(req.query.phone ?? ''))
     if (!phone) {
         send('error', { error: 'Enter your WhatsApp number with country code, e.g. 923001234567' })
         res.end()
         return
     }
+
+    const force = req.query.force === 'true' || req.query.force === '1'
+    // `resume: false`: a status peek must not spawn the old session a moment
+    // before startSession() tears it down for this new pairing.
+    const current = await getSessionStatus(userId, { resume: false })
+
+    // Only return connected early if already linked to this exact phone number and not forcing re-link
+    if (current.linked && !force && current.phone === phone) {
+        send('connected', { phone: current.phone })
+        res.end()
+        return
+    }
+
+    // startSession() below wipes any previous socket/credentials for a pairing
+    // request. Doing it here too would race the fresh session it creates.
 
     let completed = false
     // Comment-only frames keep the stream from looking idle. Heroku's router

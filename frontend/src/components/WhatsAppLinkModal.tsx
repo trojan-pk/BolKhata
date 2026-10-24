@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { Link2Off, Phone as PhoneIcon } from 'lucide-react-native';
+import { Link2Off, Phone as PhoneIcon, RefreshCw } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACE, TYPE } from '../theme/tokens';
 import { Button, Press, TextField } from '../ui';
@@ -57,6 +57,13 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   const streamRef = useRef<{ close: () => void } | null>(null);
   // Track status in a ref so async callbacks always read the latest value
   const statusRef = useRef<WaStatus>('idle');
+  // Number this attempt is linking. A stale socket/event from the previously
+  // linked number must never flip the UI back to "old number linked".
+  const expectedPhoneRef = useRef<string | null>(null);
+  // Invalidates the /wa/status request fired when the modal opened. Without
+  // this, a slow response can land after the user has already started pairing
+  // and put the previous "Linked: +old number" card back on screen.
+  const statusRequestRef = useRef(0);
 
   function updateStatus(s: WaStatus) {
     statusRef.current = s;
@@ -86,6 +93,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   }
 
   function cleanup() {
+    statusRequestRef.current += 1;
     clearCodeTimeout();
     stopPolling();
     closeStream();
@@ -137,6 +145,8 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
         if (!res.ok) return;
         const data = await res.json();
+        // Ignore the previous login while the new pairing is still running.
+        if (data.phone && expectedPhoneRef.current && data.phone !== expectedPhoneRef.current) return;
         if (data.linked && !data.connecting && data.phone) {
           stopPolling();
           handleEvent('connected', { phone: data.phone });
@@ -157,12 +167,16 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   }
 
   async function initModal() {
+    const requestId = ++statusRequestRef.current;
     updateStatus('connecting');
     setPairingCode(null);
     setError(null);
 
     try {
       const res = await fetch(`${getApiBaseUrl()}/wa/status`, { headers: await getAuthHeaders() });
+      // The user may have clicked "Change Number" / started pairing while this
+      // request was in flight; its answer is now stale.
+      if (requestId !== statusRequestRef.current) return;
       if (res.status === 401) {
         setError('Your session has expired. Sign in again to link WhatsApp.');
         updateStatus('error');
@@ -170,6 +184,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
       }
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== statusRequestRef.current) return;
         if (data.linked && data.phone) {
           setPhone(data.phone);
           updateStatus('linked');
@@ -178,6 +193,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
         }
       }
     } catch {
+      if (requestId !== statusRequestRef.current) return;
       // Fall through to the number form
     }
 
@@ -198,13 +214,18 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     } else if (eventType === 'status' && data.stage === 'paired') {
       setPaired(true);
     } else if (eventType === 'connected') {
+      // A late event from the socket we just replaced can still carry the old
+      // number. Ignore it — this attempt is pairing a different one.
+      if (expectedPhoneRef.current && data.phone && data.phone !== expectedPhoneRef.current) return;
+      const linkedPhone = data.phone ?? expectedPhoneRef.current;
       stopPolling();
       closeStream();
-      setPhone(data.phone ?? null);
+      expectedPhoneRef.current = linkedPhone;
+      setPhone(linkedPhone);
       setPairingCode(null);
       setPaired(false);
       updateStatus('linked');
-      if (onLinked && data.phone) onLinked(data.phone);
+      if (onLinked && linkedPhone) onLinked(linkedPhone);
     } else if (eventType === 'error') {
       stopPolling();
       closeStream();
@@ -332,7 +353,9 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
     setPhoneError(null);
     cleanup();
     hasCodeRef.current = false;
+    expectedPhoneRef.current = normalized;
     setPaired(false);
+    setPhone(null);
     updateStatus('connecting');
     setPairingCode(null);
     setError(null);
@@ -344,7 +367,7 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
       return;
     }
 
-    const url = `${getApiBaseUrl()}/wa/link?phone=${encodeURIComponent(normalized)}`;
+    const url = `${getApiBaseUrl()}/wa/link?phone=${encodeURIComponent(normalized)}&force=true`;
 
     codeTimeoutRef.current = setTimeout(() => {
       codeTimeoutRef.current = null;
@@ -365,10 +388,13 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
   }
 
   async function handleUnlink() {
+    cleanup();
     try {
       await ApiService.unlinkWa();
+      expectedPhoneRef.current = null;
       updateStatus('idle');
       setPhone(null);
+      setPhoneInput('');
       setPairingCode(null);
       if (onUnlinked) onUnlinked();
     } catch {
@@ -427,6 +453,24 @@ export const WhatsAppLinkModal: React.FC<Props> = ({
               </View>
             </View>
             <View style={styles.linkedActions}>
+              <Button
+                label="Change Number"
+                icon={RefreshCw}
+                variant="secondary"
+                size="md"
+                onPress={() => {
+                  cleanup();
+                  expectedPhoneRef.current = null;
+                  setPhone(null);
+                  setPhoneInput('');
+                  setPhoneError(null);
+                  setPairingCode(null);
+                  setPaired(false);
+                  setError(null);
+                  updateStatus('idle');
+                }}
+                style={styles.linkedBtn}
+              />
               <Button
                 label="Unlink Account"
                 icon={Link2Off}

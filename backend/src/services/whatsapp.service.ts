@@ -239,7 +239,9 @@ export function normalizePairingPhone(raw: string): string | null {
 
 // In-flight (not yet linked) pairing attempts, so a retry or a closed modal
 // can tear the old socket down instead of leaving it reconnecting forever.
-const pendingSessions = new Map<string, { id: number; cancel: () => void }>()
+const pendingSessions = new Map<string, { id: number; cancel: () => void; pairing: boolean }>()
+/** Users whose stored login is being torn down; status checks must not revive it. */
+const wipingUsers = new Set<string>()
 let nextSessionId = 1
 
 /**
@@ -277,19 +279,31 @@ const socketPhone = (sock: any): string | undefined => {
 
 /** Opens the saved session in the background if it isn't already. */
 function ensureSessionRunning(userId: string): void {
+    // Never resume the previous login while it is being wiped, or while the
+    // user is actively pairing a new number.
+    if (wipingUsers.has(userId) || pendingSessions.get(userId)?.pairing) return
     if (activeSockets.has(userId) || connectingUsers.has(userId)) return
     startSession(userId, () => {}, () => {}).catch((err) =>
         console.error(`[WA] resume failed for ${userId}:`, err)
     )
 }
 
-export async function getSessionStatus(userId: string): Promise<SessionStatus> {
+export async function getSessionStatus(
+    userId: string,
+    opts: { resume?: boolean } = {}
+): Promise<SessionStatus> {
+    // A pairing owns the account until it finishes. Never fall back to the
+    // previous credentials while it is in flight: that made the UI show the
+    // old number as linked again right after requesting a new code.
+    if (pendingSessions.get(userId)?.pairing) return { linked: false, pairing: true }
+    if (wipingUsers.has(userId)) return { linked: false }
+
     const sock = activeSockets.get(userId)
     if (sock) return { linked: true, phone: socketPhone(sock) }
 
     const savedPhone = await getLinkedPhone(userId)
     if (savedPhone) {
-        ensureSessionRunning(userId)
+        if (opts.resume !== false) ensureSessionRunning(userId)
         // Paired, but the socket isn't open yet (just after pair-success, or
         // resuming after a dyno restart). Sending would fail until it is.
         return { linked: true, phone: savedPhone, connecting: true }
@@ -322,21 +336,18 @@ export async function startSession(
     /** Digits only, e.g. 923001234567. Required to link a new device; omit to resume saved creds. */
     pairingPhone?: string
 ): Promise<void> {
-    // If already active and connected, return immediately
-    const existingSock = activeSockets.get(userId)
-    if (existingSock) {
-        const phone = socketPhone(existingSock)
-        send('connected', { phone })
-        onComplete({ success: true, phone })
-        return
-    }
-
     if (pairingPhone) {
-        // A fresh link request supersedes any half-finished attempt, and creds
-        // left by an unconfirmed pairing would pin the old number.
-        cancelPendingSession(userId)
-        if (!(await getLinkedPhone(userId))) {
-            await clearSupabaseAuthState(userId)
+        // A fresh pairing request for a phone supersedes any existing session or credentials
+        // so Baileys starts clean in an unregistered state and requests a fresh pairing code.
+        await removeSession(userId)
+    } else {
+        // Resuming existing credentials: if already active and connected, return immediately
+        const existingSock = activeSockets.get(userId)
+        if (existingSock) {
+            const phone = socketPhone(existingSock)
+            send('connected', { phone })
+            onComplete({ success: true, phone })
+            return
         }
     }
 
@@ -356,12 +367,15 @@ export async function startSession(
 
     pendingSessions.set(userId, {
         id: sessionId,
+        pairing: !!pairingPhone,
         cancel: () => {
             isFinished = true
             connectingUsers.delete(userId)
             if (pendingSessions.get(userId)?.id === sessionId) pendingSessions.delete(userId)
             if (currentSock) {
                 currentSock.ev.removeAllListeners('connection.update')
+                // A cancelled pairing must not save its half-written creds.
+                currentSock.ev.removeAllListeners('creds.update')
                 try { currentSock.end(undefined) } catch { /* ignore */ }
             }
         },
@@ -449,6 +463,7 @@ export async function startSession(
                 if (!pairingPhone) {
                     // Resuming saved creds that WhatsApp no longer accepts.
                     fail('Session expired', 'WhatsApp session expired. Link again with a pairing code.')
+                    sock.ev.removeAllListeners('creds.update')
                     await clearSupabaseAuthState(userId)
                     return
                 }
@@ -555,14 +570,22 @@ export async function sendTextMessage(userId: string, phone: string, text: strin
 // ─── remove session ───────────────────────────────────────────────────────────
 
 export async function removeSession(userId: string): Promise<void> {
-    cancelPendingSession(userId)
-    const sock = activeSockets.get(userId)
-    activeSockets.delete(userId)
-    connectingUsers.delete(userId)
-    if (sock) {
-        sock.ev.removeAllListeners('connection.update')
-        try { await sock.logout() } catch { /* ignore */ }
-        try { sock.end(undefined) } catch { /* ignore */ }
+    wipingUsers.add(userId)
+    try {
+        cancelPendingSession(userId)
+        const sock = activeSockets.get(userId)
+        activeSockets.delete(userId)
+        connectingUsers.delete(userId)
+        if (sock) {
+            sock.ev.removeAllListeners('connection.update')
+            // Drop the creds listener *before* logout: a dying socket must
+            // never save its old registered creds back over the wipe.
+            sock.ev.removeAllListeners('creds.update')
+            try { await sock.logout() } catch { /* ignore */ }
+            try { sock.end(undefined) } catch { /* ignore */ }
+        }
+        await clearSupabaseAuthState(userId)
+    } finally {
+        wipingUsers.delete(userId)
     }
-    await clearSupabaseAuthState(userId)
 }
